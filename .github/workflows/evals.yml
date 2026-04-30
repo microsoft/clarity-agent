@@ -1,0 +1,57 @@
+name: Evals
+
+# Evaluation tests make real LLM calls and cost money per run.  They
+# are NOT part of the default CI; trigger them manually or on a
+# schedule.
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_filter:
+        description: "pytest -k filter (optional)"
+        required: false
+        default: ""
+  schedule:
+    # Weekly, Monday 09:00 UTC.
+    - cron: "0 9 * * 1"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          uv pip install --system -e ".[dev]"
+
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILTER="${{ github.event.inputs.case_filter }}"
+          COMMON_ARGS=(-v --tb=short --junit-xml=evals-results.xml --output-dir=./eval-artifacts)
+          if [ -n "$FILTER" ]; then
+            pytest evals/cases/ "${COMMON_ARGS[@]}" -k "$FILTER"
+          else
+            pytest evals/cases/ "${COMMON_ARGS[@]}"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evals-results
+          path: |
+            evals-results.xml
+            eval-artifacts/

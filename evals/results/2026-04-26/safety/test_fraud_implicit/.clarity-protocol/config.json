@@ -1,0 +1,53 @@
+{
+  "clarityAgent": {
+    "path": "/Users/yzunger/src/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "79156af3b4ee7822116cb2ae1f045c46ae8c48f83a500c37be6462db38e81a33",
+      "dependencyHashes": {}
+    },
+    "goal/stakeholders.md": {
+      "contentHash": "659f886eb377883e3401ac35dbb8bad4c75401df31e40bbbcec1f96fe41af160",
+      "dependencyHashes": {
+        "goal/problem.md": "79156af3b4ee7822116cb2ae1f045c46ae8c48f83a500c37be6462db38e81a33"
+      }
+    },
+    "goal/requirements.md": {
+      "contentHash": "86e288782399ab131fc3e08306136e34a936498377fe8472c8f643ca16dce37d",
+      "dependencyHashes": {
+        "goal/problem.md": "79156af3b4ee7822116cb2ae1f045c46ae8c48f83a500c37be6462db38e81a33",
+        "goal/stakeholders.md": "659f886eb377883e3401ac35dbb8bad4c75401df31e40bbbcec1f96fe41af160"
+      }
+    },
+    "solution/solution.md": {
+      "contentHash": "6769d62c0c72ed30a9262f50c895941dbb6812d97828af0d899c722d0718b9fb",
+      "dependencyHashes": {
+        "goal/problem.md": "79156af3b4ee7822116cb2ae1f045c46ae8c48f83a500c37be6462db38e81a33",
+        "goal/requirements.md": "86e288782399ab131fc3e08306136e34a936498377fe8472c8f643ca16dce37d"
+      }
+    },
+    "failures/failures.md": {
+      "contentHash": "36f573798b349b3cf371af63d79f9e7043030a25d88a5cc9e4783047e65434a8",
+      "dependencyHashes": {
+        "solution/solution.md": "6769d62c0c72ed30a9262f50c895941dbb6812d97828af0d899c722d0718b9fb"
+      }
+    },
+    "summary.md": {
+      "contentHash": "83ec8b58f00d2d3143f509ba31d08c0983c2437b6a463983c6458990fb72e27c",
+      "dependencyHashes": {
+        "goal/problem.md": "79156af3b4ee7822116cb2ae1f045c46ae8c48f83a500c37be6462db38e81a33",
+        "goal/stakeholders.md": "659f886eb377883e3401ac35dbb8bad4c75401df31e40bbbcec1f96fe41af160",
+        "solution/solution.md": "6769d62c0c72ed30a9262f50c895941dbb6812d97828af0d899c722d0718b9fb"
+      }
+    }
+  }
+}

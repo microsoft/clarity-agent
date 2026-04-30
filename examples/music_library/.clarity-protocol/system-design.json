@@ -1,0 +1,31 @@
+{
+  "components": [
+    {"name": "User", "type": "External Entity", "trust_zone": "Untrusted"},
+    {"name": "React Frontend", "type": "Process", "trust_zone": "Low Trust"},
+    {"name": "Cloud Functions", "type": "Process", "trust_zone": "Trusted"},
+    {"name": "Firestore", "type": "Data Store", "trust_zone": "High Trust"},
+    {"name": "Spotify Web API", "type": "External Entity", "trust_zone": "Untrusted"},
+    {"name": "Firebase Hosting", "type": "Process", "trust_zone": "Trusted"}
+  ],
+  "flows": [
+    {"from": "User", "to": "React Frontend", "data": "Browse, organize, play actions"},
+    {"from": "Firebase Hosting", "to": "User", "data": "App bundle"},
+    {"from": "React Frontend", "to": "Cloud Functions", "data": "OAuth initiation, token refresh requests"},
+    {"from": "Cloud Functions", "to": "Spotify Web API", "data": "OAuth token exchange"},
+    {"from": "Spotify Web API", "to": "Cloud Functions", "data": "Access token, refresh token"},
+    {"from": "Cloud Functions", "to": "Firestore", "data": "Spotify tokens (credential)"},
+    {"from": "React Frontend", "to": "Spotify Web API", "data": "Library fetch requests (with access token)"},
+    {"from": "Spotify Web API", "to": "React Frontend", "data": "Album metadata, library state"},
+    {"from": "React Frontend", "to": "Firestore", "data": "Category assignments, positions, sync state"},
+    {"from": "Firestore", "to": "React Frontend", "data": "Real-time organization state"},
+    {"from": "React Frontend", "to": "User", "data": "Spotify deep link / web URL"}
+  ],
+  "threats": [
+    {"severity": "High", "components": ["Firestore"], "title": "Tokens exposed if Firestore security rules misconfigured (failure-08)"},
+    {"severity": "High", "components": ["Firestore"], "title": "All organizational data lost if GCP project deleted (failure-07)"},
+    {"severity": "High", "components": ["React Frontend", "Firestore"], "title": "Behavioral traps cause gradual disuse (failure-09)"},
+    {"severity": "High", "components": ["Cloud Functions", "Spotify Web API"], "title": "Spotify API deprecation breaks app permanently (failure-02)"},
+    {"severity": "Medium", "components": ["Cloud Functions"], "title": "Auth state invalidated, app non-functional (failure-01)"},
+    {"severity": "Medium", "components": ["Spotify Web API", "Firestore"], "title": "Library drifts from Spotify via sync gaps or ghost entries (failure-04)"}
+  ]
+}

@@ -1,0 +1,41 @@
+flowchart TD
+    classDef threat stroke:#c92a2a,stroke-width:3px
+    classDef high_sev stroke:#e67700,stroke-width:2px
+
+    subgraph untrusted ["Untrusted"]
+        style untrusted fill:#f8f9fa,stroke:#868e96,stroke-dasharray:5
+        User["👤 User"]
+        Spotify["👤 Spotify Web API"]
+    end
+
+    subgraph lowtrust ["Low Trust"]
+        style lowtrust fill:#fff3bf,stroke:#e67700,stroke-dasharray:5
+        Frontend["⚙️ React Frontend"]
+    end
+
+    subgraph trusted ["Trusted"]
+        style trusted fill:#e7f5ff,stroke:#1971c2,stroke-dasharray:5
+        Hosting["⚙️ Firebase Hosting"]
+        Functions["⚙️ Cloud Functions"]
+    end
+
+    subgraph hightrust ["High Trust"]
+        style hightrust fill:#ffe3e3,stroke:#c92a2a,stroke-dasharray:5
+        Firestore[("🗄️ Firestore")]
+    end
+
+    User -->|"Browse, organize, play"| Frontend
+    Hosting -->|"App bundle"| User
+    Frontend -->|"OAuth, token refresh"| Functions
+    Functions -->|"Token exchange"| Spotify
+    Spotify -->|"Access + refresh token"| Functions
+    Functions -.->|"Tokens (credential)"| Firestore
+    Frontend -->|"Library fetch"| Spotify
+    Spotify -->|"Album metadata"| Frontend
+    Frontend -->|"Assignments, positions"| Firestore
+    Firestore -->|"Real-time org state"| Frontend
+    Frontend -->|"Spotify deep link"| User
+
+    Firestore:::threat
+    Functions:::high_sev
+    Spotify:::high_sev

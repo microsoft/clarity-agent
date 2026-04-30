@@ -1,0 +1,153 @@
+name: Release
+
+# Trigger on version tags: git tag v1.2.3 && git push origin v1.2.3
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Rust (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Rust (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+          .\rustup-init.exe -y
+          echo "$env:USERPROFILE\.cargo\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - name: Install Python dependencies
+        run: pip install -e ".[web,cli,brainstorm,docx,openai,azure,bundle]"
+
+      - name: Install web dependencies
+        run: cd web && npm ci
+
+      # ----------------------------------------------------------------
+      # macOS code signing and notarization (optional).
+      # To enable, add these secrets to the repository:
+      #   APPLE_CERTIFICATE          — Base64-encoded .p12 certificate
+      #   APPLE_CERTIFICATE_PASSWORD — Certificate export password
+      #   APPLE_SIGNING_IDENTITY     — e.g. "Developer ID Application: Name (TEAM_ID)"
+      #   APPLE_API_KEY              — App Store Connect API key ID
+      #   APPLE_API_ISSUER           — App Store Connect issuer ID
+      #   APPLE_API_KEY_PATH         — written by the step below
+      #   APPLE_API_KEY_CONTENT      — .p8 private key content
+      # ----------------------------------------------------------------
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import /tmp/certificate.p12 -k build.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k actions build.keychain
+          rm /tmp/certificate.p12
+
+      - name: Write macOS notarization key
+        if: runner.os == 'macOS' && env.APPLE_API_KEY_CONTENT != ''
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY_CONTENT" > ~/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+
+      # ----------------------------------------------------------------
+      # Windows code signing (optional).
+      # To enable, add these secrets:
+      #   WINDOWS_CERTIFICATE          — Base64-encoded .pfx certificate
+      #   WINDOWS_CERTIFICATE_PASSWORD — Certificate password
+      # Then add certificateThumbprint to tauri.conf.json bundle.windows.
+      # ----------------------------------------------------------------
+
+      - name: Build release
+        run: python clarity.py install --release
+        env:
+          CI: true
+          # Use configured signing identity if available, otherwise ad-hoc sign.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-${{ runner.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Remove .app directories (the .dmg contains the app)
+        run: find artifacts -name "*.app" -type d -exec rm -rf {} + 2>/dev/null || true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" \
+            --title "Clarity $TAG" \
+            --generate-notes \
+            artifacts/*

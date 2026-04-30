@@ -1,0 +1,40 @@
+#!/bin/bash
+# Clarity.app launcher — Contents/MacOS/ entry point.
+#
+# On first run: downloads uv, runs uv sync to install Python + deps.
+# On every run: starts the Clarity server and opens the browser.
+#
+# User data lives in ~/Library/Application Support/Clarity/ (survives app
+# updates). Code and venv live inside the bundle.
+
+set -euo pipefail
+
+RESOURCES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+UV="$RESOURCES/uv"
+APP="$RESOURCES/app"
+DATA="$HOME/Library/Application Support/Clarity"
+PORT=8420
+
+export CLARITY_DATA_DIR="$DATA"
+mkdir -p "$DATA"
+
+# --- First-run: install uv ---------------------------------------------------
+if [ ! -f "$UV" ]; then
+    ARCH="$(uname -m)"
+    case "$ARCH" in
+        arm64|aarch64) TARGET="aarch64-apple-darwin" ;;
+        x86_64)        TARGET="x86_64-apple-darwin" ;;
+        *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    esac
+    curl -fsSL "https://github.com/astral-sh/uv/releases/latest/download/uv-${TARGET}.tar.gz" \
+        | tar xz -C "$RESOURCES" --strip-components=1 "uv-${TARGET}/uv"
+    chmod +x "$UV"
+fi
+
+# --- First-run: sync dependencies --------------------------------------------
+if [ ! -d "$APP/.venv" ]; then
+    "$UV" sync --frozen --all-extras --directory "$APP"
+fi
+
+# --- Start Clarity (webview owns the window and process lifecycle) -----------
+exec "$APP/.venv/bin/python" "$APP/clarity.py" app --port "$PORT"

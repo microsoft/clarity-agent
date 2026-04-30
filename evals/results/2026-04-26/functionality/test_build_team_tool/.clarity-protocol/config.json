@@ -1,0 +1,75 @@
+{
+  "clarityAgent": {
+    "path": "/Users/yzunger/src/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f",
+      "dependencyHashes": {}
+    },
+    "goal/stakeholders.md": {
+      "contentHash": "becad0cfb5f430170bba854ad755bed8827e0c90eaf17d29e01545d864b070a5",
+      "dependencyHashes": {
+        "goal/problem.md": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f"
+      }
+    },
+    "goal/requirements.md": {
+      "contentHash": "364674d43bf7eda27b81f9dc7ed7c154e182c19cf70cefaf51733cce4620c62e",
+      "dependencyHashes": {
+        "goal/problem.md": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f",
+        "goal/stakeholders.md": "becad0cfb5f430170bba854ad755bed8827e0c90eaf17d29e01545d864b070a5"
+      }
+    },
+    "goal/open-questions.md": {
+      "contentHash": "e9e7c36e8bc470162bfea4a670ebf6ff72fa9b61d7685442d5e2491daaa2b85e",
+      "dependencyHashes": {
+        "goal/problem.md": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f"
+      }
+    },
+    "summary.md": {
+      "contentHash": "540b1ae3d8f804838ac5820dc3024bed948a193759ea79c4d4dae29ed44541ef",
+      "dependencyHashes": {
+        "goal/problem.md": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f",
+        "goal/stakeholders.md": "becad0cfb5f430170bba854ad755bed8827e0c90eaf17d29e01545d864b070a5",
+        "solution/solution.md": "89420a170b8efe78a8a9d174366b5450414e883b91f12c22c7ec823dadec80c7"
+      }
+    },
+    "solution/solution.md": {
+      "contentHash": "89420a170b8efe78a8a9d174366b5450414e883b91f12c22c7ec823dadec80c7",
+      "dependencyHashes": {
+        "goal/problem.md": "29487578c30b39ae8956adcd63ac1c200cef352975a4241a1e18b5cbe156789f",
+        "goal/requirements.md": "364674d43bf7eda27b81f9dc7ed7c154e182c19cf70cefaf51733cce4620c62e",
+        "goal/open-questions.md": "e9e7c36e8bc470162bfea4a670ebf6ff72fa9b61d7685442d5e2491daaa2b85e"
+      }
+    },
+    "solution/solution-summary.md": {
+      "contentHash": "26687a069c026edef72fd3760a73c0c9e7814f03295feab81826120c115eb4b1",
+      "dependencyHashes": {
+        "solution/solution.md": "89420a170b8efe78a8a9d174366b5450414e883b91f12c22c7ec823dadec80c7",
+        "solution/architecture.md": "95e56f7bbb4e2b262b142b8be95671dc268ce6a88d970be8c477132c3e494b6d"
+      }
+    },
+    "failures/failures.md": {
+      "contentHash": "555eaf9676bf5435dc4b5463ffeadedf075ca65a59836d2f7167e0cabbc5e01d",
+      "dependencyHashes": {
+        "solution/solution.md": "89420a170b8efe78a8a9d174366b5450414e883b91f12c22c7ec823dadec80c7",
+        "solution/architecture.md": "95e56f7bbb4e2b262b142b8be95671dc268ce6a88d970be8c477132c3e494b6d"
+      }
+    },
+    "solution/architecture.md": {
+      "contentHash": "95e56f7bbb4e2b262b142b8be95671dc268ce6a88d970be8c477132c3e494b6d",
+      "dependencyHashes": {
+        "solution/solution.md": "89420a170b8efe78a8a9d174366b5450414e883b91f12c22c7ec823dadec80c7",
+        "failures/failures.md": "555eaf9676bf5435dc4b5463ffeadedf075ca65a59836d2f7167e0cabbc5e01d"
+      }
+    }
+  }
+}

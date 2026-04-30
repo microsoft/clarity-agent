@@ -1,0 +1,168 @@
+{
+  "project": "Team Status Dashboard",
+  "components": [
+    {
+      "id": "spa",
+      "name": "React SPA",
+      "type": "frontend",
+      "hosting": "Firebase Hosting",
+      "description": "Single-page app with /dashboard and /summary routes. All routes require auth.",
+      "trust_boundary": "company_internal"
+    },
+    {
+      "id": "firebase_auth",
+      "name": "Firebase Authentication",
+      "type": "auth_service",
+      "description": "Google OAuth restricted to company Workspace domain (hd parameter).",
+      "trust_boundary": "google_cloud"
+    },
+    {
+      "id": "firestore",
+      "name": "Firestore",
+      "type": "database",
+      "collections": ["users", "workItems", "config"],
+      "description": "Document database with security rules enforcing per-user ownership.",
+      "trust_boundary": "google_cloud"
+    },
+    {
+      "id": "security_rules",
+      "name": "Firestore Security Rules",
+      "type": "access_control",
+      "description": "Enforces ownerUid match on writes and isTeamMember check. Second auth layer.",
+      "trust_boundary": "google_cloud"
+    },
+    {
+      "id": "check_membership_fn",
+      "name": "Cloud Function: checkMembership",
+      "type": "serverless_function",
+      "trigger": "firebase_auth_login",
+      "description": "Checks Google Directory API for group membership on login. Fail-closed.",
+      "trust_boundary": "google_cloud"
+    },
+    {
+      "id": "directory_api",
+      "name": "Google Directory API",
+      "type": "external_api",
+      "description": "Checks Google Group membership. Called via service account with domain-wide delegation.",
+      "trust_boundary": "google_workspace"
+    },
+    {
+      "id": "google_group",
+      "name": "Google Group (team membership)",
+      "type": "identity_store",
+      "description": "Source of truth for team membership. Managed in Google Workspace admin.",
+      "trust_boundary": "google_workspace"
+    }
+  ],
+  "actors": [
+    {
+      "id": "team_member",
+      "name": "TeamMember",
+      "type": "aligned_direct",
+      "description": "Engineer in the Google Group. Can post and edit their own WorkItems."
+    },
+    {
+      "id": "viewer",
+      "name": "Viewer",
+      "type": "aligned_direct",
+      "description": "Any company employee authenticated via Google. Read-only."
+    },
+    {
+      "id": "vp",
+      "name": "VP / Leadership",
+      "type": "aligned_direct",
+      "description": "Accesses /summary for stakeholder reporting. Can share URL or copy text."
+    },
+    {
+      "id": "malicious_insider",
+      "name": "Malicious Insider",
+      "type": "adversarial_direct",
+      "description": "Company employee attempting XSS injection or unauthorized writes."
+    },
+    {
+      "id": "external_attacker",
+      "name": "External Attacker",
+      "type": "adversarial_indirect",
+      "description": "Outside attacker attempting to access dashboard. Blocked by domain restriction."
+    }
+  ],
+  "flows": [
+    {
+      "id": "login",
+      "from": "team_member",
+      "to": "firebase_auth",
+      "label": "Google OAuth login",
+      "description": "Triggers checkMembership Cloud Function on success."
+    },
+    {
+      "id": "membership_check",
+      "from": "check_membership_fn",
+      "to": "directory_api",
+      "label": "Group membership query",
+      "description": "Service account call. Writes isTeamMember to Firestore. Fails closed."
+    },
+    {
+      "id": "write_item",
+      "from": "team_member",
+      "to": "firestore",
+      "label": "Create/edit WorkItem",
+      "description": "Blocked by Firestore rules if isTeamMember != true or ownerUid != caller."
+    },
+    {
+      "id": "read_dashboard",
+      "from": "viewer",
+      "to": "firestore",
+      "label": "Read all WorkItems (real-time)",
+      "description": "onSnapshot listener. Any authenticated user can read."
+    },
+    {
+      "id": "summary_export",
+      "from": "vp",
+      "to": "spa",
+      "label": "Generate/copy summary",
+      "description": "Renders /summary route. Requires Google auth. URL shareable within company only."
+    }
+  ],
+  "threats": [
+    {
+      "id": "T1",
+      "title": "XSS via work item content",
+      "severity": "medium_high",
+      "affected_components": ["spa", "firestore"],
+      "affected_actors": ["viewer", "team_member", "vp"],
+      "mitigations": ["JSX escaping (no dangerouslySetInnerHTML)", "CSP headers", "plain-text comments only"]
+    },
+    {
+      "id": "T2",
+      "title": "Unauthorized write (edit another user's item)",
+      "severity": "medium",
+      "affected_components": ["firestore", "security_rules"],
+      "affected_actors": ["malicious_insider"],
+      "mitigations": ["Firestore rules: ownerUid == caller.uid", "Cloud Function sets isTeamMember (not client-settable)"]
+    },
+    {
+      "id": "T3",
+      "title": "Summary leaked externally",
+      "severity": "medium",
+      "affected_components": ["spa"],
+      "affected_actors": ["vp", "external_attacker"],
+      "mitigations": ["All routes require Google Workspace auth", "Internal-only watermark on summary"]
+    },
+    {
+      "id": "T4",
+      "title": "Stale/failed membership check grants wrong access",
+      "severity": "high",
+      "affected_components": ["check_membership_fn", "firestore", "security_rules"],
+      "affected_actors": ["malicious_insider"],
+      "mitigations": ["Fail-closed: function failure -> isTeamMember=false", "24h cache TTL + re-check on login", "Firestore rules as second layer"]
+    },
+    {
+      "id": "T5",
+      "title": "External attacker accesses dashboard",
+      "severity": "low",
+      "affected_components": ["firebase_auth"],
+      "affected_actors": ["external_attacker"],
+      "mitigations": ["Google OAuth hd parameter restricts to company domain"]
+    }
+  ]
+}

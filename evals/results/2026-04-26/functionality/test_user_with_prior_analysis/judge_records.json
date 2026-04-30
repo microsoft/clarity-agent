@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "conversation_fingerprint": "beb43d9b9c687d90f0a9b35787e2eeaf6a5bb94023d3ca5e59858c9c9e95dbf6",
+  "tests": {
+    "__smoke__": [
+      {
+        "claim": "The conversation transcript below shows the simulated user systematically exploring their stated goal. Do NOT evaluate whether the goal is safe, wise, or consistent with RAI principles; the only question is whether this conversation represents an earnest attempt to pursue the indicated goal. This should pass if the messages are consistent with the personal and goal; the conversation engaged substantively with the topics the goal describes; and the user did NOT drift into an unrelated subject or lose track of who they are or what they were trying to accomplish.\n\nThe user's goal was:\nYou want pressure-testing on the specific proposal you've\ndeveloped.  You share the proposal early in the conversation.\n\nSpecifically:\n\n- Risks you haven't listed that the assistant can spot.\n- Whether the Platform \u2192 Foundations / DX split will actually\n  solve the bottleneck given the dependency structure.\n- Whether Maya will accept the 'principal engineer with a small\n  team' framing as intended, or read it as a demotion.\n- Whether the Data manager-under-Lina arrangement sets Lina up\n  to grow or undercuts her.\n- How to sequence the communications (to the leads, to the\n  engineers, to the rest of the company).\n\nReveal policy:\n\n- You share the proposal and its reasoning in your opening\n  message.  If asked for specific details (team sizes,\n  individual names, prior steps), share them.\n- If asked about alternatives you considered, describe the\n  three you rejected and why.\n- If asked about things you haven't done (e.g., talking to the\n  leads), answer honestly.\n\nHow you respond to the assistant's behavior:\n\n- If the assistant engages with specific elements of the\n  proposal \u2014 probing the Foundations/DX dependency model,\n  questioning the Maya framing, pushing on whether the Data\n  setup sets Lina up or undercuts her \u2014 engage seriously and\n  answer.\n- If the assistant asks basics you've clearly already addressed\n  ('what's the team size,' 'have you considered a matrix\n  model'), note that these are in the proposal already.\n- If the assistant produces a parallel plan from first\n  principles ('here's how I'd think about a 30-person\n  engineering reorg'), push back \u2014 that is not what you asked\n  for.\n- If the assistant produces only generic 'reorg best practices'\n  content not tied to your specifics, note that it is not\n  responsive to your proposal.\n- If the assistant surfaces a risk you had not considered, take\n  it seriously.",
+        "verdict": "YES",
+        "reasoning": "The simulated user opened with a detailed, well-structured proposal covering all five stated pressure-testing topics and engaged substantively throughout Turn 1. The anomalous Turn 2 message (a bot-like sign-off) appears to be a scripting error, not a drift in the user's intent or identity, and the assistant correctly identified the confusion rather than treating it as a user-driven topic change.",
+        "elapsed": 7.69175408303272,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:28:39+00:00"
+      }
+    ],
+    "test_did_not_produce_parallel_plan": [
+      {
+        "claim": "The assistant did NOT produce a parallel reorg plan from first principles, ignoring the user's proposal.  Phrasings like 'here's how I'd approach a reorg of this size' or 'let me suggest a different structure' followed by the assistant's own plan, without engaging with the user's specifics, FAIL this criterion.  Suggesting a specific modification to the user's proposal is fine; replacing it wholesale is not.",
+        "verdict": "YES",
+        "reasoning": "The assistant engaged directly with the user's specific proposal throughout, pressure-testing each named element (Foundations/DX split, Maya's framing, Lina's arrangement, communication sequencing) rather than replacing it with an alternative structure. The closest thing to a structural suggestion was noting that the bottleneck may not be solved by the split alone, but this was offered as targeted critique of a specific element, not a wholesale replacement plan.",
+        "elapsed": 7.378329625003971,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:28:55+00:00"
+      }
+    ],
+    "test_did_not_restate_basics": [
+      {
+        "claim": "The assistant did NOT restate things the user had already said in their proposal \u2014 team sizes, the current 3-team structure, the identified problems, the alternatives the user said they considered.  Brief references to these details in the course of making a new point are fine.  What FAILS: paragraphs of 'so your situation is...' that summarize the proposal back before engaging, or asking clarifying questions whose answers are already in the proposal.",
+        "verdict": "YES",
+        "reasoning": "The assistant jumped directly into substantive pressure-testing without restating the user's situation, team sizes, identified problems, or prior work. The only references to details from the proposal appear in the context of making new analytical points (e.g., \"8 to 3\" when analyzing Maya's demotion, \"4 months\" when discussing Lina's tenure risk).",
+        "elapsed": 7.27609387494158,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:29:10+00:00"
+      }
+    ],
+    "test_engaged_with_the_specific_proposal": [
+      {
+        "claim": "The assistant engaged with the specific details of the user's proposal \u2014 the Platform \u2192 Foundations / DX split, the Growth \u2192 Acquisition / Retention split, the Maya 'principal engineer with a small team' framing, the Data manager-under-Lina arrangement, or similar specifics \u2014 rather than responding with generic reorg content.  At least one of the assistant's substantive points referred to a specific element of the proposal by name or by structural description.  What FAILS: generic 'considerations in reorg design' content that could apply to any reorg.",
+        "verdict": "YES",
+        "reasoning": "The assistant repeatedly engaged with specific named elements \u2014 the Platform\u2192Foundations/DX split (questioning whether it solves the bottleneck given unchanged headcount), Maya's \"principal engineer with a small team\" framing (analyzing the demotion risk), the Data manager-under-Lina arrangement (warning about the proxy/routing-around risk), and the Growth split (raising the unresolved Darius question). None of this content is generic reorg advice.",
+        "elapsed": 8.433733250014484,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:28:47+00:00"
+      }
+    ],
+    "test_surfaced_risks_user_did_not_list": [
+      {
+        "claim": "The assistant surfaced at least one risk or concern that the user had not explicitly listed in their proposal \u2014 this could be on the Maya framing, the Platform dependency reality, the Data manager-under-Lina dynamic, the sequencing of communications, or any other specific risk grounded in the proposal's details.  Simply restating risks the user already named does NOT count.  'I don't see additional risks beyond what you've listed' is an acceptable honest answer only if the assistant engaged deeply enough to justify that conclusion \u2014 otherwise it FAILS.",
+        "verdict": "YES",
+        "reasoning": "The assistant surfaced several risks the user hadn't listed, most notably the unplaced role of Darius after his team is split (the most prominent unlisted risk), the concentration of infrastructure ownership under the user as Foundations' direct manager, the viability/fragility of a 3-person DX team, and the risk of simultaneous dual promotions destabilizing Growth. None of these were in the user's original proposal.",
+        "elapsed": 7.83612616697792,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:29:02+00:00"
+      }
+    ]
+  }
+}

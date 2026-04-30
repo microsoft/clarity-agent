@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clarity</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&family=Lora:ital,wght@0,400;1,400&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: #f5f5f4;
+      color: #78716c;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 1.5rem;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 32rem;
+    }
+
+    /* Header — matches setup wizard's style */
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .header h1 {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 1.875rem;
+      font-weight: 600;
+      color: #44403c;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.5rem;
+    }
+    .header p {
+      font-size: 14px;
+      color: #78716c;
+    }
+
+    /* Quote card — the hero element */
+    .card {
+      background: #fafaf9;
+      border: 1px solid #e7e5e4;
+      border-radius: 0.75rem;
+      padding: 2rem;
+      text-align: center;
+      transition: opacity 0.4s ease;
+    }
+    .card .quote {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 1.25rem;
+      font-style: italic;
+      font-weight: 400;
+      line-height: 1.6;
+      color: #44403c;
+    }
+    .card .attribution {
+      font-size: 14px;
+      color: #78716c;
+      margin-top: 1rem;
+      font-style: normal;
+    }
+
+    /* Loading indicator */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+    .dots {
+      display: flex;
+      gap: 6px;
+    }
+    .dots span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: dot-pulse 1.4s ease-in-out infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    .loading-text {
+      font-size: 12px;
+      color: #a8a29e;
+      margin-left: 2px;
+    }
+
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 0.25; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.3); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>Clarity</h1>
+      <p>Structured thinking agent</p>
+    </div>
+
+    <div class="card" id="card">
+      <div class="quote" id="quote-text"></div>
+      <div class="attribution" id="quote-attribution"></div>
+    </div>
+
+    <div class="loading">
+      <div class="dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span class="loading-text">Getting things ready</span>
+    </div>
+  </div>
+
+  <script>
+    const taglines = [
+      { text: "Think it through before you build it." },
+      { text: "Structured thinking, AI-guided." },
+      { text: "Anticipate failures before they find you." },
+      { text: "Designed decisions, not accidental ones." },
+      { text: "The best architecture starts with the right questions." },
+    ];
+
+    const card = document.getElementById('card');
+    const textEl = document.getElementById('quote-text');
+    const attrEl = document.getElementById('quote-attribution');
+    let current = Math.floor(Math.random() * taglines.length);
+
+    function show(index) {
+      const t = taglines[index];
+      textEl.textContent = '\u201c' + t.text + '\u201d';
+      attrEl.textContent = t.attribution ? '\u2014 ' + t.attribution : '';
+      attrEl.style.display = t.attribution ? 'block' : 'none';
+      card.style.opacity = '1';
+    }
+
+    function cycle() {
+      card.style.opacity = '0';
+      setTimeout(() => {
+        current = Math.floor(Math.random() * taglines.length);
+        show(current);
+      }, 400);
+    }
+
+    show(current);
+    setInterval(cycle, 10000);
+  </script>
+</body>
+</html>

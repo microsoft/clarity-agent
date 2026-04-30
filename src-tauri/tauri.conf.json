@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickelpack/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "Clarity",
+  "version": "0.1.1",
+  "identifier": "com.clarity-agent.clarity",
+  "build": {
+    "frontendDist": "loading",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "cd ../web && npm run dev"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Clarity",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {}
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "dmg",
+      "app",
+      "msi",
+      "deb",
+      "appimage"
+    ],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "externalBin": [
+      "binaries/clarity-server"
+    ],
+    "resources": {
+      "binaries/_internal/": "_internal/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

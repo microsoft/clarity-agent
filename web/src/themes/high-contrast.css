@@ -1,0 +1,101 @@
+/*
+ * High Contrast — Accessibility Theme
+ *
+ * Maximum readability: near-black text on white surfaces, bold
+ * borders, and AAA-compliant contrast ratios throughout.
+ *
+ * Status colors are chosen to be distinguishable under the most
+ * common forms of color vision deficiency (deuteranopia,
+ * protanopia).  Every status also has a text label — color is
+ * never the sole differentiator.
+ *
+ * Color values are space-separated RGB for Tailwind <alpha-value> support.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+[data-theme="high-contrast"] {
+
+  /* ── Fonts (sans-serif for maximum legibility) ───────────── */
+  --font-body:            'Inter', system-ui, sans-serif;
+  --font-sidebar:         'Inter', system-ui, sans-serif;
+  --font-display:         'Inter', system-ui, sans-serif;
+  --font-mono:            'JetBrains Mono', monospace;
+
+  /* ── Typography scale ────────────────────────────────────── */
+  --text-base:            18px;
+  --heading-h1:           1.85rem;
+  --heading-h2:           1.4rem;
+  --heading-h3:           1.2rem;
+  --heading-weight:       700;
+  --heading-tracking:     -0.01em;
+  --body-tracking:        0em;
+  --text-chat:            16px;
+  --code-size-inline:     0.85em;
+
+  /* ── Sidebar (near-black) ────────────────────────────────── */
+  --sidebar:              0 0 0;            /* black */
+  --sidebar-active:       30 30 30;         /* dark gray */
+  --sidebar-line:         80 80 80;         /* visible divider */
+  --sidebar-text:         255 255 255;      /* white — 21:1 */
+  --sidebar-text-secondary: 230 230 230;    /* 17:1 */
+  --sidebar-text-muted:   200 200 200;      /* 14:1 */
+  --sidebar-text-faint:   170 170 170;      /* 10:1 */
+
+  /* ── Surfaces (pure white) ───────────────────────────────── */
+  --surface:              255 255 255;      /* white */
+  --surface-ground:       250 250 250;      /* near-white */
+  --surface-dim:          240 240 240;      /* light gray */
+  --surface-muted:        225 225 225;      /* medium gray */
+
+  /* ── Text (near-black) ───────────────────────────────────── */
+  --text:                 0 0 0;            /* black — 21:1 */
+  --text-heading:         0 0 0;            /* black — 21:1 */
+  --text-label:           30 30 30;         /* near-black — 17:1 */
+  --text-muted:           70 70 70;         /* dark gray — 9.0:1 */
+  --text-faint:           80 80 80;         /* gray — 7.6:1 (AAA) */
+
+  /* ── Borders (bold, high-visibility) ─────────────────────── */
+  --border:               180 180 180;      /* clearly visible */
+  --border-strong:        120 120 120;      /* strong inputs */
+  --border-dim:           200 200 200;      /* subtle dividers */
+
+  /* ── Accent (dark blue — safe for all color vision types) ── */
+  --accent:               0 70 160;         /* dark blue — 8.6:1 on white */
+  --accent-hover:         0 55 130;         /* darker blue */
+  --accent-focus:         0 70 160;         /* same as accent — 8.6:1 */
+  --accent-surface:       230 240 255;      /* light blue tint */
+  --accent-surface-border: 100 150 220;     /* blue border */
+  --accent-surface-text:  0 50 120;         /* dark blue text */
+  --accent-surface-body:  0 60 140;         /* blue body */
+  --accent-surface-muted: 0 70 160;         /* blue muted */
+  --accent-surface-faint: 70 120 200;       /* medium blue */
+
+  /* ── Status indicators ───────────────────────────────────── */
+  /* Chosen for deuteranopia/protanopia distinguishability:     */
+  /* OK=blue-green, WARN=orange, ERROR=dark red, INFO=purple   */
+  --status-ok:            0 120 100;        /* teal — distinct from red */
+  --status-ok-bg:         230 248 245;      /* light teal */
+  --status-ok-text:       0 90 75;          /* dark teal — 7.3:1 */
+  --status-warn:          180 90 0;         /* dark orange */
+  --status-warn-bg:       255 245 225;      /* light orange */
+  --status-warn-text:     130 60 0;         /* brown — 7.5:1 */
+  --status-error:         180 0 0;          /* dark red */
+  --status-error-bg:      255 235 235;      /* light red */
+  --status-error-text:    140 0 0;          /* very dark red — 9.7:1 */
+  --status-info:          90 50 170;        /* purple — distinct from all */
+  --status-info-bg:       240 235 255;      /* light purple */
+  --status-info-text:     70 30 140;        /* dark purple — 8.9:1 */
+
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-accent:        0 40 100;         /* dark blue shadow */
+
+  /* ── Disabled ────────────────────────────────────────────── */
+  --disabled:             180 180 180;      /* gray — visible but muted */
+  --disabled-surface:     240 240 240;      /* light gray */
+  --disabled-text:        100 100 100;      /* 7.4:1 on disabled-surface */
+
+  /* ── Code ────────────────────────────────────────────────── */
+  --code-bg:              20 20 20;         /* near-black */
+  --code-text:            245 245 245;      /* near-white — 17:1 */
+}

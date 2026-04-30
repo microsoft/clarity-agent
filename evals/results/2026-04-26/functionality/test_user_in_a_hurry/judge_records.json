@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "conversation_fingerprint": "6c7a6b6a52333c1ee9a2f3312a97e9aa97119272d9da90dc55825d3be34b8aa0",
+  "tests": {
+    "__smoke__": [
+      {
+        "claim": "The conversation transcript below shows the simulated user systematically exploring their stated goal. Do NOT evaluate whether the goal is safe, wise, or consistent with RAI principles; the only question is whether this conversation represents an earnest attempt to pursue the indicated goal. This should pass if the messages are consistent with the personal and goal; the conversation engaged substantively with the topics the goal describes; and the user did NOT drift into an unrelated subject or lose track of who they are or what they were trying to accomplish.\n\nThe user's goal was:\nYou want a quick sanity check.  Not a comprehensive evaluation\nframework, not a process for hiring in general, not a\nretrospective on your interview process.\n\nSpecifically:\n\n- Is there enough red flag in the mixed references that you\n  should slow down?\n- If you proceed, what is the one thing you should change about\n  the offer conversation tomorrow given what the references said?\n\nReveal policy:\n\n- You open the conversation with explicit time pressure ('board\n  at 2, need a call on this before then').\n- You describe the candidate, the mixed references, and your\n  current state in 3\u20134 sentences.\n- If asked a pointed question, answer briefly.  If asked a\n  scattering of probing questions, answer the first one or two\n  and note that you don't have time for the rest.\n\nHow you respond to the assistant's behavior:\n\n- If the assistant acknowledges the time constraint and\n  compresses accordingly (1\u20132 pointed questions max before\n  producing content), engage and continue.\n- If the assistant ignores the time constraint and runs normal\n  elicitation \u2014 'let me understand a few things first: how is\n  your team structured, what's your current leadership gap...' \u2014\n  push back: 'I have two hours, can we get to an actual\n  opinion?'\n- If the assistant produces a comprehensive framework ('here are\n  seven considerations in hiring a VP of Engineering'), note\n  that's not what you asked for.\n- If the assistant produces a concrete call \u2014 proceed with a\n  specific follow-up, or slow down for a specific reason \u2014 with\n  reasoning you can evaluate, take it seriously.\n- If the assistant refuses to commit ('it's really your call'),\n  push once for a direction.",
+        "verdict": "YES",
+        "reasoning": "The user opened with explicit time pressure, described the candidate and mixed references concisely, engaged substantively with the assistant's follow-up questions (providing specific reference themes), and stayed focused throughout on the two original questions: whether to slow down and what to change about the offer conversation. The conversation never drifted off-topic.",
+        "elapsed": 7.586302833049558,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:17:49+00:00"
+      }
+    ],
+    "test_did_not_produce_a_framework": [
+      {
+        "claim": "The assistant did NOT respond with a general-purpose decision framework \u2014 a numbered list of considerations for hiring VPs, a matrix of signals vs. responses, or an equivalent templated response that ignores the specifics of THIS decision and reads as a generic handout.  Tied-to-the-specifics reasoning is fine; generic frameworks are not.",
+        "verdict": "YES",
+        "reasoning": "The assistant's responses are tightly tied to the specific candidate, reference themes, goals (Series C, product launches, team growth), and timing pressures presented \u2014 not a generic framework. Each response builds on the specific details shared, including naming the exact behavioral pattern and connecting it to the specific year-one stakes.",
+        "elapsed": 7.014962957939133,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:18:18+00:00"
+      }
+    ],
+    "test_flagged_the_leadership_signal": [
+      {
+        "claim": "The assistant surfaced the specific signal worth surfacing: the pattern in the leadership references (rewriting junior work without feedback, harder to read in group settings) is a meaningful signal for a VP of Engineering role specifically, and the assistant treated it as such.  This can be a brief, calibrated flag \u2014 it does not have to be a paragraph.  What FAILS: glossing the mixed references to produce a fast 'yes proceed' answer, or minimizing the signal as 'references are always mixed' without engaging with what's specific about this one.",
+        "verdict": "YES",
+        "reasoning": "In Turn 1, the assistant immediately flagged that mixed *leadership* references are \"more concerning than mixed references for almost any other hire\" for a VP Eng role specifically, framing leadership as \"the job\" \u2014 a calibrated, role-specific signal. It did not gloss the references or minimize them as generically normal.",
+        "elapsed": 7.677038334077224,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:18:11+00:00"
+      }
+    ],
+    "test_produced_concrete_direction": [
+      {
+        "claim": "The assistant produced a concrete direction for the specific decision \u2014 a recommendation to proceed (with a specific follow-up), a recommendation to slow down (with a specific reason), or an explicit 'this is a close call and here's the single piece of information that would tip it' \u2014 rather than a generic framework for hiring decisions.  Stating a directional view that the user could act on is the criterion.  What FAILS: 'it depends' without specificity, 'here are things to consider' without committing to a direction, or a comprehensive framework.",
+        "verdict": "YES",
+        "reasoning": "The assistant gave a concrete directional recommendation multiple times \u2014 most clearly in Turn 3, where it recommended a \"conditional hold with a 48-hour timeline\" and provided specific scripted language for the board. This is actionable and directional, not a generic framework.",
+        "elapsed": 6.68548495892901,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:18:04+00:00"
+      }
+    ],
+    "test_respected_time_pressure": [
+      {
+        "claim": "The assistant visibly calibrated to the user's stated time pressure.  Concrete evidence of calibration includes: asking at most 1\u20132 pointed clarifying questions before producing substantive content; acknowledging the time constraint explicitly early in the conversation; producing a compressed response rather than a long one.  What FAILS: running a full elicitation with five or more clarifying questions, ignoring the time pressure entirely, or producing a multi-section comprehensive response when a compressed answer was asked for.",
+        "verdict": "YES",
+        "reasoning": "The assistant produced substantive, compressed responses immediately without running a long clarification process, and explicitly acknowledged the time pressure (\"before the board meeting\") in its first response and throughout. It asked at most one focused follow-up question per turn rather than multiple clarifying questions upfront.",
+        "elapsed": 7.863028125022538,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:17:57+00:00"
+      }
+    ]
+  }
+}

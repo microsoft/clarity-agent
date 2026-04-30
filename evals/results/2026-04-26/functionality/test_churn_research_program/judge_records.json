@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "conversation_fingerprint": "20a96aa79a6eb00f5db74afc30331a7a505654d18d7867b134254fa5f1f272b4",
+  "tests": {
+    "__smoke__": [
+      {
+        "claim": "The conversation transcript below shows the simulated user systematically exploring their stated goal. Do NOT evaluate whether the goal is safe, wise, or consistent with RAI principles; the only question is whether this conversation represents an earnest attempt to pursue the indicated goal. This should pass if the messages are consistent with the personal and goal; the conversation engaged substantively with the topics the goal describes; and the user did NOT drift into an unrelated subject or lose track of who they are or what they were trying to accomplish.\n\nThe user's goal was:\nYou want the assistant to help you scope and plan a rigorous\nresearch program into customer churn.  You want concrete outputs:\nwhat methods to use, what to ask, how to segment, how to present\nfindings to the COO.\n\nIf the assistant asks what decision the research will inform, or\nwhat you'd do differently with the answer, give your honest answer:\nyou haven't fully worked that out, and \"we'll know where to invest\"\nis roughly as specific as you've gotten.\n\nShare the data you already have when probed \u2014 usage data, support\ntickets, NPS, CRM notes, the 40 recent churned accounts.  Do NOT\nproactively volunteer the list of available data sources; you\ngenuinely haven't connected \"we might already be able to answer\npart of this with existing data\" to your research plan.\n\nBe initially mild in resistance to the assistant narrowing scope.\nYou're proud of the rigor of your plan but you are not attached to\nit.  If the assistant makes a specific, grounded case that a\nsmaller approach (e.g., \"look at the 40 accounts' usage data and\nsupport history first, then decide whether you need interviews\")\nwould get you most of the way with a fraction of the time, you'll\nengage seriously.  If the case is hand-wavy or generic you'll push\nback.\n\nThe 6-week planning deadline is real and you will mention it if\nasked about timeline.",
+        "verdict": "YES",
+        "reasoning": "Elena consistently pursued her stated goal \u2014 scoping a churn research program \u2014 sharing data sources when probed, engaging with the timeline, and seriously considering the assistant's structural suggestions. She stayed in character throughout and never drifted from her role or objective.",
+        "elapsed": 7.732823417056352,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:59:52+00:00"
+      }
+    ],
+    "test_considers_narrower_faster_approach": [
+      {
+        "claim": "The conversation or protocol documents considered a narrower or faster approach than the multi-month research program the user originally proposed \u2014 e.g., a first-pass analysis of the recently-churned accounts' existing data, a small number of targeted conversations, a time-boxed initial phase before committing to the full program, or explicitly staging the research so a smaller effort precedes larger investment.  Accepting the user's proposed multi-month scope at face value and helping design methods within that scope does NOT satisfy this criterion.",
+        "verdict": "NO",
+        "reasoning": "The agent accepted Elena's proposed six-week multi-month research program at face value and helped design methods within that scope. At no point did it suggest a narrower first-pass approach \u2014 such as quickly analyzing the existing exit interviews or CRM data before committing to the full program, or proposing a time-boxed initial phase (e.g., \"spend one week on what you already have before designing the full program\"). The data audit in Weeks 1\u20132 is framed as the first phase *of* the full program, not as a preliminary gate before committing to it.",
+        "elapsed": 10.209136457997374,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:00:22+00:00"
+      }
+    ],
+    "test_probes_for_decision_to_inform": [
+      {
+        "claim": "The assistant, before scoping the research program itself, asked the user what decision(s) the research would inform, what they would do differently with the answer, or what success for the churn work would look like in concrete terms.  A single perfunctory 'what are you hoping to learn?' followed by a pivot to methodology does NOT satisfy this; the assistant should have genuinely explored the decision context before helping scope methods.",
+        "verdict": "NO",
+        "reasoning": "In Turn 1, the assistant asked \"What does success look like for your COO?\" but this was one of four quick intake questions, and the conversation immediately pivoted to scoping methodology after Elena's Turn 2 response. The assistant never genuinely explored the *decision context* \u2014 e.g., what specific decisions the research would inform (pricing changes? product roadmap? sales motion? retention playbooks?), what actions Elena would take differently depending on the findings, or what a concrete \"win\" would look like beyond \"a diagnosis and a plan.\" The COO question was answered at a surface level (\"diagnosis + plan for the executive team\") and the assistant accepted that without probing deeper into consequential decisions before scoping the research program.",
+        "elapsed": 11.706855416996405,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:00:03+00:00"
+      }
+    ],
+    "test_surfaces_existing_data": [
+      {
+        "claim": "The assistant asked about or surfaced in the discussion that the user already has data relevant to the churn question \u2014 e.g., product usage data, support tickets, NPS responses, CRM notes, or the specific set of recently-churned accounts \u2014 and either explored what could be learned from this existing data before commissioning new research, or explicitly distinguished what new research would add beyond existing data.  Designing a full new research program without acknowledging existing data sources does NOT satisfy this criterion.",
+        "verdict": "YES",
+        "reasoning": "In Turn 1, the assistant explicitly asked \"What data sources do you have?\" and Elena listed her existing sources. In Turn 2, the assistant followed up on those sources specifically \u2014 asking about quality, completeness, and access constraints. The Week 1\u20132 \"Data Audit and Triage\" phase in the solution is explicitly designed to assess existing data before commissioning new research, and the Phase 2 interview work is scoped around what the existing data can't answer.",
+        "elapsed": 8.45318974996917,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T02:00:12+00:00"
+      }
+    ]
+  }
+}

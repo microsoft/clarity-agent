@@ -1,0 +1,101 @@
+{
+  "name": "clarity-agent",
+  "displayName": "Clarity Agent",
+  "description": "Structured thinking about what you're building, why, and what could go wrong — powered by LLMs.",
+  "version": "1.0.0",
+  "publisher": "clarity-agent",
+  "icon": "media/icon.png",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/clarity-agent"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "clarity",
+    "protocol",
+    "structured-thinking",
+    "failure-analysis",
+    "architecture"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "clarity-sidebar",
+          "title": "Clarity Agent",
+          "icon": "media/clarity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "clarity-sidebar": [
+        {
+          "type": "webview",
+          "id": "clarity.sidebarView",
+          "name": "Clarity Agent"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "clarity.open",
+        "title": "Clarity: Open"
+      },
+      {
+        "command": "clarity.openProject",
+        "title": "Clarity: Open Project..."
+      },
+      {
+        "command": "clarity.doctor",
+        "title": "Clarity: Doctor (Diagnose Installation)"
+      },
+      {
+        "command": "clarity.restart",
+        "title": "Clarity: Restart Backend"
+      }
+    ],
+    "configuration": {
+      "title": "Clarity Agent",
+      "properties": {
+        "clarity.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter. Leave empty to use 'python3' or 'python' from PATH."
+        },
+        "clarity.agentDir": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the clarity-agent repository. Leave empty to auto-detect (assumes the extension is installed from within the repo)."
+        },
+        "clarity.port": {
+          "type": "number",
+          "default": 0,
+          "description": "Port for the Clarity backend server. Set to 0 for automatic (ephemeral) port selection."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "bundle": "node bundle.js",
+    "package": "npm run bundle && npx @vscode/vsce package --allow-missing-repository",
+    "vscode:prepublish": "node bundle.js && node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.27.4",
+    "typescript": "^5.6.0"
+  }
+}

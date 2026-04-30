@@ -1,0 +1,6 @@
+out/
+node_modules/
+bundled/
+
+# Include the built VSIX (override root *.vsix ignore)
+!*.vsix

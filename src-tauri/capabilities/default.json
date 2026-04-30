@@ -1,0 +1,22 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for the Clarity app",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:*", "http://127.0.0.1:*"]
+  },
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "shell:allow-execute",
+    "shell:allow-spawn",
+    "shell:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**" }]
+    }
+  ]
+}

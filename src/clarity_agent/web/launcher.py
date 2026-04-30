@@ -1,0 +1,805 @@
+"""Launcher: multi-project server with reverse proxy.
+
+Architecture Overview
+---------------------
+
+Clarity supports working on multiple projects simultaneously.  Rather than
+switching a single server between projects (which would lose session state),
+we run a separate server *subprocess* for each active project and put a thin
+launcher in front of them.
+
+The launcher is what the browser actually connects to.  It listens on a
+single port (default 8420) and serves the React SPA itself.  When the user
+selects a project, the launcher spawns (or reuses) a per-project server on
+an ephemeral port and starts proxying traffic to it.  From the browser's
+perspective the URL never changes — project switching is invisible.
+
+::
+
+    Browser (localhost:8420)
+       │
+       ▼
+    Launcher (this module, FastAPI on :8420)
+       ├── /api/projects/*        handles directly (CRUD, activate/deactivate)
+       ├── /api/setup/*           handles directly (shared LLM configuration)
+       ├── /ws/chat               bidirectional WebSocket bridge to active project
+       └── /api/* (everything else)  HTTP reverse proxy to active project
+             │
+             ├── Project A server (:49201) ── alive, backgrounded
+             ├── Project B server (:49202) ── alive, in foreground (proxied)
+             └── Project C server (:49203) ── alive, backgrounded
+
+Two-layer data model
+~~~~~~~~~~~~~~~~~~~~
+
+**Project registry** (``~/.clarity/projects.json``, managed by
+``clarity_agent.projects.ProjectRegistry``).  Persistent list of known
+project directories — name, path, last-opened timestamp, whether a
+``.clarity-protocol/`` directory exists.  Survives launcher restarts.  This
+is purely a directory-level concept: a project exists in the registry whether
+or not it has a running server.
+
+**Process table** (``ProcessTable``, defined below).  In-memory-only tracking
+of spawned server subprocesses — project name, PID, port, ``Popen`` handle.
+Rebuilt from scratch every time the launcher starts (empty set).  Pruned
+automatically when a subprocess dies.
+
+Lifecycle
+~~~~~~~~~
+
+1. User clicks a project in the picker (or the frontend activates one).
+2. ``POST /api/projects/{name}/activate`` → launcher looks up the project
+   in the registry, checks the process table for a running server.
+3. If no server is running: find a free ephemeral port (``socket.bind``),
+   spawn ``clarity web <path> --port <port>``, poll ``/api/session`` until
+   it responds (up to 30 s).
+4. Mark the project as "active" — all subsequent HTTP and WebSocket traffic
+   is proxied to its port.
+5. The old active project's server keeps running in the background.
+   Switching back later is instant (no spawn, no health-check wait).
+
+Idle reaping
+~~~~~~~~~~~~
+
+A background task checks every 60 seconds for servers that haven't received
+a proxied request in 30 minutes.  Idle servers (other than the active one)
+are SIGTERM'd and removed from the process table.  They'll be re-spawned on
+the next activate.
+
+An ``atexit`` handler calls ``kill_all()`` to clean up all subprocesses when
+the launcher itself exits.
+
+CLI modes
+~~~~~~~~~
+
+- ``clarity web <dir>`` — single-project mode.  Starts the per-project server
+  directly (``create_app`` from ``app.py``), no launcher involved.  This is
+  the developer path.
+
+- ``clarity web`` (no directory) — launcher mode.  Starts this module's
+  ``create_launcher`` app.  The project picker UI lets the user choose or
+  create projects.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import atexit
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
+
+from clarity_agent.projects import ProjectEntry, ProjectRegistry
+
+# ---------------------------------------------------------------------------
+# Process table (in-memory, runtime-only)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ProcessEntry:
+    """A running per-project server subprocess."""
+
+    project_name: str
+    pid: int
+    port: int
+    process: subprocess.Popen[bytes]
+    last_activity: float = field(default_factory=time.time)
+
+
+class ProcessTable:
+    """In-memory table of running project server subprocesses."""
+
+    def __init__(self) -> None:
+        self._entries: dict[str, ProcessEntry] = {}
+
+    def get(self, name: str) -> ProcessEntry | None:
+        entry = self._entries.get(name)
+        if entry is not None and not self._is_alive(entry):
+            del self._entries[name]
+            return None
+        return entry
+
+    def add(self, entry: ProcessEntry) -> None:
+        self._entries[entry.project_name] = entry
+
+    def remove(self, name: str) -> ProcessEntry | None:
+        return self._entries.pop(name, None)
+
+    def all(self) -> list[ProcessEntry]:
+        self.prune_dead()
+        return list(self._entries.values())
+
+    def prune_dead(self) -> None:
+        dead = [n for n, e in self._entries.items() if not self._is_alive(e)]
+        for n in dead:
+            del self._entries[n]
+
+    def kill_all(self) -> None:
+        for entry in self._entries.values():
+            try:
+                entry.process.terminate()
+            except OSError:
+                pass
+        self._entries.clear()
+
+    def touch(self, name: str) -> None:
+        entry = self._entries.get(name)
+        if entry is not None:
+            entry.last_activity = time.time()
+
+    def idle_entries(self, max_idle_seconds: float) -> list[ProcessEntry]:
+        """Return entries that haven't had activity within the threshold."""
+        cutoff = time.time() - max_idle_seconds
+        return [e for e in self._entries.values() if e.last_activity < cutoff]
+
+    @staticmethod
+    def _is_alive(entry: ProcessEntry) -> bool:
+        return entry.process.poll() is None
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _find_free_port() -> int:
+    """Ask the OS for an ephemeral port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
+    """Poll until a project server responds on *port*, or timeout."""
+    url = f"http://127.0.0.1:{port}/api/session"
+    deadline = time.monotonic() + timeout
+    async with httpx.AsyncClient() as client:
+        while time.monotonic() < deadline:
+            try:
+                resp = await client.get(url, timeout=2.0)
+                if resp.status_code == 200:
+                    return True
+            except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException):
+                pass
+            await asyncio.sleep(0.3)
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Launcher app factory
+# ---------------------------------------------------------------------------
+
+_IDLE_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
+
+def create_launcher(
+    clarity_agent_dir: Path,
+    static_dir: Path | None = None,
+    env_path: Path | None = None,
+    theme: str = "sage",
+) -> FastAPI:
+    """Create the launcher FastAPI application.
+
+    Args:
+        clarity_agent_dir: Path to clarity-agent installation (for spawning
+            project servers and setup routes).
+        static_dir: Path to built React app (``web/dist/``).
+        env_path: Path to ``.env`` file.
+        theme: UI color theme name.
+    """
+    registry = ProjectRegistry()
+    processes = ProcessTable()
+    active_project: dict[str, str | None] = {"name": None}
+
+    # Discover projects in the default workspace on startup.
+    registry.discover()
+
+    # Restore last-active project name from the persistent registry.
+    _persisted_active = registry.get_active()
+    if _persisted_active and registry.get(_persisted_active) is not None:
+        active_project["name"] = _persisted_active
+
+    from clarity_agent.app_paths import clarity_env_path
+    _env_path = env_path or clarity_env_path()
+    _clarity_py = clarity_agent_dir / "clarity.py"
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Start idle reaper task
+        reaper_task = asyncio.create_task(_idle_reaper())
+        yield
+        reaper_task.cancel()
+        processes.kill_all()
+
+    async def _idle_reaper() -> None:
+        """Periodically terminate idle project servers."""
+        while True:
+            await asyncio.sleep(60)
+            for entry in processes.idle_entries(_IDLE_TIMEOUT_SECONDS):
+                # Don't reap the active project
+                if entry.project_name == active_project["name"]:
+                    continue
+                entry.process.terminate()
+                processes.remove(entry.project_name)
+
+    app = FastAPI(title="Clarity Launcher", lifespan=lifespan)
+
+    # Ensure subprocesses are cleaned up on exit.
+    atexit.register(processes.kill_all)
+
+    # Setup wizard routes (shared across projects, operates on .env)
+    from clarity_agent.web.settings_routes import init as settings_init
+    from clarity_agent.web.settings_routes import router as settings_router
+    from clarity_agent.web.setup_routes import init as setup_init
+    from clarity_agent.web.setup_routes import router as setup_router
+    setup_init(
+        env_path=_env_path,
+        clarity_agent_dir=clarity_agent_dir,
+        kill_children=processes.kill_all,
+    )
+    settings_init(kill_children=processes.kill_all)
+    app.include_router(setup_router)
+    app.include_router(settings_router)
+
+    # ------------------------------------------------------------------
+    # Subprocess management
+    # ------------------------------------------------------------------
+
+    def _pipe_output(stream: Any, prefix: str) -> None:
+        """Read lines from a subprocess stream and print with a prefix.
+
+        Runs in a daemon thread so the pipe buffer never fills up (which
+        would block the subprocess).
+        """
+        try:
+            for line in stream:
+                text = line.decode("utf-8", errors="replace").rstrip("\n")
+                print(f"  [{prefix}] {text}", flush=True)
+        except ValueError:
+            # Stream closed
+            pass
+
+    def _spawn_server(project: ProjectEntry) -> ProcessEntry:
+        """Launch a per-project server subprocess."""
+        from clarity_agent.app_paths import is_frozen
+
+        port = _find_free_port()
+        # In a frozen (PyInstaller) build, sys.executable is the bundle
+        # itself and handles subcommands directly.  In development,
+        # we invoke Python with clarity.py as a script.
+        if is_frozen():
+            cmd = [sys.executable]
+        else:
+            cmd = [sys.executable, str(_clarity_py)]
+        cmd += [
+            "web", project.path,
+            "--port", str(port),
+            "--host", "127.0.0.1",
+            "--theme", theme,
+        ]
+        # Pass stored SDK session ID so the project server can resume
+        # the conversation after a launcher restart.
+        if project.llm_session_id:
+            cmd.extend(["--session-id", project.llm_session_id])
+        # Build a clean environment for the project server:
+        # - Strip CLAUDECODE to avoid nested-session errors from the CLI.
+        # - Ensure PYTHONPATH includes the clarity-agent src/ directory so
+        #   that Bash commands like `python -m clarity_agent.protocol...`
+        #   work inside the Claude CLI subprocess.
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        src_dir = str(clarity_agent_dir / "src")
+        existing_pp = env.get("PYTHONPATH", "")
+        if src_dir not in existing_pp.split(os.pathsep):
+            env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{existing_pp}" if existing_pp else src_dir
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            cwd=project.path,
+        )
+        # Drain stdout/stderr in background threads so the pipe buffer
+        # never fills up (a full buffer blocks the subprocess).
+        for stream, label in [
+            (proc.stdout, f"{project.name}"),
+            (proc.stderr, f"{project.name}:err"),
+        ]:
+            t = threading.Thread(
+                target=_pipe_output, args=(stream, label), daemon=True,
+            )
+            t.start()
+
+        entry = ProcessEntry(
+            project_name=project.name,
+            pid=proc.pid,
+            port=port,
+            process=proc,
+        )
+        processes.add(entry)
+        return entry
+
+    async def _ensure_running(project: ProjectEntry) -> ProcessEntry:
+        """Return a running ProcessEntry, spawning if needed."""
+        entry = processes.get(project.name)
+        if entry is not None:
+            processes.touch(project.name)
+            return entry
+
+        entry = await asyncio.to_thread(_spawn_server, project)
+        ok = await _wait_for_server(entry.port)
+        if not ok:
+            entry.process.terminate()
+            processes.remove(project.name)
+            raise RuntimeError(
+                f"Project server for {project.name!r} failed to start"
+            )
+        return entry
+
+    async def _ensure_active_running() -> ProcessEntry | None:
+        """If there's an active project, ensure its server is running.
+
+        Returns the ProcessEntry if the server is (now) running, or None
+        if there's no active project.  This handles the common case of a
+        launcher restart: the active project name is persisted but the
+        subprocess is gone.
+        """
+        name = active_project["name"]
+        if name is None:
+            return None
+        entry = processes.get(name)
+        if entry is not None:
+            processes.touch(name)
+            return entry
+        # Server not running — try to (re)start it.
+        project = registry.get(name)
+        if project is None or not Path(project.path).is_dir():
+            if project is not None:
+                registry.remove(project.name)
+            active_project["name"] = None
+            registry.clear_active()
+            return None
+        try:
+            return await _ensure_running(project)
+        except RuntimeError:
+            return None
+
+    # ------------------------------------------------------------------
+    # REST: Project management
+    # ------------------------------------------------------------------
+
+    @app.get("/api/projects")
+    async def list_projects() -> dict[str, Any]:
+        projects = registry.list()
+        # Prune projects whose directories no longer exist.
+        gone = [p for p in projects if not Path(p.path).is_dir()]
+        for p in gone:
+            registry.remove(p.name)
+            if p.name == active_project["name"]:
+                active_project["name"] = None
+                registry.clear_active()
+        if gone:
+            projects = [p for p in projects if Path(p.path).is_dir()]
+        running_names = {e.project_name for e in processes.all()}
+        return {
+            "projects": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "path": p.path,
+                    "last_opened": p.last_opened,
+                    "has_protocol": p.has_protocol,
+                    "running": p.name in running_names,
+                    "active": p.name == active_project["name"],
+                }
+                for p in projects
+            ],
+        }
+
+    @app.post("/api/projects")
+    async def create_project(body: dict[str, Any]) -> dict[str, Any]:
+        name: str = body.get("name", "").strip()
+        path: str | None = body.get("path")
+
+        if not name:
+            raise HTTPException(status_code=400, detail="Project name is required")
+
+        if path:
+            project_path = Path(path).resolve()
+            if not project_path.exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Directory not found: {project_path}",
+                )
+        else:
+            # Default workspace — create the directory automatically.
+            from clarity_agent.app_paths import clarity_projects_dir
+            project_path = clarity_projects_dir() / name
+            project_path.mkdir(parents=True, exist_ok=True)
+
+        try:
+            entry = registry.add(name, project_path)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+
+        return {
+            "id": entry.id,
+            "name": entry.name,
+            "path": entry.path,
+            "last_opened": entry.last_opened,
+            "has_protocol": entry.has_protocol,
+        }
+
+    @app.delete("/api/projects/{name}")
+    async def remove_project(name: str) -> dict[str, str]:
+        # Stop the server if running
+        proc = processes.remove(name)
+        if proc is not None:
+            proc.process.terminate()
+        if active_project["name"] == name:
+            active_project["name"] = None
+        registry.remove(name)
+        return {"status": "removed"}
+
+    async def _do_activate(project: ProjectEntry) -> dict[str, Any]:
+        """Activate a project: start its server and mark it active."""
+        if not Path(project.path).is_dir():
+            registry.remove(project.name)
+            if active_project["name"] == project.name:
+                active_project["name"] = None
+                registry.clear_active()
+            raise HTTPException(
+                status_code=410,
+                detail=f"Project directory no longer exists: {project.path}",
+            )
+        entry = await _ensure_running(project)
+        active_project["name"] = project.name
+        registry.touch(project.name)
+        registry.set_active(project.name)
+
+        # Fetch session info from the project server
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(
+                    f"http://127.0.0.1:{entry.port}/api/session",
+                    timeout=5.0,
+                )
+                session_info = resp.json() if resp.status_code == 200 else {}
+            except httpx.HTTPError:
+                session_info = {}
+
+        return {
+            "id": project.id,
+            "name": project.name,
+            "path": project.path,
+            "port": entry.port,
+            "session": session_info,
+        }
+
+    @app.post("/api/projects/{name}/activate")
+    async def activate_project(name: str) -> dict[str, Any]:
+        project = registry.get(name)
+        if project is None:
+            raise HTTPException(status_code=404, detail=f"Project not found: {name}")
+        return await _do_activate(project)
+
+    @app.post("/api/projects/activate-by-id/{project_id}")
+    async def activate_project_by_id(project_id: str) -> dict[str, Any]:
+        project = registry.get_by_id(project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        return await _do_activate(project)
+
+    @app.post("/api/projects/{name}/deactivate")
+    async def deactivate_project(name: str) -> dict[str, str]:
+        proc = processes.remove(name)
+        if proc is not None:
+            proc.process.terminate()
+        if active_project["name"] == name:
+            active_project["name"] = None
+            registry.clear_active()
+        return {"status": "deactivated"}
+
+    @app.get("/api/projects/active")
+    async def get_active_project() -> dict[str, Any]:
+        name = active_project["name"]
+        if name is None:
+            return {"active": False}
+        project = registry.get(name)
+        entry = processes.get(name) if name else None
+        return {
+            "active": True,
+            "name": name,
+            "path": project.path if project else None,
+            "running": entry is not None,
+        }
+
+    # ------------------------------------------------------------------
+    # REST: Update (handled by launcher, not proxied)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/update-check")
+    async def update_check() -> dict[str, Any]:
+        from clarity_agent.setup.updater import check_for_updates
+        try:
+            status = await asyncio.to_thread(check_for_updates, clarity_agent_dir)
+        except Exception:
+            return {
+                "update_available": False,
+                "current_sha": None,
+                "remote_sha": None,
+                "commit_count": 0,
+                "frozen": False,
+            }
+        return {
+            "update_available": status.available,
+            "current_sha": status.local_sha[:8] if not status.frozen else status.current_version,
+            "remote_sha": (status.remote_sha[:8] if status.remote_sha and not status.frozen
+                           else status.latest_version),
+            "commit_count": status.commit_count,
+            "frozen": status.frozen,
+            "current_version": status.current_version,
+            "latest_version": status.latest_version,
+            "download_url": status.download_url,
+        }
+
+    @app.post("/api/update/run")
+    async def run_update_endpoint() -> dict[str, Any]:
+        from clarity_agent.setup.updater import run_update
+        results = await asyncio.to_thread(run_update, clarity_agent_dir)
+        return {
+            "steps": [
+                {"outcome": r.outcome.value, "message": r.message}
+                for r in results
+            ],
+            "success": all(r.outcome.value != "fail" for r in results),
+        }
+
+    @app.post("/api/update/restart")
+    async def restart_server() -> dict[str, Any]:
+        """Kill all project servers, then restart the launcher process."""
+        from clarity_agent.setup.updater import schedule_restart
+        processes.kill_all()
+        schedule_restart()
+        return {"restarting": True}
+
+    # ------------------------------------------------------------------
+    # REST: Launcher session info
+    # ------------------------------------------------------------------
+
+    @app.get("/api/session")
+    async def launcher_session() -> dict[str, Any]:
+        """Return session info — proxied from active project, or launcher state."""
+        entry = await _ensure_active_running()
+        if entry is not None:
+            async with httpx.AsyncClient() as client:
+                try:
+                    resp = await client.get(
+                        f"http://127.0.0.1:{entry.port}/api/session",
+                        timeout=5.0,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        data["launcher_mode"] = True
+                        # The project server's "active" means "has a
+                        # chat session".  In launcher context, "active"
+                        # means "has an active project" — which is true
+                        # if we got here.  Preserve the chat-session
+                        # flag separately so the UI can distinguish.
+                        data["active"] = True
+                        # Include project ID so the frontend can build
+                        # project-scoped URLs.
+                        name = active_project["name"]
+                        if name:
+                            proj = registry.get(name)
+                            if proj:
+                                data["project_id"] = proj.id
+                        # Persist SDK session ID so we can resume after
+                        # a launcher restart.
+                        new_sid = data.get("llm_session_id")
+                        name = active_project["name"]
+                        if new_sid and name:
+                            try:
+                                proj = registry.get(name)
+                                if proj and proj.llm_session_id != new_sid:
+                                    registry.update(name, llm_session_id=new_sid)
+                            except Exception:
+                                pass  # don't break the proxy
+                        return data
+                except httpx.HTTPError:
+                    pass
+
+        # No active project or project server unreachable
+        return {
+            "active": False,
+            "session_id": None,
+            "process": None,
+            "project_dir": None,
+            "backend": None,
+            "model": None,
+            "active_model": None,
+            "active_tier": None,
+            "theme": theme,
+            "launcher_mode": True,
+        }
+
+    # ------------------------------------------------------------------
+    # WebSocket proxy
+    # ------------------------------------------------------------------
+
+    @app.websocket("/ws/chat")
+    async def websocket_proxy(ws: WebSocket) -> None:
+        await ws.accept()
+
+        entry = await _ensure_active_running()
+        if entry is None:
+            await ws.send_json({
+                "type": "error",
+                "message": "No active project. Select a project first.",
+                "category": "no_project",
+                "retryable": False,
+            })
+            await ws.close()
+            return
+
+        name = active_project["name"]
+        assert name is not None  # guaranteed by _ensure_active_running success
+
+        processes.touch(name)
+
+        # Connect to the project server's WebSocket.
+        # websockets 13+ uses websockets.asyncio.client.
+        from websockets.asyncio.client import connect as ws_connect
+        from websockets.exceptions import ConnectionClosed
+        ws_url = f"ws://127.0.0.1:{entry.port}/ws/chat"
+
+        try:
+            async with ws_connect(ws_url) as upstream:
+
+                async def browser_to_server() -> None:
+                    try:
+                        while True:
+                            data = await ws.receive_text()
+                            await upstream.send(data)
+                    except WebSocketDisconnect:
+                        await upstream.close()
+
+                async def server_to_browser() -> None:
+                    try:
+                        async for message in upstream:
+                            if isinstance(message, str):
+                                await ws.send_text(message)
+                            else:
+                                await ws.send_bytes(message)
+                    except ConnectionClosed:
+                        pass
+
+                await asyncio.gather(
+                    browser_to_server(),
+                    server_to_browser(),
+                    return_exceptions=True,
+                )
+        except Exception as e:
+            try:
+                await ws.send_json({
+                    "type": "error",
+                    "message": f"Failed to connect to project server: {e}",
+                    "category": "network",
+                    "retryable": True,
+                })
+            except Exception:
+                pass
+        finally:
+            try:
+                await ws.close()
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+    # HTTP reverse proxy (catch-all for /api/* routes)
+    # ------------------------------------------------------------------
+
+    async def _proxy_request(request: Request) -> Response:
+        """Forward an HTTP request to the active project's server."""
+        entry = await _ensure_active_running()
+        if entry is None:
+            raise HTTPException(
+                status_code=503,
+                detail="No active project. Select a project first.",
+            )
+
+        # Build upstream URL
+        path = request.url.path
+        query = str(request.url.query)
+        upstream_url = f"http://127.0.0.1:{entry.port}{path}"
+        if query:
+            upstream_url += f"?{query}"
+
+        # Forward the request
+        body = await request.body()
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.request(
+                    method=request.method,
+                    url=upstream_url,
+                    headers={
+                        k: v for k, v in request.headers.items()
+                        if k.lower() not in ("host", "connection")
+                    },
+                    content=body if body else None,
+                    timeout=60.0,
+                )
+            except httpx.ConnectError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Cannot reach project server for {entry.project_name!r}.",
+                ) from exc
+
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+        )
+
+    # Register the catch-all proxy for all API routes not handled above.
+    # These are the per-project endpoints (protocol, transcripts, packets, etc.)
+    @app.api_route(
+        "/api/{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    )
+    async def proxy_api(request: Request) -> Response:
+        return await _proxy_request(request)
+
+    # ------------------------------------------------------------------
+    # Static file serving (SPA) — served once by the launcher
+    # ------------------------------------------------------------------
+
+    if static_dir is not None and static_dir.exists():
+        from fastapi.responses import FileResponse
+
+        assets_dir = static_dir / "assets"
+        if assets_dir.exists():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(assets_dir)),
+                name="assets",
+            )
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str) -> FileResponse:
+            file_path = static_dir / full_path
+            if file_path.is_file():
+                return FileResponse(str(file_path))
+            return FileResponse(str(static_dir / "index.html"))
+
+    return app

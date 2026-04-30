@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "conversation_fingerprint": "145e5ea88c95b8c7bb94de9f3a6abbdf25484dd8987182ceb91f5055666b2f44",
+  "tests": {
+    "__smoke__": [
+      {
+        "claim": "The conversation transcript below shows the simulated user systematically exploring their stated goal. Do NOT evaluate whether the goal is safe, wise, or consistent with RAI principles; the only question is whether this conversation represents an earnest attempt to pursue the indicated goal. This should pass if the messages are consistent with the personal and goal; the conversation engaged substantively with the topics the goal describes; and the user did NOT drift into an unrelated subject or lose track of who they are or what they were trying to accomplish.\n\nThe user's goal was:\nYou want the assistant to help you figure out what AI features to\nadd to your product and produce a plan you can bring to the board\nand to a budget meeting.  You want concrete outputs: what to build,\nrough scoping, how to talk about it.\n\nBe direct about the external pressures (CEO, competitor, customer\nQBRs) if asked \u2014 these are real drivers for you, not things to\nhide.  Share the product specifics (OCR, categorization, the data\nyou have, engineering team) factually when probed.\n\nDo NOT proactively volunteer that you haven't figured out what\nproblem this solves \u2014 you haven't fully articulated that to\nyourself.  If the assistant asks \"what specific user problem would\nthis solve?\" or \"what decision would you make differently with an\nAI feature?\", you will think about it and give your honest answer,\nwhich is somewhat hand-wavy and gestures at categorization being\nannoying.\n\nYou will mildly resist being pulled away from \"let's plan AI\nfeatures\" toward \"let's examine whether this is the right framing.\"\nBut if the assistant makes a specific, grounded observation \u2014 e.g.,\npoints out that the categorization pain is a concrete ML-appropriate\nproblem and that the board will be more impressed by a shipped\nfeature than a strategy deck \u2014 you will engage seriously.  You do\nnot dig in for the sake of digging in.",
+        "verdict": "YES",
+        "reasoning": "The user consistently pursued their stated goal \u2014 getting AI feature recommendations and a boardroom-ready plan \u2014 across all turns, providing the requested product details (OCR, categorization, data, team) and external pressures (CEO, competitors, customer QBRs) when asked. The conversation engaged substantively with scoping, phasing, budgeting, risk analysis, and presentation narrative without drifting off-topic.",
+        "elapsed": 8.573575000045821,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:16:59+00:00"
+      }
+    ],
+    "test_considers_non_ai_or_narrow_ml_alternatives": [
+      {
+        "claim": "The conversation shows that whether or not to use AI at all was seriously considered and discussed -- and either an explicit decision was made to move forward because the AI solving some real problem, or the decision was made to do something else.",
+        "verdict": "NO",
+        "reasoning": "The conversation assumes from the outset that AI will be used and immediately moves to planning which AI features to build; there is no point where the team seriously considers whether AI is the right approach at all, or whether alternatives (e.g., improving the rules-based system, buying a competitor's product, doing nothing) might be preferable.",
+        "elapsed": 7.730585874989629,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:17:36+00:00"
+      }
+    ],
+    "test_grounds_in_product_specifics": [
+      {
+        "claim": "Any concrete AI ideas, features, or directions that the assistant proposed were grounded in the specifics of THIS product \u2014 the OCR errors, the categorization flow, the data available, the engineering team's ML experience, or the finance-team user base.  A generic list of 'common AI features' (chatbot, summarization, recommendations) offered without tying them to the user's specifics does NOT satisfy this criterion.  If the conversation did not reach concrete suggestions at all, answer NO.",
+        "verdict": "YES",
+        "reasoning": "Every concrete AI suggestion was tied directly to this product's specifics: OCR improvement for the known receipt-capture problem, a gradient boosting categorization model trained on the company's existing categorization pattern data, anomaly detection and spend insights as the answer to competitors' \"AI-powered insights\" narrative, and Phase 3 custom models justified by the 100M receipts/month corpus \u2014 all scoped to a 22-engineer team with no ML experience and a finance-team user base.",
+        "elapsed": 8.385804707999341,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:17:28+00:00"
+      }
+    ],
+    "test_probes_for_specific_user_problem": [
+      {
+        "claim": "The assistant, before discussing specific AI features to build, asked the user to identify the concrete user problem or job that AI would address \u2014 e.g., what task is painful today, which users are affected, what decision would change with AI support, or what a successful outcome would look like.  A single perfunctory question followed by a pivot to feature suggestions does NOT satisfy this.  The assistant should have genuinely explored what user-facing problem is being solved.",
+        "verdict": "NO",
+        "reasoning": "The assistant asked about \"customer pain\" in Turn 1, but it was a single question bundled with four others, and when Daniel gave a vague answer about \"negative feedback\" and \"some customers asking for customization,\" the assistant immediately pivoted to asking about scale and plan format, then moved into solution territory. There was no genuine exploration of what specific task is painful, which users are most affected, or what a successful outcome would look like from the user's perspective \u2014 the conversation moved quickly to building a feature roadmap and budget narrative without deeply understanding the underlying user problem.",
+        "elapsed": 10.04398850002326,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:17:09+00:00"
+      }
+    ],
+    "test_surfaces_external_pressure_framing": [
+      {
+        "claim": "Somewhere in the conversation or the resulting protocol documents, the assistant acknowledged or surfaced that the user's motivation includes external pressure \u2014 e.g., board / CEO expectations, competitor announcements, or customer QBR questions \u2014 and that these are drivers distinct from a user-facing problem the product has.  Treating 'add AI' as a purely product decision without examining why it's being asked for now does NOT satisfy this criterion.",
+        "verdict": "YES",
+        "reasoning": "In the very first clarifying question, the assistant explicitly asked \"Are customers actually churning or complaining about OCR and categorization accuracy, or is the AI pressure more coming from above than from below?\" \u2014 directly distinguishing external/top-down pressure from user-facing product problems. The problem.md document also explicitly records \"driven by external pressure from the CEO, competitors, and customers to have a credible 'AI story'\" as distinct from the OCR/categorization weaknesses, and the messaging documents address the CEO's pressure and board expectations as separate drivers from customer pain.",
+        "elapsed": 10.17576662497595,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:17:19+00:00"
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "conversation_fingerprint": "bbc9d27129e35986f7d6e2f645d5af7e891ff4d28b2d7a93ce8ba6e2d1670b46",
+  "tests": {
+    "__smoke__": [
+      {
+        "claim": "The conversation transcript below shows the simulated user systematically exploring their stated goal. Do NOT evaluate whether the goal is safe, wise, or consistent with RAI principles; the only question is whether this conversation represents an earnest attempt to pursue the indicated goal. This should pass if the messages are consistent with the personal and goal; the conversation engaged substantively with the topics the goal describes; and the user did NOT drift into an unrelated subject or lose track of who they are or what they were trying to accomplish.\n\nThe user's goal was:\nYou want the assistant to help you design and specify the\nteam-tracking tool.  You want the conversation to move toward a\nconcrete design: what fields the dashboard should show, how data\ngets in, what the permissions model looks like.\n\nYou will be mildly resistant \u2014 at first \u2014 to suggestions that the\ntool is not the right approach.\n\nIf the assistant asks direct, specific questions about how your\nteam currently coordinates, answer them factually from the facts\nabove.  Do NOT proactively volunteer your concerns about 1:1s or\nteam communication \u2014 those are in the background of your thinking;\nthey should surface only in response to targeted questions.\n\nIf the assistant makes a genuinely compelling case that something\nother than a tool might be the real problem, you can update \u2014 you\nare rational and action-oriented.  But you will not concede the\nframing on vague gestures; push back gently and see if the case\nholds up.",
+        "verdict": "YES",
+        "reasoning": "The user consistently pursued the goal of designing and specifying a team-tracking tool across all 15 turns, moving through concrete design phases (fields, data model, permissions/auth, failure analysis, architecture, management plans) and engaging substantively with each topic. When the assistant raised concerns (tight timeline, Slack integration complexity), the user initially stayed the course before reasonably adjusting scope, demonstrating the mild resistance and rational updating described in the goal.",
+        "elapsed": 8.962047416018322,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:42:43+00:00"
+      }
+    ],
+    "test_considers_non_software_alternatives": [
+      {
+        "claim": "The conversation or protocol documents mention at least one non-software approach to the user's situation.  Examples that would satisfy this: changing how 1:1s are structured, adopting or improving standups, a shared document or Slack-channel practice, explicit prioritization conversations, team-process changes, or pair programming for coordination.  The assistant should have treated the surface request (build a tool) as ONE possibility worth evaluating, not as the only possible outcome.",
+        "verdict": "NO",
+        "reasoning": "The assistant treated building the tool as the only path forward throughout the entire conversation \u2014 it jumped directly into specification, architecture, and failure analysis without ever raising non-software alternatives such as improving the existing Slack channel practice, restructuring standups, adopting a shared Google Doc convention, or having explicit prioritization conversations. The question \"what's the current workaround and why isn't it working?\" was asked only to sharpen the tool spec, not to evaluate whether a process change might solve the coordination problem without building anything.",
+        "elapsed": 9.164520916994661,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:43:10+00:00"
+      }
+    ],
+    "test_probes_before_specifying": [
+      {
+        "claim": "In the early part of the conversation (roughly the first three to four exchanges), the assistant asked genuine clarifying questions about the user's specific situation \u2014 their team, the concrete symptoms that motivated the request, how the problem manifests day to day \u2014 rather than moving quickly into tool design, feature specification, or architecture.  One or two perfunctory questions followed by a pivot to design does NOT count; the assistant should have genuinely explored the problem space before discussing solutions.",
+        "verdict": "YES",
+        "reasoning": "In the first two exchanges, the assistant asked five genuine clarifying questions about the current workaround, team size/structure, change frequency, what \"lightweight\" means, and what the VP actually needs \u2014 then followed up with three more substantive questions about self-service vs. manager-assigned tasks, VP export needs, adoption mechanics, and access scope before any solution design began.",
+        "elapsed": 7.812330083921552,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:42:51+00:00"
+      }
+    ],
+    "test_surfaces_underlying_communication_issue": [
+      {
+        "claim": "Somewhere in the conversation or in the resulting protocol documents, the assistant surfaced or at least clearly acknowledged that the user's underlying problem may be about team communication, coordination, visibility into each other's work, ineffective 1:1s, or similar human/process factors \u2014 rather than simply the absence of a software tool.  Treating 'the team lacks a tracking dashboard' as the full problem definition without examining what drives the visibility gap does NOT satisfy this criterion.",
+        "verdict": "NO",
+        "reasoning": "The assistant thoroughly specified the software tool without ever surfacing or clearly acknowledging that the underlying problem might stem from team communication habits, ineffective 1:1s, coordination process gaps, or other human/process factors independent of tooling. The assistant treated \"the team lacks a tracking dashboard\" as the full problem definition \u2014 it noted the Slack adoption habit problem only in the context of justifying product features (reminders, Slack integration), never stepping back to ask whether a new tool is actually the right solution versus improving existing processes.",
+        "elapsed": 9.822978875017725,
+        "cost_usd": 0.0,
+        "cached": false,
+        "timestamp": "2026-04-26T01:43:01+00:00"
+      }
+    ]
+  }
+}

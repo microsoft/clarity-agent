@@ -1,0 +1,36 @@
+# Eval framework configuration.
+#
+# Maps each role in the eval framework to an LLM backend.  Credentials
+# are resolved from the environment using the same mechanism as the
+# main app (env vars → keyring → settings.json).
+#
+# The three roles are deliberately distinct:
+#   target — the system under test (a ClaritySession).  Runs the normal
+#            Clarity tier routing, so the model choice per process is
+#            governed by the target provider's tier defaults — the
+#            ``model`` field is NOT used for this role.
+#   user   — the simulated user, a single-call LLM.  ``model`` picks
+#            the exact model.
+#   judge  — the evaluator, a single-call LLM.  ``model`` picks the
+#            exact model; a strong model here makes verdicts reliable.
+
+roles:
+  target:
+    provider: github
+    auth_mode: gh_cli
+
+  # You will probably need access to an "unsafe" model (one with no safety
+  # filters) to run these evals. Use that model for the user role, but *not*
+  # for the target or judge roles.
+  user:
+    provider: azure
+    auth_mode: default
+    model: gpt-4o
+
+  judge:
+    provider: github
+    auth_mode: gh_cli
+    model: claude-opus-4-6
+
+defaults:
+  max_turns: 15

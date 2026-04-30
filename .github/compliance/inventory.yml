@@ -1,0 +1,7 @@
+inventory:
+- source: DirectOwners
+  items:
+  - id: scooley@microsoft.com
+  - id: yzunger@microsoft.com
+  - id: ncoles@microsoft.com
+  isProduction: false

@@ -1,0 +1,2 @@
+# Mark pre-built web frontend as generated (collapsed in PR diffs).
+web/dist/** linguist-generated=true

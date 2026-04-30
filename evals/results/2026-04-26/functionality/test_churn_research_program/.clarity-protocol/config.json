@@ -1,0 +1,52 @@
+{
+  "clarityAgent": {
+    "path": "/Users/yzunger/src/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "80fd2753484583e1631e41b96034b9cfd854d1f287af5fb9e88f8a91e6f1ead5",
+      "dependencyHashes": {}
+    },
+    "goal/stakeholders.md": {
+      "contentHash": "6ff27417e6c4c39f6f63554433f718619a2880827a54c042313b9b0ae8e8a99a",
+      "dependencyHashes": {
+        "goal/problem.md": "80fd2753484583e1631e41b96034b9cfd854d1f287af5fb9e88f8a91e6f1ead5"
+      }
+    },
+    "goal/requirements.md": {
+      "contentHash": "7c6ec908baeed40308e0495bc54f6312807df99bd914ca5986b3115c65c239fd",
+      "dependencyHashes": {
+        "goal/problem.md": "80fd2753484583e1631e41b96034b9cfd854d1f287af5fb9e88f8a91e6f1ead5",
+        "goal/stakeholders.md": "6ff27417e6c4c39f6f63554433f718619a2880827a54c042313b9b0ae8e8a99a"
+      }
+    },
+    "goal/open-questions.md": {
+      "contentHash": "84d10c2e8772fa376d3acc14dfca52273620ed6e1046a685006fe857c655bec1",
+      "dependencyHashes": {
+        "goal/problem.md": "80fd2753484583e1631e41b96034b9cfd854d1f287af5fb9e88f8a91e6f1ead5"
+      }
+    },
+    "solution/solution.md": {
+      "contentHash": "384c80cb8b94fb39a5bc13a87bd310c20ad44f6be7514971c640e20b5cd81b7f",
+      "dependencyHashes": {
+        "goal/problem.md": "80fd2753484583e1631e41b96034b9cfd854d1f287af5fb9e88f8a91e6f1ead5",
+        "goal/requirements.md": "7c6ec908baeed40308e0495bc54f6312807df99bd914ca5986b3115c65c239fd",
+        "goal/open-questions.md": "84d10c2e8772fa376d3acc14dfca52273620ed6e1046a685006fe857c655bec1"
+      }
+    },
+    "failures/failures.md": {
+      "contentHash": "721bea4f951552ee7d60bd79c50cb0f44f4150d5eaff3ddac0367c97815b2899",
+      "dependencyHashes": {
+        "solution/solution.md": "384c80cb8b94fb39a5bc13a87bd310c20ad44f6be7514971c640e20b5cd81b7f"
+      }
+    }
+  }
+}

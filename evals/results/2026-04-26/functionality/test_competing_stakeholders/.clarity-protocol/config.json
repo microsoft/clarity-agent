@@ -1,0 +1,38 @@
+{
+  "clarityAgent": {
+    "path": "/Users/yzunger/src/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "109281618997acc428812215083eeda6fb45052aa5a8d3a2dae3b5c2c0e6b73d",
+      "dependencyHashes": {}
+    },
+    "goal/stakeholders.md": {
+      "contentHash": "6d2b5cd387bfa3003a9481d6bbb4f66e1f5028f3576fc9ab160e50b69c327807",
+      "dependencyHashes": {
+        "goal/problem.md": "109281618997acc428812215083eeda6fb45052aa5a8d3a2dae3b5c2c0e6b73d"
+      }
+    },
+    "goal/requirements.md": {
+      "contentHash": "75be29cd11155c3f5d7e339d0ab9c99279036059b80c104048b030f5edc67a95",
+      "dependencyHashes": {
+        "goal/problem.md": "109281618997acc428812215083eeda6fb45052aa5a8d3a2dae3b5c2c0e6b73d",
+        "goal/stakeholders.md": "6d2b5cd387bfa3003a9481d6bbb4f66e1f5028f3576fc9ab160e50b69c327807"
+      }
+    },
+    "goal/open-questions.md": {
+      "contentHash": "f3b4f863add02257d27d67830b5135b5ea0f942fdf1433f8c2d2d785a97c3636",
+      "dependencyHashes": {
+        "goal/problem.md": "109281618997acc428812215083eeda6fb45052aa5a8d3a2dae3b5c2c0e6b73d"
+      }
+    }
+  }
+}

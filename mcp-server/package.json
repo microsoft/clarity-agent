@@ -1,0 +1,27 @@
+{
+  "name": "@clarity-agent/mcp",
+  "version": "0.1.0",
+  "description": "Clarity Agent MCP server — structured thinking about what you're building, why, and what could go wrong.",
+  "license": "MIT",
+  "bin": {
+    "clarity-agent-mcp": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "clarity",
+    "structured-thinking",
+    "failure-analysis",
+    "architecture"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/clarity-agent"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

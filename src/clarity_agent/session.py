@@ -1,0 +1,583 @@
+"""
+Clarity session management.
+
+Contains :class:`ClaritySession`, the core orchestrator for running clarity
+processes interactively. Used by the CLI (``clarity.py``) and the web
+backend (``clarity_agent.web``).
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from types import TracebackType
+from typing import IO, Any
+
+from prompt_toolkit import prompt as pt_prompt
+
+from clarity_agent.llm import ChatBackend, LLMConfig
+from clarity_agent.llm.types import ToolHandler
+from clarity_agent.protocol.packet_status import (
+    PacketStatusReport,
+    check_packet_status,
+    format_for_agent,
+    format_report,
+    record_hashes,
+)
+
+
+def _git_username(project_dir: Path) -> str | None:
+    """Return a filesystem-safe git identity for the current user, or None."""
+    for field in ("user.name", "user.email"):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(project_dir), "config", field],
+                capture_output=True, text=True, timeout=3,
+            )
+            value = result.stdout.strip()
+            if value:
+                # Sanitize: keep alphanumeric, dot, hyphen; collapse everything else to -
+                safe = re.sub(r"[^a-zA-Z0-9.\-]+", "-", value).strip("-")
+                if safe:
+                    return safe
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return None
+
+
+class ClaritySession:
+    def __init__(
+        self,
+        project_dir: str | Path,
+        clarity_agent_dir: str | Path,
+        backend: ChatBackend,
+        llm_config: LLMConfig,
+        transcript_dir: Path | None = None,
+    ) -> None:
+        self.project_dir: Path = Path(project_dir)
+        self.clarity_agent_dir: Path = Path(clarity_agent_dir)
+        from clarity_agent.app_paths import protocol_dir as _protocol_dir
+        self.protocol_dir: Path = _protocol_dir(self.project_dir)
+        self.backend: ChatBackend = backend
+        self.llm_config: LLMConfig = llm_config
+        self._transcript: IO[str] | None = None
+
+        if transcript_dir is not None:
+            transcript_dir.mkdir(parents=True, exist_ok=True)
+            now = datetime.now()
+            timestamp: str = now.strftime("%Y%m%d-%H%M%S")
+            username = _git_username(self.project_dir)
+            stem = f"{username}-{timestamp}" if username else timestamp
+            transcript_path: Path = transcript_dir / f"{stem}.md"
+            self._transcript = open(transcript_path, "w", encoding="utf-8")
+            backend_name: str = type(backend).__name__
+            self._log("# Transcript\n\n")
+            self._log(f"**Date:** {now.isoformat()}\n")
+            self._log(f"**Project:** {self.project_dir}\n")
+            self._log(f"**Backend:** {backend_name}\n\n---\n\n")
+            print(f"  Transcript: {transcript_path}")
+
+        # Wire up tool-use callback for transcript recording
+        backend.on_tool_use = self._on_tool_use
+
+    def _log(self, text: str) -> None:
+        """Write to transcript file if enabled. Flushes after each write."""
+        if self._transcript:
+            self._transcript.write(text)
+            self._transcript.flush()
+
+    def _on_tool_use(self, tool_name: str, detail: str) -> None:
+        """Callback for tool-use events from the backend."""
+        self._log(f"    [Tool] {tool_name} -> {detail}\n")
+
+    def __enter__(self) -> ClaritySession:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if self._transcript:
+            self._transcript.close()
+            self._transcript = None
+
+    def load_behaviors(self) -> str:
+        """Load cross-cutting behavioral guidelines from AGENTS.md.
+
+        Extracts the ``## Behaviors`` section, which applies to all processes.
+        Returns an empty string if the file or section is missing.
+        """
+        agents_md: Path = self.clarity_agent_dir / "AGENTS.md"
+        if not agents_md.exists():
+            return ""
+        content: str = agents_md.read_text()
+        start: int = content.find("## Behaviors")
+        if start == -1:
+            return ""
+        rest: str = content[start:]
+        next_heading: int = rest.find("\n## ", 1)
+        if next_heading != -1:
+            return rest[:next_heading].strip()
+        return rest.strip()
+
+    def load_process(self, process_name: str) -> str:
+        """Load a process guide from the clarity agent directory."""
+        process_path: Path = self.clarity_agent_dir / "processes" / f"{process_name}.md"
+        if not process_path.exists():
+            raise FileNotFoundError(f"Process guide not found: {process_path}")
+        return process_path.read_text()
+
+    def load_thinker(self, thinker_name: str) -> str:
+        """Load a thinker guide from the clarity agent directory."""
+        thinker_path: Path = self.clarity_agent_dir / "thinkers" / f"{thinker_name}.md"
+        if not thinker_path.exists():
+            raise FileNotFoundError(f"Thinker guide not found: {thinker_path}")
+        return thinker_path.read_text()
+
+    def chat(
+        self,
+        user_message: str,
+        system_prompt: str | None = None,
+        *,
+        model: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_handler: ToolHandler | None = None,
+    ) -> str:
+        """Send a message and get a response from Claude.
+
+        Args:
+            model: Optional per-call model override. When set, the backend
+                uses this model for the API call while preserving conversation
+                history on the same backend instance.
+            tools: Optional tool schemas to provide to the model.
+            tool_handler: Callable that receives a :class:`ToolUseBlock`
+                and returns a result string.
+        """
+        self._log(f"**User:** {user_message}\n\n")
+        response: str = self.backend.chat(
+            user_message, system_prompt, model=model,
+            tools=tools, tool_handler=tool_handler,
+        )
+        self._log(f"**Assistant:** {response}\n\n---\n\n")
+        return response
+
+    def get_packet_status_report(self) -> str | None:
+        """Run the packet status checker and return agent-formatted report, or None."""
+        if not self.protocol_dir.exists():
+            return None
+        report: PacketStatusReport = check_packet_status(self.protocol_dir)
+        # Include if there's something interesting to report
+        if (
+            report["summary"]["stale"]
+            or report["summary"]["empty"]
+            or report["summary"]["untracked"]
+            or report.get("mailboxes")
+        ):
+            return format_for_agent(report)
+        return None
+
+    def record_document_state(self) -> None:
+        """Record content hashes for all documents after a process completes."""
+        if not self.protocol_dir.exists():
+            return
+        recorded: list[str] = record_hashes(self.protocol_dir)
+        if recorded:
+            print(f"\n  Recorded document state for {len(recorded)} file(s).")
+
+    def run_main(self) -> None:
+        """Run the clarity-agent process to assess state and determine next steps."""
+        self.run_custom_process("clarity-agent")
+
+    def _resolve_model(self, process_name: str) -> str:
+        """Return the model (or tier name) for *process_name*.
+
+        The returned value may be a tier name (like ``"deep"``) or a
+        concrete model string; the backend's ``resolve_model()``
+        handles both.
+        """
+        return self.llm_config.resolve(process_name)
+
+    def run_custom_process(self, process_name: str) -> None:
+        """Run a custom process by name."""
+        print(f"\n{'=' * 80}")
+        print(f"RUNNING {process_name.upper()} PROCESS")
+        print(f"{'=' * 80}\n")
+
+        self._log(f"## Process: {process_name}\n\n")
+
+        # Resolve the model for this process.  May be a tier name ("deep")
+        # or a concrete model string; the backend's resolve_model() handles both.
+        model_for_process: str = self._resolve_model(process_name)
+        tier: str = self.llm_config.resolve_tier(process_name)
+        resolved_model: str = self.backend.resolve_model(model_for_process)
+        if tier != "default":
+            print(f"  Model: {resolved_model} (tier: {tier})")
+            self._log(f"**Model override:** {resolved_model} (tier: {tier})\n\n")
+
+        # Always include the feedback tool so users can send feedback
+        # from any process.
+        from clarity_agent.ai_actions.feedback import (
+            create_feedback_handler,
+            create_feedback_tools,
+        )
+
+        feedback_tools = create_feedback_tools()
+        feedback_handler = create_feedback_handler(
+            self.project_dir,
+            provider=self.llm_config.provider,
+            model=self.llm_config.tiers.get("default"),
+            on_tool_use=self.backend.on_tool_use,
+        )
+
+        tools: list[dict[str, Any]] = list(feedback_tools)
+        tool_handler: ToolHandler = feedback_handler
+
+        # For failure-brainstorming, add tools so the AI can record
+        # findings with controlled formatting.
+        if process_name == "failure-brainstorming":
+            from clarity_agent.ai_actions.brainstorm import (
+                create_brainstorm_handler,
+                create_brainstorm_tools,
+                format_available_thinkers,
+            )
+            from clarity_agent.protocol.thinker_registry import select_thinkers
+
+            all_thinkers = select_thinkers(
+                self.clarity_agent_dir, self.protocol_dir, mode="deep",
+            )
+            # Exclude general-thinker — the AI IS the general thinker now.
+            specialists = [t for t in all_thinkers if t.name != "general-thinker"]
+
+            brainstorm_tools = create_brainstorm_tools(specialists or None)
+            brainstorm_handler = create_brainstorm_handler(
+                self.protocol_dir,
+                self.clarity_agent_dir,
+                on_tool_use=self.backend.on_tool_use,
+            )
+
+            tools.extend(brainstorm_tools)
+            _fb_handler = feedback_handler
+
+            def _combined(tc: Any) -> str:
+                if tc.name == "send_feedback":
+                    return _fb_handler(tc)
+                return brainstorm_handler(tc)
+
+            tool_handler = _combined
+
+        # Load process
+        try:
+            process_content: str = self.load_process(process_name)
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            return
+
+        behaviors: str = self.load_behaviors()
+        behaviors_block: str = f"{behaviors}\n\n" if behaviors else ""
+
+        system_prompt: str = (
+            f"{behaviors_block}"
+            f"You are running the {process_name} process. "
+            f"Here is the process guide:\n\n{process_content}\n\n"
+            f"Follow this process step by step.\n\n"
+            f"The clarity-agent directory (containing process guides and "
+            f"thinker definitions) is: {self.clarity_agent_dir}\n"
+            f"Process guides: {self.clarity_agent_dir / 'processes'}/\n"
+            f"Thinker guides: {self.clarity_agent_dir / 'thinkers'}/"
+        )
+
+        # Include packet status report for processes that benefit from it
+        status_report: str | None = self.get_packet_status_report()
+        if status_report:
+            system_prompt += (
+                f"\n\nThe following packet status analysis was performed by checking "
+                f"content hashes against the document dependency graph. Use this "
+                f"to inform your assessment:\n\n{status_report}"
+            )
+
+        # For failure-brainstorming, append methodology and specialist info.
+        if process_name == "failure-brainstorming":
+            methodology_path = (
+                self.clarity_agent_dir / "processes" / "failure-reasoning-guidelines.md"
+            )
+            if methodology_path.exists():
+                system_prompt += (
+                    f"\n\n## Failure Reasoning Methodology\n\n"
+                    f"{methodology_path.read_text()}"
+                )
+            if specialists:  # type: ignore[possibly-undefined]
+                system_prompt += f"\n\n{format_available_thinkers(specialists)}"  # type: ignore[possibly-undefined]
+
+        initial_message: str = f"Let's run the {process_name} process."
+
+        response: str = self.chat(
+            initial_message,
+            system_prompt=system_prompt,
+            model=model_for_process,
+            tools=tools,
+            tool_handler=tool_handler,
+        )
+
+        print(f"Assistant: {response}\n")
+
+        # Interactive conversation
+        print("(Enter for newline, Alt+Enter to send, 'exit' to end)\n")
+        while True:
+            try:
+                user_input: str = _multiline_input()
+            except (EOFError, KeyboardInterrupt):
+                print(f"\nEnding {process_name} process.")
+                break
+            if not user_input:
+                continue
+
+            if user_input.lower() in ("exit", "quit", "done"):
+                print(f"\nEnding {process_name} process.")
+                break
+
+            # Process handoff: intercept "run <process-name>" to load
+            # the next process guide into the conversation.  Works for
+            # all backends since it injects text, not tools.
+            handoff_match: re.Match[str] | None = re.match(
+                r"^run\s+([\w-]+)\s*$", user_input.strip(), re.IGNORECASE,
+            )
+            if handoff_match:
+                next_process: str = handoff_match.group(1)
+                try:
+                    next_content: str = self.load_process(next_process)
+                    process_name = next_process
+                    print(f"\nLoading {next_process} process guide...\n")
+                    user_input = (
+                        f"We're now running the {next_process} process. "
+                        f"Here is the process guide:\n\n{next_content}\n\n"
+                        f"Follow this process from its beginning, taking "
+                        f"into account our conversation so far."
+                    )
+                except FileNotFoundError:
+                    print(f"  Unknown process: {next_process}")
+                    continue
+
+            response = self.chat(
+                user_input, model=model_for_process,
+                tools=tools, tool_handler=tool_handler,
+            )
+            print(f"\nAssistant: {response}\n")
+
+        # Record document state after process completes
+        self.record_document_state()
+
+    def interactive_mode(self) -> None:
+        """Run in interactive mode with command menu."""
+        print(f"\n{'=' * 80}")
+        print("CLARITY CLI - Interactive Mode")
+        backend_label: str = (
+            "tools enabled" if self.backend.supports_tools else "talk only"
+        )
+        print(f"Backend: {backend_label}")
+        print("=" * 80)
+        print(f"\nProject directory: {self.project_dir}")
+        print(f"Clarity agent: {self.clarity_agent_dir}")
+        print(f"Protocol exists: {self.protocol_dir.exists()}")
+
+        while True:
+            print(f"\n{'-' * 80}")
+            print("Commands:")
+            print("  run              - Run clarity-agent (assess state, determine next step)")
+            print("  process <name>   - Run a specific process by name")
+            print("  brainstorm       - Run AI thinkers to brainstorm failure modes")
+            print("  packet [opts]    - Generate a review packet (--list for sources)")
+            print("  chat             - Free-form chat with Claude")
+            print("  status           - Show project status")
+            print("  packet-status    - Check packet status (staleness, dependencies)")
+            print("  record           - Record current document hashes as baseline")
+            print("  quit             - Exit")
+            print("-" * 80)
+
+            command: str = input("\nCommand: ").strip().lower()
+
+            if command == "quit":
+                print("\nGoodbye!")
+                break
+            elif command == "run":
+                self.run_main()
+            elif command.startswith("process "):
+                process_name: str = command.split(" ", 1)[1]
+                self.run_custom_process(process_name)
+            elif command == "brainstorm" or command.startswith("brainstorm "):
+                self.run_brainstorm(command)
+            elif command == "packet" or command.startswith("packet "):
+                self.run_packet(**_parse_packet_command(command))
+            elif command == "chat":
+                self.free_chat()
+            elif command == "status":
+                self.show_status()
+            elif command == "packet-status":
+                self.show_packet_status()
+            elif command == "record":
+                self.record_document_state()
+            else:
+                print(f"Unknown command: {command}")
+
+    def free_chat(self) -> None:
+        """Free-form chat mode."""
+        print(f"\n{'=' * 80}")
+        print("FREE CHAT MODE")
+        print(f"{'=' * 80}")
+        print("(Enter for newline, Alt+Enter to send, 'exit' to return to menu)\n")
+
+        from clarity_agent.ai_actions.feedback import (
+            create_feedback_handler,
+            create_feedback_tools,
+        )
+
+        tools = create_feedback_tools()
+        tool_handler: ToolHandler = create_feedback_handler(
+            self.project_dir,
+            provider=self.llm_config.provider,
+            model=self.llm_config.tiers.get("default"),
+            on_tool_use=self.backend.on_tool_use,
+        )
+
+        while True:
+            try:
+                user_input: str = _multiline_input()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not user_input:
+                continue
+
+            if user_input.lower() in ("exit", "quit"):
+                break
+
+            response: str = self.chat(
+                user_input, tools=tools, tool_handler=tool_handler,
+            )
+            print(f"\nAssistant: {response}\n")
+
+    def show_status(self) -> None:
+        """Show current project status."""
+        print(f"\n{'=' * 80}")
+        print("PROJECT STATUS")
+        print("=" * 80)
+
+        print(f"\nProject directory: {self.project_dir}")
+        print(f"Protocol exists: {self.protocol_dir.exists()}")
+
+        if self.protocol_dir.exists():
+            print("\nProtocol contents:")
+            for root, _dirs, files in os.walk(self.protocol_dir):
+                level: int = root.replace(str(self.protocol_dir), "").count(os.sep)
+                indent: str = "  " * level
+                print(f"{indent}{os.path.basename(root)}/")
+                sub_indent: str = "  " * (level + 1)
+                for file in files:
+                    print(f"{sub_indent}{file}")
+
+    def show_packet_status(self) -> None:
+        """Show packet status report."""
+        if not self.protocol_dir.exists():
+            print(f"\nNo {self.protocol_dir} directory found. Run main clarity agent first.")
+            return
+
+        report: PacketStatusReport = check_packet_status(self.protocol_dir)
+        print()
+        print(format_report(report, verbose=True))
+
+    def run_brainstorm(self, command: str) -> None:
+        """Run AI-driven failure brainstorming via the process guide."""
+        if not self.protocol_dir.exists():
+            print(f"\nNo {self.protocol_dir} directory found. Run main clarity agent first.")
+            return
+        self.run_custom_process("failure-brainstorming")
+
+    def run_packet(
+        self,
+        *,
+        include: list[str] | None = None,
+        output: str | None = None,
+        fmt: str = "markdown",
+        show_list: bool = False,
+    ) -> None:
+        """Generate a review packet and write it to a file."""
+        from clarity_agent.packet import (
+            PacketError,
+            generate_packet,
+            list_formats,
+            list_sources,
+        )
+
+        if show_list:
+            print(f"\nAvailable sources: {', '.join(list_sources())}")
+            print(f"Available formats: {', '.join(list_formats())}")
+            return
+
+        if not self.protocol_dir.exists():
+            print(f"\nNo {self.protocol_dir} directory found. Run main clarity agent first.")
+            return
+
+        if output is None:
+            ext: str = "md" if fmt == "markdown" else fmt
+            output = f"packet.{ext}"
+
+        print(f"\n{'=' * 80}")
+        print("GENERATING REVIEW PACKET")
+        print(f"{'=' * 80}")
+
+        sources_desc: str = ", ".join(include) if include else "all"
+        print(f"\n  Sources: {sources_desc}")
+        print(f"  Format:  {fmt}")
+        print(f"  Output:  {output}")
+
+        try:
+            content: bytes = generate_packet(
+                self.protocol_dir, include=include, format=fmt,
+            )
+        except PacketError as e:
+            print(f"\n  Error: {e}")
+            return
+
+        output_path: Path = Path(output)
+        output_path.write_bytes(content)
+        print(f"\n  Packet written to {output_path.resolve()}")
+
+
+def _multiline_input(label: str = "You: ") -> str:
+    """Read multiline input. Enter adds a newline; Alt+Enter submits."""
+    return pt_prompt(label, multiline=True).strip()
+
+
+def _parse_packet_command(command: str) -> dict[str, Any]:
+    """Parse an interactive-mode packet command into keyword arguments.
+
+    Handles syntax like::
+
+        packet                          # all sources, default format
+        packet problem,failures         # specific sources
+        packet -o review.md             # custom output
+        packet --format docx            # explicit format
+        packet --list                   # show available sources/formats
+    """
+    parts: list[str] = command.split()
+    kwargs: dict[str, Any] = {}
+
+    i: int = 1  # skip "packet"
+    while i < len(parts):
+        if parts[i] == "--list":
+            kwargs["show_list"] = True
+            i += 1
+        elif parts[i] == "-o" and i + 1 < len(parts):
+            kwargs["output"] = parts[i + 1]
+            i += 2
+        elif parts[i] == "--format" and i + 1 < len(parts):
+            kwargs["fmt"] = parts[i + 1]
+            i += 2
+        else:
+            kwargs["include"] = parts[i].split(",")
+            i += 1
+
+    return kwargs

@@ -1,0 +1,19 @@
+{
+  "clarityAgent": {
+    "path": "/Users/yzunger/src/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "faf67309b118a17343829fb7239ba9d04fa771ff5693998153cfe709f7d05e75",
+      "dependencyHashes": {}
+    }
+  }
+}

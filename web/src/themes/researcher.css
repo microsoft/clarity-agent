@@ -1,0 +1,103 @@
+/*
+ * Researcher — Editorial Research Studio Theme
+ *
+ * Deep ink sidebar with warm cream surfaces and amber accents.
+ * Designed to feel like a sophisticated research workspace where
+ * careful thinking happens. Warm, intellectual, and memorable.
+ *
+ * This file is the single source of truth for all visual styling:
+ * colors, fonts, typography scale, and status indicators.
+ *
+ * Color values are space-separated RGB for Tailwind <alpha-value> support.
+ * Font and size values are used directly via var().
+ *
+ * To create a new theme: copy this file, change the values, update the
+ * import in index.css, and add a [data-theme="yourname"] selector.
+ */
+
+/* Google Fonts for this theme */
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+[data-theme="researcher"] {
+
+  /* ── Fonts ───────────────────────────────────────────────── */
+  --font-body:            'DM Sans', system-ui, sans-serif;
+  --font-sidebar:         'DM Sans', system-ui, sans-serif;
+  --font-display:         'Source Serif 4', Georgia, serif;
+  --font-mono:            'JetBrains Mono', monospace;
+
+  /* ── Typography scale ────────────────────────────────────── */
+  --text-base:            17px;
+  --heading-h1:           1.85rem;
+  --heading-h2:           1.4rem;
+  --heading-h3:           1.2rem;
+  --heading-weight:       400;
+  --heading-tracking:     -0.02em;
+  --body-tracking:        -0.01em;
+  --text-chat:            0.875rem;
+  --code-size-inline:     0.85em;
+
+  /* ── Sidebar (deep ink) ─────────────────────────────────── */
+  --sidebar:              15 23 42;       /* slate-900 — deep ink blue */
+  --sidebar-active:       30 41 59;       /* slate-800 — active item */
+  --sidebar-line:         51 65 85;       /* slate-700 — divider lines */
+  --sidebar-text:         248 250 252;    /* slate-50  — primary text */
+  --sidebar-text-secondary: 203 213 225;  /* slate-300 — secondary text */
+  --sidebar-text-muted:   148 163 184;    /* slate-400 — muted text */
+  --sidebar-text-faint:   100 116 139;    /* slate-500 — faint hints */
+
+  /* ── Surfaces (warm cream) ──────────────────────────────── */
+  --surface:              255 253 250;    /* warm white — cards, panels */
+  --surface-ground:       250 247 242;    /* warm cream — main backdrop */
+  --surface-dim:          245 241 235;    /* sand — table heads, hovers */
+  --surface-muted:        235 230 222;    /* warm stone — badges, inline-code */
+
+  /* ── Text (ink tones) ───────────────────────────────────── */
+  --text:                 28 25 23;       /* near-black — body text */
+  --text-heading:         41 37 36;       /* stone-800 — headings */
+  --text-label:           68 64 60;       /* stone-700 — labels */
+  --text-muted:           115 110 105;    /* warm gray — descriptions */
+  --text-faint:           130 124 118;    /* warm gray — placeholders (3.9:1) */
+
+  /* ── Borders ────────────────────────────────────────────── */
+  --border:               230 225 218;    /* warm stone — standard */
+  --border-strong:        210 204 196;    /* darker stone — inputs */
+  --border-dim:           242 238 232;    /* light — row dividers */
+
+  /* ── Accent (warm amber) ────────────────────────────────── */
+  --accent:               180 83 9;       /* amber-700 — buttons, user bubbles */
+  --accent-hover:         146 64 14;      /* amber-800 — hover state */
+  --accent-focus:         180 83 9;       /* amber-700 — focus rings, dots (5.0:1) */
+  --accent-surface:       255 251 235;    /* amber-50  — selected items */
+  --accent-surface-border: 253 230 138;   /* amber-200 — accent card border */
+  --accent-surface-text:  146 64 14;      /* amber-800 — accent card heading */
+  --accent-surface-body:  180 83 9;       /* amber-700 — accent card body */
+  --accent-surface-muted: 217 119 6;      /* amber-600 — accent card muted */
+  --accent-surface-faint: 245 158 11;     /* amber-500 — accent card faint */
+
+  /* ── Status indicators ──────────────────────────────────── */
+  --status-ok:            16 185 129;     /* emerald-500 — current / success */
+  --status-ok-bg:         236 253 245;    /* emerald-50  — badge background */
+  --status-ok-text:       4 120 87;       /* emerald-700 — badge text */
+  --status-warn:          245 158 11;     /* amber-500   — stale / attention */
+  --status-warn-bg:       255 251 235;    /* amber-50    — badge background */
+  --status-warn-text:     180 83 9;       /* amber-700   — badge text */
+  --status-error:         239 68 68;      /* red-500     — missing / error */
+  --status-error-bg:      254 242 242;    /* red-50      — badge background */
+  --status-error-text:    185 28 28;      /* red-700     — badge text */
+  --status-info:          59 130 246;     /* blue-500    — untracked / info */
+  --status-info-bg:       239 246 255;    /* blue-50     — badge background */
+  --status-info-text:     29 78 216;      /* blue-700    — badge text */
+
+  /* ── Shadows ────────────────────────────────────────────── */
+  --shadow-accent:        120 53 15;      /* amber-900 — warm shadow tint */
+
+  /* ── Disabled ───────────────────────────────────────────── */
+  --disabled:             210 204 196;    /* stone — disabled button bg */
+  --disabled-surface:     245 241 235;    /* sand — disabled input bg */
+  --disabled-text:        130 124 118;    /* warm gray — disabled text */
+
+  /* ── Code ───────────────────────────────────────────────── */
+  --code-bg:              30 41 59;       /* slate-800 — code block bg */
+  --code-text:            248 250 252;    /* slate-50  — code text */
+}

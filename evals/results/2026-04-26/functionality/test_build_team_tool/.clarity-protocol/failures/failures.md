@@ -1,0 +1,29 @@
+# Failure Modes
+
+1. **[Adoption & Engagement Collapse](failure-01-adoption-and-engagement.md)** (High) Team members stop updating, post vague items, or let the dashboard fill with stale data. The coordination problem goes unsolved; the VP summary becomes unreliable. Managed: launch ritual (norms + worked examples) as primary prevention; owner-only private staleness indicator for self-correction; post-launch reminders and Slack integration as long-term reinforcement. Residual: ~80% participation is success; 100% is not required.
+
+2. **[Auth & Access Control Breakdown](failure-02-auth-access-control.md)** (High) The Cloud Function or Firestore rules fail, causing write lockout or unauthorized access. Domain-wide delegation is a potential launch blocker. Managed: fail-closed Cloud Function + Firestore rules as second layer; Firestore rule CI tests; 24h membership TTL; Cloud Function error rate alert; ops runbook with credential rotation calendar. Residual: removed members retain write access for up to 24h; emergency manual override documented in runbook.
+
+3. **[Internal Work Exposed Externally](failure-03-external-data-exposure.md)** (Medium) Work item content reaches people outside the company via shared URL or VP forwarding. Managed: Google Workspace auth wall on all routes including /summary; "For internal use only" watermark on copy-paste output; 7-day archival of done items; team awareness at launch. Residual: deliberate external sharing by trusted stakeholders is accepted; company acceptable-use norms apply.
+
+4. **[Performance Surveillance Chilling Effect](failure-04-performance-surveillance.md)** (High) Manager uses dashboard to track individual output; team members notice and start gaming updates; honest status sharing stops. Managed: launch ritual with explicit leadership commitment (primary); design with no activity metrics, no item counts, no ranking by activity; staleness indicator shown only to item owner; 4- and 12-week retrospectives to detect early. Residual: surveillance with strong intent cannot be technically blocked; social contract and team culture are the primary control.
+
+5. **[Unhealthy Comparison and Competition](failure-05-comparison-and-competition.md)** (Medium) Engineers doing maintenance/support work feel their contributions look lesser against high-visibility feature work. Some inflate dashboard presence; others disengage. Managed: first-class work type categories (Feature, On-call, Incident, Maintenance, Tech debt, Support) with equal visual weight; no item counts or activity proxies; team lead models posting all work types on day one; launch framing that all work belongs. Residual: some comparison is natural and accepted; retrospective monitors for gaming or disengagement patterns.
+
+6. **[Misreading Updates Triggers Conflict](failure-06-misreading-updates.md)** (Medium) A brief update is read without context and interpreted negatively; interpersonal conflict follows. Persistent visibility amplifies a pre-existing team communication dynamic. Managed: launch ritual with worked examples normalizing brief updates; team norm to ask before interpreting; item-level comments for in-place context; manager awareness to intervene early. Residual: occasional misreadings are accepted as normal; target is fast resolution, not elimination.
+
+7. **[Service Unavailability and Ownership Gaps](failure-07-service-reliability.md)** (Medium) Firebase quota, Google outage, or unchecked credential expiry takes the tool offline with no clear owner to fix it. Managed: Firebase Blaze plan + budget alert from day one (eliminates quota risk); named owner designated at launch; ops runbook in team wiki; uptime monitoring with Slack alert; graceful degradation message with Slack fallback link. Residual: Google infrastructure outages are accepted as correlated external dependency.
+
+8. **[XSS via Unsanitized Content](failure-08-xss.md)** (Medium-High) Malicious script injected via work item field executes in viewing users' browsers. Managed: JSX-only rendering documented as permanent constraint; plain-text comments only; input length limits; CSP headers as defense-in-depth; Firestore audit log for detection; admin delete + session invalidation procedure in ops runbook. Residual: very low with measures in place; primary residual is a future developer adding a rich-text renderer without following the documented constraint.
+
+## Cross-Cutting Patterns
+
+**Trust and honesty as shared vulnerability.** Failures 01, 04, 05, and 06 all converge on the same outcome: engineers stop posting honest status updates. Their management plans share a common high-leverage intervention — the **launch ritual** — which addresses all four simultaneously with a single investment. The launch ritual is a first-class deliverable alongside the code.
+
+**Staleness indicator scope.** The staleness indicator (F01 mitigation) must be owner-only and private. If shown company-wide it becomes a surveillance affordance (F04) and a comparison trigger (F05). This is a cross-cutting design constraint: a single field on the item card that is conditionally rendered only for the owning user.
+
+**Auth is a single point of failure — with two independent locks.** Failures 02 and 08 both depend on auth integrity. The two-layer auth (Cloud Function + Firestore rules) and the fail-closed behavior address both. Neither layer alone is sufficient; together they provide meaningful defense-in-depth.
+
+**Launch conditions matter as much as the code.** The highest-severity failures (01, 04) and two medium failures (05, 06) are primarily addressed by the launch ritual — not by code. The build plan must treat the launch ritual as a first-class deliverable.
+
+**The ops runbook addresses three failure modes.** F02 (auth recovery), F07 (service restoration), and F08 (XSS response) all include steps in the ops runbook. This document should be written as part of the build sprint, not afterward.

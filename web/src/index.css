@@ -1,0 +1,346 @@
+@import "./themes/sage.css";
+@import "./themes/researcher.css";
+@import "./themes/high-contrast.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base layer ── */
+@layer base {
+  html {
+    /* --font-scale is set via JS from the font_scale setting (default 1).
+       Scales rem-based headings and all inherited text. */
+    font-size: calc(100% * var(--font-scale, 1));
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: calc(var(--text-base) * var(--font-scale, 1));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: var(--body-tracking);
+  }
+
+  /* Subtle warm noise texture on ground surfaces */
+  .bg-surface-ground\/50,
+  .bg-surface-ground {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+}
+
+/* ── Animations ── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-warm {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out both;
+}
+
+.animate-pulse-warm {
+  animation: pulse-warm 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Staggered delay utilities */
+.delay-75 { animation-delay: 75ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* ── Reduced motion ── */
+/* Respects OS preference OR user override via data-reduce-motion. */
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-reduce-motion="no-preference"]) {
+    .animate-fade-up,
+    .animate-fade-in,
+    .animate-slide-in-left,
+    .animate-pulse-warm,
+    .animate-pulse,
+    .animate-bounce { animation: none; }
+
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* User forced reduced motion (regardless of OS setting). */
+html[data-reduce-motion="reduce"] {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-slide-in-left,
+  .animate-pulse-warm,
+  .animate-pulse,
+  .animate-bounce { animation: none; }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── Chat text sizing ── */
+
+.chat-text,
+.prose.chat-text {
+  font-size: calc(var(--text-chat) * var(--font-scale, 1));
+}
+
+/* ── Prose overrides (on top of @tailwindcss/typography defaults) ── */
+
+.prose {
+  font-family: var(--font-body);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-display);
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
+}
+
+.prose h1 { font-size: var(--heading-h1); }
+.prose h2 { font-size: var(--heading-h2); }
+.prose h3 { font-size: var(--heading-h3); }
+
+/* Code blocks: dark background using theme tokens */
+.prose pre {
+  @apply bg-code-bg text-code-text rounded-xl p-5 overflow-x-auto text-sm;
+  font-family: var(--font-mono);
+}
+
+/* Inline code: subtle chip using theme tokens */
+.prose :where(code):not(:where(pre *)) {
+  @apply bg-surface-muted text-body-heading px-1.5 py-0.5 rounded-md text-sm font-normal;
+  font-family: var(--font-mono);
+  font-size: var(--code-size-inline);
+}
+
+/* Remove the backtick decoration that typography adds around inline code */
+.prose :where(code):not(:where(pre *))::before,
+.prose :where(code):not(:where(pre *))::after {
+  content: "";
+}
+
+/* Tables: clean borders using theme tokens */
+.prose table {
+  @apply w-full border-collapse;
+}
+
+.prose th,
+.prose td {
+  @apply border border-border-strong px-3 py-2.5 text-left;
+}
+
+.prose th {
+  @apply bg-surface-dim font-semibold text-body-label;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Blockquotes: warm left border */
+.prose blockquote {
+  border-left-color: rgb(var(--accent));
+  font-style: italic;
+}
+
+/* Links: amber underline */
+.prose a {
+  text-decoration-color: rgb(var(--accent) / 0.4);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s;
+}
+
+.prose a:hover {
+  text-decoration-color: rgb(var(--accent));
+}
+
+/* Tighten spacing within chat bubbles */
+.prose > :first-child {
+  margin-top: 0 !important;
+}
+
+.prose > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-faint));
+}
+
+/* ── Focus ring style ── */
+*:focus-visible {
+  outline: 2px solid rgb(var(--accent-focus));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Selection color ── */
+::selection {
+  background: rgb(var(--accent) / 0.15);
+  color: rgb(var(--text));
+}
+
+/* ── Print styles ── */
+@media print {
+  /* Hide everything except printable content. Using display:none
+     (not visibility:hidden) so the printable content flows naturally
+     for multi-page pagination. */
+  body > * {
+    display: none !important;
+  }
+  /* The React root contains our app — show it, then hide non-printable
+     descendants and show only [data-printable]. */
+  #root {
+    display: block !important;
+  }
+  #root > * {
+    display: none !important;
+  }
+  /* Walk down the component tree: Layout → flex container → main → printable.
+     Each ancestor of [data-printable] needs to be visible. */
+  #root [data-printable] {
+    display: block !important;
+  }
+  /* Show all ancestors of [data-printable] up to #root. */
+  #root :has([data-printable]) {
+    display: block !important;
+  }
+
+  /* Strip layout constraints that prevent content from flowing to next page */
+  #root :has([data-printable]),
+  [data-printable] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Restore padding on the inner content container */
+  [data-printable] > * {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  /* Clean print background */
+  [data-printable],
+  [data-printable] .bg-surface,
+  [data-printable] .bg-surface-ground\/50 {
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Force legible text colors */
+  [data-printable] * {
+    color: black !important;
+  }
+  [data-printable] .text-body-faint,
+  [data-printable] .text-body-faint\/60,
+  [data-printable] .text-body-faint\/50,
+  [data-printable] .text-body-muted {
+    color: #666 !important;
+  }
+
+  /* User message bubbles: light grey instead of accent color */
+  [data-printable] .bg-accent {
+    background: #e5e7eb !important;
+    box-shadow: none !important;
+  }
+  [data-printable] .bg-accent,
+  [data-printable] .bg-accent * {
+    color: black !important;
+  }
+
+  /* Print header: shown only in print */
+  .print-header {
+    display: block !important;
+    padding: 1rem 1.5rem !important;
+    border-bottom: 1px solid #d1d5db !important;
+    margin-bottom: 1rem !important;
+  }
+
+  /* Hide elements marked as print-hide */
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Chat messages: remove flex justify-end so they flow top-down */
+  [data-printable] .flex.flex-col.justify-end {
+    justify-content: flex-start !important;
+    min-height: 0 !important;
+  }
+
+  /* Clean up prose for print */
+  .prose pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}

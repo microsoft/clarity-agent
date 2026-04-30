@@ -1,0 +1,103 @@
+/*
+ * Sage — Soft Sage Theme
+ *
+ * Warm neutrals with a green/sage sidebar. Earthy and gentle.
+ * The default theme for Clarity.
+ *
+ * This file is the single source of truth for all visual styling:
+ * colors, fonts, typography scale, and status indicators.
+ *
+ * Color values are space-separated RGB for Tailwind <alpha-value> support.
+ * Font and size values are used directly via var().
+ *
+ * To create a new theme: copy this file, change the values, update the
+ * import in index.css, and add a [data-theme="yourname"] selector.
+ */
+
+/* Google Fonts for this theme */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root,
+[data-theme="sage"] {
+
+  /* ── Fonts ───────────────────────────────────────────────── */
+  --font-body:            'Lora', Georgia, serif;
+  --font-sidebar:         'DM Sans', system-ui, sans-serif;
+  --font-display:         'Source Serif 4', Georgia, serif;
+  --font-mono:            'JetBrains Mono', monospace;
+
+  /* ── Typography scale ────────────────────────────────────── */
+  --text-base:            18px;
+  --heading-h1:           1.85rem;
+  --heading-h2:           1.4rem;
+  --heading-h3:           1.2rem;
+  --heading-weight:       400;
+  --heading-tracking:     -0.02em;
+  --body-tracking:        -0.01em;
+  --text-chat:            16px;
+  --code-size-inline:     0.85em;
+
+  /* ── Sidebar (dark sage) ──────────────────────────────────── */
+  --sidebar:              2 44 34;        /* emerald-950 */
+  --sidebar-active:       6 78 59;        /* emerald-900 */
+  --sidebar-line:         6 95 70;        /* emerald-800 */
+  --sidebar-text:         245 245 244;    /* stone-100 */
+  --sidebar-text-secondary: 214 211 209;  /* stone-300 */
+  --sidebar-text-muted:   168 162 158;    /* stone-400 */
+  --sidebar-text-faint:   130 124 119;    /* stone-500ish — 3.7:1 on sidebar */
+
+  /* ── Surfaces (warm stone) ────────────────────────────────── */
+  --surface:              250 250 249;    /* stone-50  — cards, panels */
+  --surface-ground:       245 245 244;    /* stone-100 — main backdrop */
+  --surface-dim:          245 245 244;    /* stone-100 — table heads, hovers */
+  --surface-muted:        231 229 228;    /* stone-200 — badges, inline-code */
+
+  /* ── Text (stone tones) ───────────────────────────────────── */
+  --text:                 41 37 36;       /* stone-800 — body text */
+  --text-heading:         68 64 60;       /* stone-700 — headings */
+  --text-label:           87 83 78;       /* stone-600 — labels */
+  --text-muted:           120 113 108;    /* stone-500 — descriptions */
+  --text-faint:           135 129 125;    /* stone-450ish — placeholders (3.7:1) */
+
+  /* ── Borders ──────────────────────────────────────────────── */
+  --border:               231 229 228;    /* stone-200 — standard */
+  --border-strong:        214 211 209;    /* stone-300 — inputs */
+  --border-dim:           245 245 244;    /* stone-100 — row dividers */
+
+  /* ── Accent (emerald) ─────────────────────────────────────── */
+  --accent:               5 150 105;      /* emerald-600 — buttons, user bubbles */
+  --accent-hover:         4 120 87;       /* emerald-700 — hover state */
+  --accent-focus:         4 140 98;       /* emerald-550ish — focus rings, dots (4.1:1) */
+  --accent-surface:       236 253 245;    /* emerald-50  — selected items */
+  --accent-surface-border: 167 243 208;   /* emerald-200 — accent card border */
+  --accent-surface-text:  6 95 70;        /* emerald-800 — accent card heading */
+  --accent-surface-body:  4 120 87;       /* emerald-700 — accent card body */
+  --accent-surface-muted: 5 150 105;      /* emerald-600 — accent card muted */
+  --accent-surface-faint: 16 185 129;     /* emerald-500 — accent card faint */
+
+  /* ── Status indicators ────────────────────────────────────── */
+  --status-ok:            16 185 129;     /* emerald-500 — current / success */
+  --status-ok-bg:         236 253 245;    /* emerald-50  — badge background */
+  --status-ok-text:       4 120 87;       /* emerald-700 — badge text */
+  --status-warn:          245 158 11;     /* amber-500   — stale / attention */
+  --status-warn-bg:       255 251 235;    /* amber-50    — badge background */
+  --status-warn-text:     180 83 9;       /* amber-700   — badge text */
+  --status-error:         239 68 68;      /* red-500     — missing / error */
+  --status-error-bg:      254 242 242;    /* red-50      — badge background */
+  --status-error-text:    185 28 28;      /* red-700     — badge text */
+  --status-info:          59 130 246;     /* blue-500    — untracked / info */
+  --status-info-bg:       239 246 255;    /* blue-50     — badge background */
+  --status-info-text:     29 78 216;      /* blue-700    — badge text */
+
+  /* ── Shadows ──────────────────────────────────────────────── */
+  --shadow-accent:        6 78 59;        /* emerald-900 — warm shadow tint */
+
+  /* ── Disabled ─────────────────────────────────────────────── */
+  --disabled:             214 211 209;    /* stone-300 — disabled button bg */
+  --disabled-surface:     245 245 244;    /* stone-100 — disabled input bg */
+  --disabled-text:        168 162 158;    /* stone-400 — disabled text */
+
+  /* ── Code (warm stone inset) ──────────────────────────────── */
+  --code-bg:              237 235 232;    /* stone-200ish — warm inset */
+  --code-text:            55 50 47;       /* stone-750 — dark warm text */
+}

@@ -1,0 +1,131 @@
+{
+  "clarityAgent": {
+    "path": "~/.clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  },
+  "documentState": {
+    "goal/problem.md": {
+      "contentHash": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb",
+      "dependencyHashes": {}
+    },
+    "goal/stakeholders.md": {
+      "contentHash": "103060ad060d13e1a99a2e2aabb8e4c016f046ae3a7b930e3c06badf06f34c7d",
+      "dependencyHashes": {
+        "goal/problem.md": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb"
+      }
+    },
+    "goal/requirements.md": {
+      "contentHash": "b344e78175741efeb8b9727d2f3230d272b2cfaf5a67883dc42993c020f6430e",
+      "dependencyHashes": {
+        "goal/problem.md": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb",
+        "goal/stakeholders.md": "103060ad060d13e1a99a2e2aabb8e4c016f046ae3a7b930e3c06badf06f34c7d"
+      }
+    },
+    "goal/open-questions.md": {
+      "contentHash": "b0f824fc7b91c5369fca2e50f62f06b8d7a9afd864dd9df30635284bae37d830",
+      "dependencyHashes": {
+        "goal/problem.md": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb"
+      }
+    },
+    "solution/solution.md": {
+      "contentHash": "d6c906baf9e6644ebebd119ad4d069631ffc2c91963a3df94bdbf82f45d832f5",
+      "dependencyHashes": {
+        "goal/problem.md": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb",
+        "goal/requirements.md": "b344e78175741efeb8b9727d2f3230d272b2cfaf5a67883dc42993c020f6430e",
+        "goal/open-questions.md": "b0f824fc7b91c5369fca2e50f62f06b8d7a9afd864dd9df30635284bae37d830"
+      }
+    },
+    "solution/architecture.md": {
+      "contentHash": "06dad9bc760d6f2f0d31772f673a8637d31b64fd1d7a32ea6df9d677877bab11",
+      "dependencyHashes": {
+        "solution/solution.md": "d6c906baf9e6644ebebd119ad4d069631ffc2c91963a3df94bdbf82f45d832f5",
+        "failures/failures.md": "da0a1d207bd1777d24da373086ddd1b76487d7e2d8a01838116d0294d90d6195"
+      }
+    },
+    "failures/failures.md": {
+      "contentHash": "da0a1d207bd1777d24da373086ddd1b76487d7e2d8a01838116d0294d90d6195",
+      "dependencyHashes": {
+        "solution/solution.md": "d6c906baf9e6644ebebd119ad4d069631ffc2c91963a3df94bdbf82f45d832f5",
+        "solution/architecture.md": "06dad9bc760d6f2f0d31772f673a8637d31b64fd1d7a32ea6df9d677877bab11"
+      }
+    },
+    "summary.md": {
+      "contentHash": "fc496de68f75e42759cf12a4936043f3a29d980368c9d5c0d927cca515758697",
+      "dependencyHashes": {
+        "goal/problem.md": "ba3334d97224e69ce0c264243dc464af17c6b68e8c20eab087948a1b561e2ceb",
+        "solution/solution.md": "d6c906baf9e6644ebebd119ad4d069631ffc2c91963a3df94bdbf82f45d832f5"
+      }
+    }
+  },
+  "brainstormState": {
+    "general-thinker": {
+      "fingerprint": "f7329c1cb58c0ed5b08a70cf66ec36e26fda3e438988e65a679aedd285287c4f",
+      "failure_count": 4,
+      "failure_titles": [
+        "Spotify OAuth token expiry causes silent data staleness",
+        "Spotify API deprecation or breaking changes",
+        "Spotify rate limiting during initial library import",
+        "Spotify client secret exposed in frontend code"
+      ],
+      "failure_paths": [
+        "mailboxes/failure-brainstorm/20260227-220855-00-spotify-oauth-token-expiry-causes-silent-data-stal.md",
+        "mailboxes/failure-brainstorm/20260227-220855-00-spotify-api-deprecation-or-breaking-changes.md",
+        "mailboxes/failure-brainstorm/20260227-220855-00-spotify-rate-limiting-during-initial-library-impor.md",
+        "mailboxes/failure-brainstorm/20260227-220855-00-spotify-client-secret-exposed-in-frontend-code.md"
+      ],
+      "suggestion_count": 0
+    },
+    "adversarial-analysis-thinker": {
+      "fingerprint": "e9920ff308ed0c292cceb01c3300e5c9a88c7625798720bad9d3205c87caa54f",
+      "failure_count": 0,
+      "failure_titles": [],
+      "failure_paths": [],
+      "suggestion_count": 0
+    },
+    "codebase-scanner-thinker": {
+      "fingerprint": "04c6d64ae881f01d316e0f8ee01a042db6982e22fda19630838a6d1037f661de",
+      "failure_count": 0,
+      "failure_titles": [],
+      "failure_paths": [],
+      "suggestion_count": 0
+    },
+    "human-factors-thinker": {
+      "fingerprint": "7c52819ed8f36f11adb2caf1e9e466e2cc2bd8ce93f84f34530683088614be80",
+      "failure_count": 0,
+      "failure_titles": [],
+      "failure_paths": [],
+      "suggestion_count": 0
+    },
+    "latest-threats-fetcher": {
+      "fingerprint": "7c42311fbb86a3ee4904eec02214302a001421ec32941d9fa154b599447a44b0",
+      "failure_count": 0,
+      "failure_titles": [],
+      "failure_paths": [],
+      "suggestion_count": 0
+    },
+    "security-thinker": {
+      "fingerprint": "c304a3e921527fcddb20be06f76848f58af54669e8b6162eb496dbf262e278f4",
+      "failure_count": 0,
+      "failure_titles": [],
+      "failure_paths": [],
+      "suggestion_count": 0
+    }
+  },
+  "decisionState": {
+    "decision-01-token-storage": {
+      "status": "decided",
+      "relatedDocs": {
+        "solution/solution.md": "d6c906baf9e6644ebebd119ad4d069631ffc2c91963a3df94bdbf82f45d832f5"
+      },
+      "decidedDate": "2026-03-02",
+      "reviewBy": null
+    }
+  }
+}
