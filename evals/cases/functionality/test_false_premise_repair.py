@@ -135,14 +135,22 @@ def test_asked_for_the_actual_numbers(result: SessionResult, judge) -> None:
     """Don't redesign a process based on vibes."""
     assert judge.check(
         result.transcript,
-        "Early in the conversation, the assistant asked the user for "
-        "the actual velocity / throughput / cycle-time numbers "
-        "rather than proposing interventions on the basis of the "
-        "stated framing alone.  Asking 'what do your actual numbers "
-        "look like' or equivalent counts.  What FAILS: proposing "
-        "changes to sprint planning or retros on the assumption "
-        "that the stated 'declining velocity' interpretation is "
-        "accurate, without probing it.",
+        "Before proposing or evaluating interventions, the assistant "
+        "pulled concrete data about the team's actual performance "
+        "into the conversation.  This can take many forms — a direct "
+        "request for velocity / throughput / cycle-time / story-count "
+        "numbers; a question like 'how do you know velocity has "
+        "declined?' that prompts the user to surface measurements; "
+        "enumerating specific metrics the assistant would want to "
+        "see (story points, cycle time, PRs shipped, etc.); or any "
+        "other phrasing that puts quantitative ground truth on the "
+        "table.  The criterion is about whether the assistant got "
+        "data into the conversation before recommending changes, "
+        "NOT about which specific words it used to do so.  What "
+        "FAILS: proposing changes to sprint planning, retros, "
+        "sizing, or process on the basis of the stated 'declining "
+        "velocity' framing without ever asking for or engaging "
+        "with the underlying data.",
     ), (
         "Target did not probe the premise with data before "
         f"proposing interventions.\n\n{result.transcript}"
