@@ -60,10 +60,14 @@ def clarity_data_dir() -> Path:
     # Windows: %LOCALAPPDATA%\Clarity\data\
     if sys.platform == "win32":
         local_app_data = os.environ.get("LOCALAPPDATA")
-        if local_app_data:
-            candidate = Path(local_app_data) / "Clarity" / "data"
-            if candidate.parent.is_dir():
-                return candidate
+        # Validate that LOCALAPPDATA itself points at a real directory —
+        # not the Clarity subdir, which won't exist on first run (callers
+        # mkdir(parents=True) it on demand, same pattern as every other
+        # data-dir API).  The earlier ``candidate.parent.is_dir()`` check
+        # required %LOCALAPPDATA%\Clarity\ to pre-exist, which silently
+        # fell through to ``~/.clarity`` for every fresh install.
+        if local_app_data and Path(local_app_data).is_dir():
+            return Path(local_app_data) / "Clarity" / "data"
 
     # Linux / developer fallback.
     return Path.home() / ".clarity"

@@ -529,6 +529,7 @@ class TestDataDirSync:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Without env var, Python uses the platform-specific default."""
+        import os
         import sys
 
         from clarity_agent.app_paths import clarity_data_dir
@@ -538,6 +539,16 @@ class TestDataDirSync:
         if sys.platform == "darwin":
             assert result == Path.home() / "Library" / "Application Support" / "Clarity"
         elif sys.platform == "win32":
-            assert "Clarity" in str(result)
+            # Mirror the production resolution exactly: %LOCALAPPDATA%\Clarity\data
+            # when LOCALAPPDATA is set and points at a real directory, otherwise
+            # the universal ~/.clarity fallback.  The earlier assertion
+            # (``"Clarity" in str(result)``) was too loose — it accepted both
+            # outcomes silently and missed a production bug where the function
+            # always fell through to ~/.clarity on first run.
+            local_app_data = os.environ.get("LOCALAPPDATA")
+            if local_app_data and Path(local_app_data).is_dir():
+                assert result == Path(local_app_data) / "Clarity" / "data"
+            else:
+                assert result == Path.home() / ".clarity"
         else:
             assert result == Path.home() / ".clarity"
