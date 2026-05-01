@@ -556,10 +556,9 @@ fn main() {
                 std::thread::spawn(move || {
                     let mut log_poll = open_startup_log();
                     let start = Instant::now();
-                    let client = reqwest::blocking::Client::builder()
+                    let client = ureq::AgentBuilder::new()
                         .timeout(Duration::from_secs(2))
-                        .build()
-                        .expect("failed to build HTTP client");
+                        .build();
 
                     let health_url = format!("{}/api/session", server_url);
                     let mut attempt = 0u32;
@@ -578,8 +577,8 @@ fn main() {
                             break;
                         }
 
-                        match client.get(&health_url).send() {
-                            Ok(resp) if resp.status().is_success() => {
+                        match client.get(&health_url).call() {
+                            Ok(resp) if (200..300).contains(&resp.status()) => {
                                 let msg = format!(
                                     "[startup] Server ready in {:.1}s, navigating to {}",
                                     start.elapsed().as_secs_f64(), server_url,
