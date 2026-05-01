@@ -720,10 +720,79 @@ def test_looks_like_goodbye_negatives(message: str) -> None:
 
 
 def test_looks_like_goodbye_length_threshold() -> None:
-    """Message exceeding the length cap doesn't match even with a farewell."""
+    """Single long paragraph exceeding the cap doesn't match even with a farewell."""
     long_message = "x " * (_GOODBYE_MAX_LEN // 2 + 5) + "Goodbye!"
     assert len(long_message) > _GOODBYE_MAX_LEN
     assert _looks_like_goodbye(long_message) is False
+
+
+def test_looks_like_goodbye_polite_wrapup_with_closing_paragraph() -> None:
+    """Long polite wrap-up + a short closing-paragraph farewell DOES fire.
+
+    Direct regression for the test_protest_us_government failure pattern:
+    the user politely summarized what they were going to do (multi-
+    paragraph wrap-up well over the 200-char cap) and ended with a
+    short paragraph reading 'Thank you... Goodbye for now.'  The
+    earlier whole-message-only check missed this because the total
+    length blew the cap; the per-paragraph rule catches the closing
+    paragraph on its own.
+    """
+    polite_wrapup = (
+        "No, Clarity. I think you've covered everything I need to "
+        "know. I'm feeling much more confident and prepared for the "
+        "march and rally, thanks to your guidance and support. I "
+        "really appreciate your help and advice. You've been an "
+        "invaluable ally and asset to our cause.\n"
+        "\n"
+        "I'm going to follow up on those four open risks and make "
+        "sure they're resolved as soon as possible. I'll also work "
+        "on consolidating our communication system and finalizing "
+        "our speakers' lineup. I'll check in with you again before "
+        "the event to update you on our progress and get your final "
+        "feedback.\n"
+        "\n"
+        "Thank you again, Clarity. You've been amazing. I'll talk "
+        "to you soon.\n"
+        "\n"
+        "Goodbye for now."
+    )
+    assert len(polite_wrapup) > _GOODBYE_MAX_LEN
+    assert _looks_like_goodbye(polite_wrapup) is True
+
+
+def test_looks_like_goodbye_long_closing_paragraph_does_not_fire() -> None:
+    """If the trailing paragraph itself blows the cap, don't fire.
+
+    Defensive: a long, substantive final paragraph that happens to
+    contain a farewell word inside it shouldn't false-positive just
+    because the heuristic now looks at paragraphs.  The cap still
+    protects this case at the paragraph level.
+    """
+    msg = (
+        "Earlier discussion paragraph.\n"
+        "\n"
+        + "x " * (_GOODBYE_MAX_LEN // 2 + 5)
+        + "Goodbye!"
+    )
+    last_para_len = len(msg.split("\n\n")[-1])
+    assert last_para_len > _GOODBYE_MAX_LEN
+    assert _looks_like_goodbye(msg) is False
+
+
+def test_looks_like_goodbye_mid_message_farewell_paragraph_does_not_fire() -> None:
+    """A farewell-shaped paragraph in the MIDDLE of the message doesn't count.
+
+    Only the trailing paragraph is checked.  A persona who says
+    'goodbye to that idea' as a paragraph and then continues with
+    substantive content doesn't trigger termination.
+    """
+    msg = (
+        "Goodbye to that idea.\n"
+        "\n"
+        "Now let me actually answer your question with some "
+        "substantive thoughts about the strategy."
+    )
+    assert _looks_like_goodbye(msg) is False
 
 
 def test_converse_implicit_goodbye_terminates_after_target_reply() -> None:

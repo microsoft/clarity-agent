@@ -128,7 +128,7 @@ def _strip_safety_disclaimer(message: str) -> tuple[str, bool]:
 # that happen to contain "goodbye" or "take care."
 _GOODBYE_PATTERNS = re.compile(
     r"\b("
-    r"goodbye"
+    r"goodbye(?: for now| then)?"
     r"|bye(?: for now| then)?"
     r"|see you(?: (?:later|soon|around|tomorrow|next time))?"
     r"|take care"
@@ -161,11 +161,24 @@ _GOODBYE_MAX_LEN = 200
 def _looks_like_goodbye(message: str) -> bool:
     """Return True if *message* reads like a natural conversation close.
 
-    Triggers when *message* is both short (<= ``_GOODBYE_MAX_LEN``)
-    AND ends with one of the :data:`_GOODBYE_PATTERNS`.  The "both"
-    rule is deliberate — a persona might mention a farewell phrase
-    mid-dialogue ("I'll never say goodbye to you"), but a short
-    message ENDING in one is almost always a hang-up.
+    Two firing patterns, both requiring an ending farewell:
+
+    1. The whole message is short (<= ``_GOODBYE_MAX_LEN``) AND ends
+       with one of :data:`_GOODBYE_PATTERNS`.  Catches terse hang-ups
+       like ``"Thanks, bye!"``.
+    2. The whole message may be long, but the LAST PARAGRAPH is
+       short (<= ``_GOODBYE_MAX_LEN``) AND ends with one of the
+       patterns.  Catches the common "polite wrap-up + a clear
+       closing paragraph" shape, where the user summarizes what
+       they're going to do and ends with a short farewell para —
+       which the whole-message check missed because the wrap-up
+       text pushed the total length over the cap.
+
+    The "ends with a farewell pattern at paragraph boundary" rule is
+    what keeps both cases from false-positiving on a persona that
+    mentions farewell-shaped phrases mid-dialogue (``"I'll never say
+    goodbye to that idea"``): mid-paragraph mentions don't end a
+    paragraph, so they don't trigger.
 
     Backup for the ``[DONE]`` marker protocol: some user LLMs
     reliably produce the marker, others produce natural speech
@@ -177,9 +190,25 @@ def _looks_like_goodbye(message: str) -> bool:
     conservative pattern matches to keep false positives rare.
     """
     stripped = message.strip()
-    if not stripped or len(stripped) > _GOODBYE_MAX_LEN:
+    if not stripped:
         return False
-    return _GOODBYE_PATTERNS.search(stripped) is not None
+    # Pattern 1: short whole message ending with a farewell.
+    if (
+        len(stripped) <= _GOODBYE_MAX_LEN
+        and _GOODBYE_PATTERNS.search(stripped)
+    ):
+        return True
+    # Pattern 2: long message whose final paragraph is itself a
+    # short farewell.  Split on blank lines (one or more) so the
+    # closing paragraph is isolated even when preceded by a long
+    # multi-paragraph wrap-up.
+    paragraphs = re.split(r"\n\s*\n", stripped)
+    last_para = paragraphs[-1].strip() if paragraphs else ""
+    return (
+        bool(last_para)
+        and len(last_para) <= _GOODBYE_MAX_LEN
+        and _GOODBYE_PATTERNS.search(last_para) is not None
+    )
 
 
 def _extract_done_marker(message: str) -> tuple[str, bool]:
