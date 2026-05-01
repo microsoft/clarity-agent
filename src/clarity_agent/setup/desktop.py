@@ -226,6 +226,18 @@ def _link_sidecar(source_dir: Path) -> StepResult:
                 link_path.unlink()
             link_path.symlink_to(sidecar.resolve())
 
+            # tauri.conf.json declares ``binaries/_internal/`` as a
+            # bundle resource, which the Windows one-directory build
+            # populates with the Python runtime + dependencies.  The
+            # macOS/Linux one-file build is self-contained and has
+            # no _internal/, but Tauri still resolves the resource
+            # at bundle time and fails ("resource path doesn't
+            # exist") if the dir is absent.  Create an empty
+            # placeholder to satisfy it — bundles a no-op directory
+            # into the .app, no runtime impact.
+            internal_placeholder = binaries_dir / "_internal"
+            internal_placeholder.mkdir(exist_ok=True)
+
         return StepResult(Outcome.OK, f"Sidecar linked: {link_name}")
     except Exception as exc:
         return StepResult(Outcome.FAIL, f"Failed to link sidecar: {exc}")
