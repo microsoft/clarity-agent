@@ -150,6 +150,82 @@ def _load_module_metadata(
         return None
 
 
+# Reserved cache keys used by the framework's two smoke-gate checks.
+# Kept here (rather than imported from judge.py) so a future rename
+# in judge.py forces an explicit update to the report layer too —
+# the report's table-of-smoke-checks shape depends on knowing exactly
+# these names.  Order matters: persona-adoption runs first (during
+# converse_with), smoke check runs after the conversation completes.
+_SMOKE_GATE_KEYS: list[tuple[str, str]] = [
+    ("__persona_adoption__", "persona-adoption check"),
+    ("__smoke__", "smoke check"),
+]
+
+
+def _load_smoke_gate_records(
+    outputs_dir: Path, folder_rel: str,
+) -> list[tuple[str, str, JudgeRecord | None]]:
+    """Return ``(reserved_name, label, record_or_None)`` per smoke gate, in run order.
+
+    Reads ``<folder_rel>/judge_records.json`` directly rather than via
+    :class:`JudgeCache.lookup`, because lookup gates on fingerprint
+    match and we want the records regardless — they reflect what
+    actually happened, even if the transcript was later edited.
+
+    Either record may be ``None`` independently.  Persona-adoption
+    only runs on fresh conversations (the resume path skips it
+    because ``converse_with`` doesn't run); smoke runs on every
+    conversation (fresh or resumed).  Both ``None`` when the cache
+    file is missing or malformed — caller should skip the smoke
+    section entirely in that case.
+    """
+    cache_path = outputs_dir / folder_rel / "judge_records.json"
+    tests: dict[str, list[dict[str, Any]]] = {}
+    if cache_path.exists():
+        try:
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            tests = data.get("tests") or {}
+        except (OSError, json.JSONDecodeError):
+            tests = {}
+
+    def _first_record(reserved_name: str) -> JudgeRecord | None:
+        entries = tests.get(reserved_name) or []
+        if not entries:
+            return None
+        entry = entries[0]
+        try:
+            return JudgeRecord(
+                claim=entry["claim"],
+                verdict=entry["verdict"],
+                reasoning=entry.get("reasoning", ""),
+                elapsed=float(entry.get("elapsed", 0.0)),
+                cost_usd=float(entry.get("cost_usd", 0.0)),
+                cached=False,
+                timestamp=entry.get("timestamp"),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    return [
+        (reserved_name, label, _first_record(reserved_name))
+        for reserved_name, label in _SMOKE_GATE_KEYS
+    ]
+
+
+def _smoke_anchor(folder_rel: str, reserved_name: str) -> str:
+    """Anchor for a smoke-gate detail subsection.
+
+    Format: ``smoke-<category>-<module>-<reserved>``.  Distinct from
+    test anchors (which use the user-facing function name) so the
+    namespaces don't collide.  ``__smoke__`` becomes ``smoke``,
+    ``__persona_adoption__`` becomes ``persona-adoption`` for
+    readable URLs.
+    """
+    slug = reserved_name.strip("_").replace("_", "-")
+    base = folder_rel.replace("/", "-").replace(".", "-")
+    return f"smoke-{base}-{slug}"
+
+
 def _blockquote_lines(text: str) -> list[str]:
     """Return *text* rendered as a markdown blockquote (``> `` prefix)."""
     return [f"> {line}" if line else ">" for line in text.splitlines()]
@@ -442,6 +518,43 @@ def write_summary(
                 f"**{_format_duration(meta.get('duration_seconds', 0.0))}** | "
                 f"**${meta.get('cost_usd', 0.0):.4f}** |"
             )
+
+        # Smoke-gate rows: persona-adoption first (turn-1 gate, runs
+        # during converse_with), then smoke check (post-conversation
+        # gate).  Always at the top of the per-test rows in
+        # run-order, with the 🔬 marker so they don't visually mix
+        # with the numbered user assertions.  A separator row below
+        # makes the boundary explicit.  Either gate may be missing
+        # (persona-adoption skipped on resumed runs; both missing if
+        # the cache file isn't there yet) — only render rows for
+        # the gates that actually have records.
+        smoke_gate_records = _load_smoke_gate_records(outputs_dir, folder_rel)
+        rendered_any_gate = False
+        for reserved_name, label, rec in smoke_gate_records:
+            if rec is None:
+                continue
+            verdict_icon = _verdict_icon(rec.verdict)
+            verdict_label = "N/A" if rec.verdict == "NA" else rec.verdict
+            duration_cell = (
+                f"{rec.elapsed:.1f}s" if rec.elapsed else "—"
+            )
+            cost_cell = f"${rec.cost_usd:.4f}" if rec.cost_usd > 0 else "—"
+            anchor = _smoke_anchor(folder_rel, reserved_name)
+            lines.append(
+                f"| 🔬 | [**_{label}_**](#{anchor}) | "
+                f"{verdict_icon} {verdict_label} | "
+                f"{duration_cell} | "
+                f"{cost_cell} |"
+            )
+            rendered_any_gate = True
+        if rendered_any_gate and module_ids:
+            # Visual separator row between the smoke gates above and
+            # the user assertions below.  Markdown tables don't
+            # support real horizontal rules between rows, so we use
+            # a marker row with bold em-dashes — clear enough to
+            # read at a glance without breaking the table grid.
+            lines.append("| | **— assertions ↓ —** | | | |")
+
         for nodeid in module_ids:
             info = _outcome_for(nodeid)
             parsed = _parse_nodeid(nodeid)
@@ -525,25 +638,54 @@ def write_summary(
         )
         lines.append("")
 
-        # Smoke-failure banner.  One conversation ⇒ one smoke verdict,
-        # so even though every test in the module carries the
-        # smoke_failed outcome, the reasoning only needs to appear
-        # once at the module level.  Pull it off whichever test has
-        # it recorded (they all share the same explanation).
+        # Smoke-failure banner.  One conversation ⇒ one smoke
+        # verdict, so the failure reasoning only needs to appear
+        # once at the module level even though every test in the
+        # module carries the ``smoke_failed`` outcome.  Both the
+        # turn-1 persona-adoption gate and the post-conversation
+        # smoke gate raise SmokeCheckFailedError, so the banner text
+        # stays generic — the per-gate detail subsections below
+        # show the actual judge record and reasoning.
         smoke_reasoning = _first_smoke_reasoning(module_ids, test_outcomes)
         if smoke_reasoning:
             lines.append(
-                f"{_OUTCOME_ICON['smoke_failed']} **Smoke check failed — "
-                "module aborted.**  The conversation didn't actually "
-                "exercise the persona's stated goal, so the test "
-                "assertions below would be operating on an invalid "
-                "sample and were not run."
+                f"{_OUTCOME_ICON['smoke_failed']} **Smoke gate failed — "
+                "module aborted.**  One of the framework's two smoke "
+                "checks rejected this run; subsequent test assertions "
+                "were not run.  See the smoke-check detail below for "
+                "which gate fired and why."
             )
             lines.append("")
-            lines.append("**Judge's reasoning:**")
+
+        # Per-gate detail subsections.  Renders both gates that have
+        # records on disk (regardless of pass/fail) at the top of
+        # each module's detail section, before the scenario block
+        # and the user-test sections.  These are the most
+        # information-dense judge calls in the run and worth
+        # surfacing prominently.
+        smoke_gate_records = _load_smoke_gate_records(outputs_dir, folder_rel)
+        for reserved_name, label, rec in smoke_gate_records:
+            if rec is None:
+                continue
+            anchor = _smoke_anchor(folder_rel, reserved_name)
+            verdict_icon = _verdict_icon(rec.verdict)
+            verdict_label = "N/A" if rec.verdict == "NA" else rec.verdict
+            elapsed_str = (
+                f" _(judge took {rec.elapsed:.1f}s)_" if rec.elapsed else ""
+            )
+            lines.append(
+                f'#### <a id="{anchor}"></a>🔬 {label}'
+            )
             lines.append("")
-            lines.extend(_blockquote_lines(smoke_reasoning.strip()))
+            lines.append(
+                f"{verdict_icon} **{verdict_label}**{elapsed_str}"
+            )
             lines.append("")
+            lines.append(f"**Criterion:** {_truncate(rec.claim, 1000)}")
+            lines.append("")
+            if rec.reasoning:
+                lines.append(f"**Reasoning:** {rec.reasoning}")
+                lines.append("")
 
         if meta is not None:
             lines.extend(_render_scenario_block(meta))

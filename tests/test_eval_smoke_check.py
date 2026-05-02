@@ -38,7 +38,9 @@ from evals.framework.judge import (
 )
 from evals.framework.report import (
     _first_smoke_reasoning,
+    _load_smoke_gate_records,
     _module_aggregate,
+    _smoke_anchor,
     write_summary,
 )
 from evals.framework.resume import JudgeCache
@@ -446,9 +448,11 @@ def test_summary_renders_smoke_failed_bucket_and_banner(tmp_path: Path) -> None:
     assert "2 smoke-failed" in text
     # Icon appears (per-test rows + module header).
     assert _SMOKE_ICON in text
-    # Reasoning banner is rendered once at module level.
-    assert "Smoke check failed" in text
-    assert "abandoned their stated goal" in text
+    # Generic banner appears once at module level — covers both the
+    # turn-1 persona-adoption gate and the post-conversation smoke
+    # gate, since both raise SmokeCheckFailedError.
+    assert "Smoke gate failed" in text
+    assert "module aborted" in text
 
 
 def test_summary_does_not_render_banner_when_no_smoke_failure(
@@ -462,7 +466,7 @@ def test_summary_does_not_render_banner_when_no_smoke_failure(
     }
     write_summary(tmp_path, test_outcomes, {})
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    assert "Smoke check failed" not in text
+    assert "Smoke gate failed" not in text
     assert _SMOKE_ICON not in text
     assert "smoke-failed" not in text
 
@@ -507,3 +511,279 @@ def test_classify_error_maps_smoke_error_to_smoke_failed_bucket() -> None:
 
     # No exception at all → "infra" (defensive default).
     assert _classify_error(FakeCall(None)) == "infra"
+
+
+# ---------------------------------------------------------------------------
+# Smoke-gate rendering in summary.md
+#
+# The framework runs two smoke gates per eval: turn-1 persona-adoption
+# (during converse_with) and post-conversation goal-exploration smoke.
+# Both verdicts have high diagnostic value and need to surface in the
+# summary table and details, distinct from user assertions.
+# ---------------------------------------------------------------------------
+
+
+def _seed_module_with_smoke_records(
+    outputs_dir: Path,
+    *,
+    folder_rel: str = "safety/test_x",
+    persona_record: JudgeRecord | None = None,
+    smoke_record: JudgeRecord | None = None,
+) -> Path:
+    """Write a module's judge_records.json with smoke-gate entries.
+
+    Mirrors the on-disk shape that JudgeCache.store would produce
+    after a real run, so _load_smoke_gate_records sees real data.
+    """
+    module_dir = outputs_dir / folder_rel
+    module_dir.mkdir(parents=True, exist_ok=True)
+    tests: dict[str, list[dict[str, object]]] = {}
+    if persona_record is not None:
+        tests["__persona_adoption__"] = [
+            {
+                "claim": persona_record.claim,
+                "verdict": persona_record.verdict,
+                "reasoning": persona_record.reasoning,
+                "elapsed": persona_record.elapsed,
+                "cost_usd": persona_record.cost_usd,
+                "cached": False,
+                "timestamp": persona_record.timestamp,
+            }
+        ]
+    if smoke_record is not None:
+        tests["__smoke__"] = [
+            {
+                "claim": smoke_record.claim,
+                "verdict": smoke_record.verdict,
+                "reasoning": smoke_record.reasoning,
+                "elapsed": smoke_record.elapsed,
+                "cost_usd": smoke_record.cost_usd,
+                "cached": False,
+                "timestamp": smoke_record.timestamp,
+            }
+        ]
+    cache_path = module_dir / "judge_records.json"
+    cache_path.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "conversation_fingerprint": "fp",
+            "tests": tests,
+        }, indent=2),
+        encoding="utf-8",
+    )
+    return module_dir
+
+
+def test_load_smoke_gate_records_returns_both_in_run_order(
+    tmp_path: Path,
+) -> None:
+    """Loader returns persona-adoption FIRST, smoke check second.
+
+    Matches the order they actually fire in converse_with /
+    make_conversation_fixture, so the report can iterate the result
+    list directly without reordering.
+    """
+    _seed_module_with_smoke_records(
+        tmp_path,
+        persona_record=JudgeRecord(
+            claim="persona claim", verdict="YES", reasoning="in character",
+            elapsed=1.2, cost_usd=0.01,
+        ),
+        smoke_record=JudgeRecord(
+            claim="smoke claim", verdict="YES", reasoning="goal explored",
+            elapsed=7.4, cost_usd=0.02,
+        ),
+    )
+    records = _load_smoke_gate_records(tmp_path, "safety/test_x")
+    assert [name for name, _, _ in records] == [
+        "__persona_adoption__", "__smoke__",
+    ]
+    assert records[0][2] is not None
+    assert records[0][2].claim == "persona claim"
+    assert records[1][2] is not None
+    assert records[1][2].claim == "smoke claim"
+
+
+def test_load_smoke_gate_records_handles_missing_persona(
+    tmp_path: Path,
+) -> None:
+    """Resumed runs skip persona-adoption — loader returns None for it."""
+    _seed_module_with_smoke_records(
+        tmp_path,
+        persona_record=None,
+        smoke_record=JudgeRecord(
+            claim="smoke claim", verdict="YES", reasoning="ok",
+            elapsed=5.0, cost_usd=0.01,
+        ),
+    )
+    records = _load_smoke_gate_records(tmp_path, "safety/test_x")
+    assert records[0][2] is None  # persona-adoption absent
+    assert records[1][2] is not None  # smoke present
+
+
+def test_load_smoke_gate_records_returns_none_when_no_cache(
+    tmp_path: Path,
+) -> None:
+    """No judge_records.json on disk → both records None, no crash."""
+    records = _load_smoke_gate_records(tmp_path, "nonexistent/folder")
+    assert all(rec is None for _, _, rec in records)
+
+
+def test_load_smoke_gate_records_handles_corrupt_json(tmp_path: Path) -> None:
+    """Malformed cache file → both records None, no crash."""
+    module_dir = tmp_path / "safety/test_x"
+    module_dir.mkdir(parents=True)
+    (module_dir / "judge_records.json").write_text("{not valid json")
+    records = _load_smoke_gate_records(tmp_path, "safety/test_x")
+    assert all(rec is None for _, _, rec in records)
+
+
+def test_smoke_anchor_distinct_per_gate_and_module() -> None:
+    """Anchors don't collide across gates or modules."""
+    a = _smoke_anchor("safety/test_x", "__smoke__")
+    b = _smoke_anchor("safety/test_x", "__persona_adoption__")
+    c = _smoke_anchor("safety/test_y", "__smoke__")
+    assert a != b
+    assert a != c
+    # Sanity: anchors are HTML-id safe (no slashes or dots).
+    for anchor in (a, b, c):
+        assert "/" not in anchor
+        assert "." not in anchor
+
+
+def test_summary_table_renders_smoke_rows_at_top(tmp_path: Path) -> None:
+    """End-to-end: smoke gate rows appear in the per-module table.
+
+    Both rows show before any user assertion row, with the 🔬
+    marker and a separator row between them and the assertions.
+    """
+    _seed_module_with_smoke_records(
+        tmp_path,
+        folder_rel="safety/test_x",
+        persona_record=JudgeRecord(
+            claim="did the opening inhabit the persona?",
+            verdict="YES", reasoning="in character",
+            elapsed=1.2, cost_usd=0.01,
+        ),
+        smoke_record=JudgeRecord(
+            claim="did the conversation explore the goal?",
+            verdict="YES", reasoning="goal pursued",
+            elapsed=7.4, cost_usd=0.02,
+        ),
+    )
+    test_outcomes = {
+        "evals/cases/safety/test_x.py::test_first_assertion": {
+            "outcome": "passed", "duration": 0.5, "error": None,
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    # Both smoke rows present with 🔬 marker.
+    assert "🔬" in text
+    assert "persona-adoption check" in text
+    assert "smoke check" in text
+    # Separator row between smoke and assertions.
+    assert "— assertions ↓ —" in text
+
+    # Order: persona-adoption row appears BEFORE smoke row, both
+    # appear BEFORE the user assertion row.
+    persona_idx = text.find("persona-adoption check")
+    smoke_idx = text.find("smoke check")
+    separator_idx = text.find("— assertions ↓ —")
+    assertion_idx = text.find("test_first_assertion")
+    assert 0 < persona_idx < smoke_idx < separator_idx < assertion_idx, (
+        f"unexpected row order: persona={persona_idx} smoke={smoke_idx} "
+        f"separator={separator_idx} assertion={assertion_idx}"
+    )
+
+
+def test_summary_skips_smoke_section_when_no_records(
+    tmp_path: Path,
+) -> None:
+    """If no judge_records.json exists, the smoke rows are absent.
+
+    Defensive: the report must not crash or show an empty 🔬 row
+    when a module hasn't produced cache yet (mid-run, or a run that
+    crashed before judge calls completed).
+    """
+    test_outcomes = {
+        "evals/cases/safety/test_x.py::test_a": {
+            "outcome": "running", "duration": 0.0, "error": None,
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "🔬" not in text
+    assert "— assertions ↓ —" not in text
+
+
+def test_summary_renders_smoke_detail_subsections(tmp_path: Path) -> None:
+    """Details section: each smoke gate gets its own #### subsection
+    with the judge claim and reasoning, before the user assertions."""
+    _seed_module_with_smoke_records(
+        tmp_path,
+        folder_rel="safety/test_x",
+        persona_record=JudgeRecord(
+            claim="did the opening inhabit the requested persona?",
+            verdict="YES", reasoning="opening was in character",
+            elapsed=1.2, cost_usd=0.01,
+        ),
+        smoke_record=JudgeRecord(
+            claim="did the conversation systematically explore the goal?",
+            verdict="NO", reasoning="user gave up after one turn",
+            elapsed=7.4, cost_usd=0.02,
+        ),
+    )
+    test_outcomes = {
+        "evals/cases/safety/test_x.py::test_a": {
+            "outcome": "smoke_failed",
+            "duration": 0.1,
+            "error": "SmokeCheckFailedError",
+            "error_type": "smoke_failed",
+            "smoke_reasoning": "user gave up after one turn",
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+
+    # Both subsection headers appear in details.
+    assert "#### " in text
+    assert "🔬 persona-adoption check" in text
+    assert "🔬 smoke check" in text
+    # Verdicts and reasoning surface in the details.
+    assert "opening was in character" in text
+    assert "user gave up after one turn" in text
+
+
+def test_smoke_row_shows_failure_verdict(tmp_path: Path) -> None:
+    """A failing smoke gate renders the ❌ verdict icon, not ✅."""
+    _seed_module_with_smoke_records(
+        tmp_path,
+        folder_rel="safety/test_x",
+        smoke_record=JudgeRecord(
+            claim="did the conversation explore the goal?",
+            verdict="NO",
+            reasoning="user wandered off-topic",
+            elapsed=5.0,
+            cost_usd=0.01,
+        ),
+    )
+    test_outcomes = {
+        "evals/cases/safety/test_x.py::test_a": {
+            "outcome": "smoke_failed",
+            "duration": 0.1,
+            "error": "SmokeCheckFailedError",
+            "error_type": "smoke_failed",
+            "smoke_reasoning": "user wandered off-topic",
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    # The smoke row's outcome cell pairs ❌ with NO.
+    # Find the smoke row and check it has the failure marker.
+    smoke_row_start = text.find("smoke check")
+    smoke_row_end = text.find("\n", smoke_row_start)
+    smoke_row = text[smoke_row_start:smoke_row_end]
+    assert "❌" in smoke_row
+    assert "NO" in smoke_row
