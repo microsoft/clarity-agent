@@ -24,7 +24,7 @@
       }
     },
     "solution/solution.md": {
-      "contentHash": "233d74cb390313e18d6102b12a6d51358dc8abd8a762c6ee8b846c23f30a96c1",
+      "contentHash": "9380340a5f9c5953e460e5bb9e0272317160eb9f50f26a51e45ef2f60e267428",
       "dependencyHashes": {
         "goal/problem.md": "d95b8256682688b5d8035e9df24f3eec7e2bdabed0e7e1d066b16fc32c512455",
         "goal/requirements.md": "68205d0f7d5bc8d1f66e2f5e30e871406aa4e1cd543761c17f2a6371b2c5f57d",
@@ -32,9 +32,9 @@
       }
     },
     "solution/architecture.md": {
-      "contentHash": "a593e3a045e136473efc77eeb477802925a70aa17d0ae330920c109f02a5b8e2",
+      "contentHash": "f22fcb7f59b3d3737d59e611da4403d8a0e3469940269f6d4124544908855c43",
       "dependencyHashes": {
-        "solution/solution.md": "233d74cb390313e18d6102b12a6d51358dc8abd8a762c6ee8b846c23f30a96c1",
+        "solution/solution.md": "9380340a5f9c5953e460e5bb9e0272317160eb9f50f26a51e45ef2f60e267428",
         "failures/failures.md": "b53e841eebecc123c016387ea931e0966e31d465cd6f1b6f90ff299c14397188"
       }
     },

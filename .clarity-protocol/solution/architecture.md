@@ -102,7 +102,7 @@ Composite of typed `ContentSource` objects, each knowing how to read one part of
 Three components manage installation and ongoing health:
 
 - **Installer** (`installer.py`) — runs the full install sequence (preflight checks, venv, pip, web build, snippet insertion). Stdlib-only at the top level so it can run before pip install; submodules like `snippet` are imported lazily after dependencies are available.
-- **Snippet** (`snippet.py` + `snippet.md`) — a ~15-line markdown snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with `<!-- clarity-begin -->` / `<!-- clarity-end -->` delimiters for idempotent updates. The snippet has two behavioral modes: *thinking mode* (invoke full clarity processes) and *maintenance mode* (update protocol documents as a TODO after implementation work). Target file auto-detected; `{{PROCESSES_DIR}}` placeholder substituted at insertion time.
+- **Snippet** (`snippet.py` + `snippet.md`) — a markdown snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with `<!-- clarity-begin -->` / `<!-- clarity-end -->` delimiters for idempotent updates. The snippet instructs coding agents to engage clarity at two points: *before building* (triggered by the user asking, or by the agent recognizing a consequential architectural choice that would be expensive to reverse) and *after building* (checking protocol staleness after significant implementation work). Target file auto-detected; `{{PROCESSES_DIR}}` placeholder substituted at insertion time.
 - **Doctor** (`doctor.py`) — validates installation health (Python version, dependencies, protocol directory, snippet presence) and offers auto-fix for common issues.
 
 #### Web Backend (`web/app.py` + `session_manager.py`)
@@ -412,7 +412,7 @@ All products share the protocol format as the interoperability point. A user's `
 
 **Full-implementation products** embed or connect to the Layer 3 infrastructure. Architecture varies by product:
 
-- **Coding agent integration** — a short snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters. Zero infrastructure of its own; the coding agent's shell access provides Layer 3 via direct invocation. Migration to MCP tools would let the snippet work with coding agents that support MCP but not shell access.
+- **Coding agent integration** — a snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters. Instructs the agent to proactively check protocol context before making consequential choices (not just when the user asks), and to maintain protocol freshness after implementation. Zero infrastructure of its own; the coding agent's shell access provides Layer 3 via direct invocation. Migration to MCP tools would let the snippet work with coding agents that support MCP but not shell access.
 - **Web app** — runs Layer 3 infrastructure in-process. Could additionally expose it as an MCP server for other tools to connect to.
 - **Hosted web service** — runs Layer 3 server-side with multi-tenant isolation. New architectural concerns: user authentication, project isolation, storage backend (filesystem may not be appropriate at scale), and cost management per tenant.
 - **IDE integration** — connects to a local MCP server running Layer 3 infrastructure.

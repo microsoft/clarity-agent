@@ -36,7 +36,7 @@ The current implementation is a **full-implementation product** with three entry
 
 **Three entry points (products):**
 
-- **Coding agent integration (AGENTS.md)** — an `AGENTS.md` file in a project root causes AI coding agents (currently Claude Code) to follow the clarity agent's process guides. The coding agent session itself becomes the clarity conversation.
+- **Coding agent integration (AGENTS.md)** — an `AGENTS.md` file in a project root instructs AI coding agents to engage clarity at inflection points: when the user asks to think, and proactively when the agent recognizes a choice that would be expensive to reverse. The coding agent session itself becomes the clarity conversation.
 - **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
 - **CLI** — initialization, packet status checking, session management.
 
