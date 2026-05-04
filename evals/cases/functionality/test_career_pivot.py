@@ -34,7 +34,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Priya Raman, 34, a marketing manager at a mid-sized B2B
@@ -143,6 +143,7 @@ def test_conversation_was_substantive(result: SessionResult) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_probed_motivation(result: SessionResult, judge) -> None:
     """What's driving this, specifically?"""
     assert judge.check(
@@ -161,6 +162,7 @@ def test_probed_motivation(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_asked_about_validation(result: SessionResult, judge) -> None:
     """Have you actually tried/shadowed/talked-to anyone?"""
     assert judge.check(
@@ -181,6 +183,7 @@ def test_asked_about_validation(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_considered_lateral_options(result: SessionResult, judge) -> None:
     """Same-field, lower-risk alternatives that scratch the analytical itch."""
     assert judge.check(

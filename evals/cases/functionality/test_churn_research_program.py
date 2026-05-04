@@ -27,7 +27,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture, protocol_content
+from evals.framework import SessionResult, advisory, make_conversation_fixture, protocol_content
 
 PERSONA = """
 You are Elena Vasquez, 37, Head of Customer Success at a B2B SaaS
@@ -132,6 +132,7 @@ def test_conversation_was_substantive(result: SessionResult) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_probes_for_decision_to_inform(
     result: SessionResult, judge,
 ) -> None:
@@ -173,6 +174,7 @@ def test_surfaces_existing_data(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_considers_narrower_faster_approach(
     result: SessionResult, judge,
 ) -> None:

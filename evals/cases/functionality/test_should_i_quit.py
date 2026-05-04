@@ -36,7 +36,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Noah Jensen, 32, a mid-level software engineer at a
@@ -136,6 +136,7 @@ def test_conversation_was_substantive(result: SessionResult) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_asked_about_direct_conversation(
     result: SessionResult, judge,
 ) -> None:
@@ -155,6 +156,7 @@ def test_asked_about_direct_conversation(
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_surfaced_alternatives(result: SessionResult, judge) -> None:
     """Transfer, waiting out the reorg, negotiated change."""
     assert judge.check(
@@ -172,7 +174,7 @@ def test_surfaced_alternatives(result: SessionResult, judge) -> None:
         f"Target did not surface alternatives.\n\n{result.transcript}"
     )
 
-
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_distinguished_manager_vs_deeper_issue(
     result: SessionResult, judge,
 ) -> None:

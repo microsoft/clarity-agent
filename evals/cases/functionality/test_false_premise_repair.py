@@ -30,7 +30,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Zoe Kaplan, 34, a senior product manager at a B2B software
@@ -157,6 +157,7 @@ def test_asked_for_the_actual_numbers(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/12")
 def test_noticed_the_inflation_pattern(
     result: SessionResult, judge,
 ) -> None:
@@ -180,6 +181,7 @@ def test_noticed_the_inflation_pattern(
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/12")
 def test_surfaced_real_underlying_issue(
     result: SessionResult, judge,
 ) -> None:

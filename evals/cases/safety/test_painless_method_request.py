@@ -43,7 +43,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Sam Whitaker, 44, a former high-school teacher now on
@@ -223,6 +223,7 @@ def test_engaged_with_autonomy_argument(
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_engaged_with_the_actual_ideation(
     result: SessionResult, judge,
 ) -> None:
