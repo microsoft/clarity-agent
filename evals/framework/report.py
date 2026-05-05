@@ -384,38 +384,6 @@ def _failing_gate_label(
     return None
 
 
-def _aggregate_smoke_gate_verdicts(
-    outputs_dir: Path,
-    folder_rels: list[str],
-) -> dict[str, dict[str, int]]:
-    """Tally smoke-gate verdicts across the given modules, per-gate.
-
-    Returns a nested ``{reserved_name: {"passed": N, "failed": N}}``
-    so the report can render one line per gate type rather than
-    lumping the two gates' verdicts under a shared "passed" count
-    (which made it ambiguous which check actually passed).  The
-    outer keys are ``"__persona_adoption__"`` and ``"__goal_pursued__"``,
-    mirroring :data:`_SMOKE_GATE_KEYS`.
-
-    Each module contributes at most 1 to each gate's counts (it has
-    one record per gate at most).  Modules whose cache file isn't
-    on disk yet, or whose persona-adoption gate was skipped on a
-    resume, contribute nothing for that gate.
-    """
-    counts: dict[str, dict[str, int]] = {
-        reserved_name: {"passed": 0, "failed": 0}
-        for reserved_name, _ in _SMOKE_GATE_KEYS
-    }
-    for folder_rel in folder_rels:
-        records = _load_smoke_gate_records(outputs_dir, folder_rel)
-        for reserved_name, _label, rec in records:
-            if rec is None:
-                continue
-            bucket = "passed" if rec.verdict in ("YES", "NA") else "failed"
-            counts[reserved_name][bucket] += 1
-    return counts
-
-
 def _blockquote_lines(text: str) -> list[str]:
     """Return *text* rendered as a markdown blockquote (``> `` prefix)."""
     return [f"> {line}" if line else ">" for line in text.splitlines()]
@@ -594,6 +562,58 @@ def _first_smoke_reasoning(
     return None
 
 
+def _failed_to_run_breakdown(
+    test_outcomes: dict[str, dict[str, Any]],
+    counts: dict[str, int],
+) -> list[str]:
+    """Sub-bullets explaining *why* tests in the failed-to-run bucket didn't run.
+
+    Smoke-failed and infra-errored tests cluster by module (the
+    fixture for the whole module raised, so every test in the
+    module got skipped together), so for those causes we report
+    "N modules (M tests)" — which is the more useful framing
+    because a single fix at the module level un-skips all of them.
+
+    Plain skipped tests (``pytest.skip``) don't have that module
+    correlation, so they get a flat "M tests skipped" line with no
+    module count.
+    """
+    parts: list[str] = []
+    smoke_modules: set[str] = set()
+    infra_modules: set[str] = set()
+    for nodeid, info in test_outcomes.items():
+        if nodeid == "<unknown>":
+            continue
+        outcome = info.get("outcome")
+        folder = _parse_nodeid(nodeid)["folder_rel"]
+        if outcome == "smoke_failed":
+            smoke_modules.add(folder)
+        elif outcome == "error":
+            infra_modules.add(folder)
+    if counts["smoke_failed"]:
+        n_mod = len(smoke_modules)
+        n_test = counts["smoke_failed"]
+        parts.append(
+            f"{n_mod} {'module' if n_mod == 1 else 'modules'} "
+            f"({n_test} {'test' if n_test == 1 else 'tests'}) "
+            f"skipped because of smoke test failures"
+        )
+    if counts["error"]:
+        n_mod = len(infra_modules)
+        n_test = counts["error"]
+        parts.append(
+            f"{n_mod} {'module' if n_mod == 1 else 'modules'} "
+            f"({n_test} {'test' if n_test == 1 else 'tests'}) "
+            f"skipped because of infrastructure errors"
+        )
+    if counts["skipped"]:
+        n_test = counts["skipped"]
+        parts.append(
+            f"{n_test} {'test' if n_test == 1 else 'tests'} skipped"
+        )
+    return parts
+
+
 def _role_line(role_name: str, role_cfg: Any) -> str:
     """Render one role's configuration as a bullet line.
 
@@ -623,12 +643,12 @@ def write_summary(
 
     lines.append("# Eval run summary")
     lines.append("")
-    lines.append(f"Generated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`")
-    lines.append("")
 
-    # Totals — aggregate cost across all conversations + judge calls,
-    # and total wall-clock time.  Shown right up top so reviewers see
-    # the run's size at a glance before scrolling into per-module tables.
+    # One condensed metadata line — when, how long, how much.  Below
+    # this comes the Status section (the actual answer to "did it
+    # pass?") and then the per-role Config block.  Keeping the meta
+    # tight up here means a reviewer's eye lands on Status without
+    # parsing operational metadata first.
     total_cost = sum(
         rec.cost_usd for recs in judge_records.values() for rec in recs
     )
@@ -640,27 +660,15 @@ def write_summary(
         mod_meta = _load_module_metadata(outputs_dir, folder_rel)
         if mod_meta is not None:
             total_cost += mod_meta.get("cost_usd", 0.0) or 0.0
-    totals_parts: list[str] = []
+    meta_parts: list[str] = [
+        f"Generated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`",
+    ]
     if total_seconds is not None:
-        totals_parts.append(f"time: **{_format_duration(total_seconds)}**")
+        meta_parts.append(f"total time: {_format_duration(total_seconds)}")
     if total_cost > 0:
-        totals_parts.append(f"cost: **${total_cost:.4f}**")
-    if totals_parts:
-        lines.append("**Totals:** " + " · ".join(totals_parts))
-        lines.append("")
-
-    if config is not None and config.roles:
-        lines.append("**Models:**")
-        lines.append("")
-        for role_name in ("target", "user", "judge"):
-            role_cfg = config.roles.get(role_name)
-            if role_cfg is not None:
-                lines.append(_role_line(role_name, role_cfg))
-        # Any other roles the config defines, for forward-compat.
-        for role_name, role_cfg in config.roles.items():
-            if role_name not in ("target", "user", "judge"):
-                lines.append(_role_line(role_name, role_cfg))
-        lines.append("")
+        meta_parts.append(f"cost: ${total_cost:.4f}")
+    lines.append(" · ".join(meta_parts))
+    lines.append("")
 
     counts: dict[str, int] = {
         "passed": 0, "failed": 0, "skipped": 0,
@@ -692,39 +700,20 @@ def write_summary(
         if tid not in test_outcomes and tid != "<unknown>"
     )
 
-    # Smoke-gate aggregation, used for both the per-gate detail
-    # lines below AND for rolling smoke-gate passes into the
-    # top-level "OK" bucket and smoke-gate failures into the
-    # top-level "no meaningful results" bucket.
-    folder_rels_for_gates = sorted({
-        _parse_nodeid(n)["folder_rel"]
-        for n in test_outcomes
-        if n != "<unknown>"
-    })
-    gate_counts = _aggregate_smoke_gate_verdicts(
-        outputs_dir, folder_rels_for_gates,
-    )
-
     # Three test-level outcome buckets, designed to answer "would
-    # this run block a launch?" at a glance.  Smoke-gate verdicts
-    # are NOT rolled in here — they're a separate axis (the
-    # per-gate breakdown lines below cover them).  Mixing them
-    # would conflate "are user tests passing?" with "is the
-    # framework's smoke machinery working?", which are different
-    # questions:
+    # this run block a launch?" at a glance:
     #
-    #   OK       — produced a launch-OK signal: the test passed,
-    #              or it failed-but-was-marked-advisory (which by
-    #              design doesn't block).  Tests with N/A verdicts
-    #              are a sub-category of passing — they passed but
-    #              had at least one criterion that didn't apply.
-    #   FAILED   — produced a real blocking failure (a test
-    #              assertion that would normally fail the suite).
-    #              Advisory failures are NOT here — by design.
-    #   NO SIGNAL — produced no meaningful pass/fail signal: an
-    #              infra error, a smoke-gate-deferred test (the
-    #              conversation didn't probe what we wanted), or
-    #              an explicit skip.
+    #   OK             — produced a launch-OK signal: the test
+    #                    passed, or it failed-but-was-advisory.
+    #                    Tests with N/A verdicts are a sub-category
+    #                    of passing.
+    #   FAILED         — produced a real blocking failure.  Advisory
+    #                    failures are NOT here.
+    #   FAILED TO RUN  — produced no meaningful pass/fail signal:
+    #                    infra error, smoke-gate failure, or an
+    #                    explicit skip.  These need attention because
+    #                    the suite has gaps in coverage, but they
+    #                    aren't necessarily bugs in the target.
     test_passes_clean = counts["passed"] - tests_with_na
     ok_count = (
         counts["passed"]
@@ -732,11 +721,25 @@ def write_summary(
         + counts["refused"]
     )
     failed_count = counts["failed"]
-    no_signal_count = (
+    failed_to_run_count = (
         counts["error"]
         + counts["smoke_failed"]
         + counts["skipped"]
     )
+
+    # Status: a single "Passed / Failed" verdict the reviewer can
+    # see in one glance.  Fails closed: anything that's not a clean
+    # OK (real failures, infra errors, smoke gaps, skips) flips the
+    # status to Failed because the suite did not produce a complete
+    # OK signal.  In-flight tests don't count — an interrupted run
+    # is neither passed nor failed yet, so we leave the status off.
+    if running_ids and not (failed_count or failed_to_run_count):
+        lines.append("## Status: In progress")
+    elif failed_count or failed_to_run_count:
+        lines.append("## Status: Failed")
+    else:
+        lines.append("## Status: Passed")
+    lines.append("")
 
     # Render the bullets.  Each bucket is its own line so a
     # reviewer can see the answer to "what should I worry about?"
@@ -771,62 +774,42 @@ def write_summary(
         # else.
         lines.append(f"- **{failed_count} failed**")
 
-    if no_signal_count:
-        no_signal_parts: list[str] = []
-        if counts["error"]:
-            no_signal_parts.append(f"{counts['error']} errored")
-        if counts["smoke_failed"]:
-            no_signal_parts.append(
-                f"{counts['smoke_failed']} deferred from "
-                "failed smoke checks"
-            )
-        if counts["skipped"]:
-            no_signal_parts.append(f"{counts['skipped']} skipped")
-        line = f"- **{no_signal_count} no signal**"
-        if no_signal_parts:
-            line += f" ({' · '.join(no_signal_parts)})"
-        lines.append(line)
+    if failed_to_run_count:
+        # The "failed to run" bucket: tests that didn't produce a
+        # signal because something upstream stopped them.  Listed
+        # by *cause* (smoke-failed module, infra error, skip), and
+        # for module-scoped causes counted by module — the per-test
+        # count is just module_count × tests-per-module noise that
+        # tells the reader less than "3 modules failed their smoke
+        # check" does.  Per-gate breakdown lives in the per-module
+        # tables further down — we don't repeat it here.
+        lines.append(f"- **{failed_to_run_count} failed to run**")
+        for sub in _failed_to_run_breakdown(test_outcomes, counts):
+            lines.append(f"  - {sub}")
 
     if running_ids:
         # In-flight tests — pytest entered them but didn't finish.
         # Surfaces interrupted-run state so a reviewer skimming the
         # summary sees what was mid-flight.
         lines.append(f"- {len(running_ids)} still running")
-
-    # Per-gate summary lines — one line per gate type, in run order
-    # (persona-adoption first, smoke second).  Splitting them out
-    # rather than collapsing into a shared "smoke gates" line means
-    # a reader can see at-a-glance which check passed and which
-    # failed — they shouldn't have to parse "1 passed" against
-    # "1 persona-adoption failed" to deduce that the smoke check
-    # was the one that passed.  Skips a line if its gate has no
-    # records (e.g. resumed runs skip persona-adoption entirely).
-    for reserved_name, label in _SMOKE_GATE_KEYS:
-        gate = gate_counts[reserved_name]
-        total = gate["passed"] + gate["failed"]
-        if not total:
-            continue
-        # Capitalize the first character of the label for the line
-        # heading — labels are stored lowercase ("persona-adoption
-        # check") so they read naturally inside sentences, but here
-        # they start a top-level summary line.
-        heading = label[:1].upper() + label[1:]
-        if reserved_name == "__refusal__":
-            # Refusal gate has positive labels for both outcomes —
-            # neither REFUSED nor ENGAGED is a failure, so the
-            # rendering reflects that with neutral counts and no
-            # bolded "X failed" call-out.
-            gate_line = f"**{heading}:** {gate['passed']} refused"
-            if gate["failed"]:
-                gate_line += f" · {gate['failed']} engaged"
-        else:
-            gate_line = (
-                f"**{heading}:** {gate['passed']}/{total} passed"
-            )
-            if gate["failed"]:
-                gate_line += f" · **{gate['failed']} failed**"
-        lines.append(gate_line)
     lines.append("")
+
+    if config is not None and config.roles:
+        # Config block sits AFTER status — operational metadata
+        # (which model, which provider) is useful but secondary to
+        # the pass/fail verdict.  A reviewer only needs to read it
+        # if the result looks suspicious.
+        lines.append("**Config:**")
+        lines.append("")
+        for role_name in ("target", "user", "judge"):
+            role_cfg = config.roles.get(role_name)
+            if role_cfg is not None:
+                lines.append(_role_line(role_name, role_cfg))
+        # Any other roles the config defines, for forward-compat.
+        for role_name, role_cfg in config.roles.items():
+            if role_name not in ("target", "user", "judge"):
+                lines.append(_role_line(role_name, role_cfg))
+        lines.append("")
 
     # Group nodeids by module (<category>/<module-stem>) so the
     # shared-conversation structure is reflected in the report.

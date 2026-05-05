@@ -518,9 +518,14 @@ def test_summary_renders_smoke_failed_bucket_and_banner(tmp_path: Path) -> None:
     write_summary(tmp_path, test_outcomes, {})
 
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    # Top-line bucket: tests are in the no-signal bucket because
-    # they were deferred by a smoke-gate failure.
-    assert "2 deferred from failed smoke checks" in text
+    # Top-line bucket: tests are in the failed-to-run bucket
+    # because they were deferred by a smoke-gate failure.  Both
+    # tests live in the same module, so the breakdown counts the
+    # one module and the two tests it skipped.
+    assert "**2 failed to run**" in text
+    assert "1 module (2 tests) skipped because of smoke test failures" in text
+    # Status reflects the smoke gap — anything not OK is Failed.
+    assert "## Status: Failed" in text
     # Icon appears (module-header row + per-test rows).
     assert _SMOKE_ICON in text
     # Per-module text uses the new vocabulary — "smoke test
@@ -892,140 +897,14 @@ def test_smoke_row_shows_failure_verdict(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Smoke-gate breakdown counts in the top-line summary + module heading
+# Per-module smoke-gate rendering (heading qualifier + per-module rows)
 #
-# The new gate-level summary line tells reviewers at-a-glance which
-# of the two gates fired across the run, distinct from the test-level
-# "smoke-failed" count (which counts deferred user tests, not gates).
-# The module heading qualifier identifies the failing gate per-module.
+# Per-gate breakdown lines used to live in the top-of-summary header,
+# but were removed because they cluttered the answer to the only
+# question that header is supposed to answer ("did the run pass?").
+# Per-gate verdicts now show up only inside each module's table row
+# and in the module-heading qualifier — that's where they're useful.
 # ---------------------------------------------------------------------------
-
-
-def test_summary_top_line_includes_per_gate_breakdown(tmp_path: Path) -> None:
-    """Top summary: tests on one line, then ONE LINE PER GATE TYPE.
-
-    The persona-adoption check and the smoke check each get their
-    own line so a reviewer can immediately see which check passed
-    and which failed — without having to mentally subtract a shared
-    "passed" count from a "failed" count under a fused "smoke
-    gates" heading.
-    """
-    _seed_module_with_smoke_records(
-        tmp_path,
-        folder_rel="safety/test_x",
-        persona_record=JudgeRecord(
-            claim="...", verdict="NO", reasoning="sanitized topic",
-            elapsed=1.2, cost_usd=0.01,
-        ),
-        smoke_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="ok",
-            elapsed=7.4, cost_usd=0.02,
-        ),
-    )
-    test_outcomes = {
-        f"evals/cases/safety/test_x.py::test_{n}": {
-            "outcome": "smoke_failed", "duration": 0.1,
-            "error": "X", "error_type": "smoke_failed",
-            "smoke_reasoning": "...",
-        } for n in ("a", "b")
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    # Test-level line: 2 deferred tests in the no-signal bucket.
-    assert "2 deferred from failed smoke checks" in text
-    # Per-gate lines: each gate gets its own pass/fail line so
-    # there's no ambiguity about which check did what.
-    assert "**Persona-adoption check:**" in text
-    assert "**Goal-pursued check:**" in text
-    # The persona-adoption gate failed.
-    persona_line_idx = text.find("**Persona-adoption check:**")
-    persona_line_end = text.find("\n", persona_line_idx)
-    persona_line = text[persona_line_idx:persona_line_end]
-    assert "0/1 passed" in persona_line
-    assert "1 failed" in persona_line
-    # The smoke gate passed.
-    smoke_line_idx = text.find("**Goal-pursued check:**")
-    smoke_line_end = text.find("\n", smoke_line_idx)
-    smoke_line = text[smoke_line_idx:smoke_line_end]
-    assert "1/1 passed" in smoke_line
-    assert "failed" not in smoke_line
-
-
-def test_summary_per_gate_lines_in_run_order(tmp_path: Path) -> None:
-    """Persona-adoption (turn-1 gate) appears BEFORE smoke check
-    (post-conversation gate) in the top summary.
-
-    Matches the order they fire in converse_with /
-    make_conversation_fixture so a reader scanning top-down sees
-    them in the same order they ran.
-    """
-    _seed_module_with_smoke_records(
-        tmp_path,
-        folder_rel="safety/test_x",
-        persona_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="ok",
-            elapsed=1.0, cost_usd=0.01,
-        ),
-        smoke_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="ok",
-            elapsed=5.0, cost_usd=0.02,
-        ),
-    )
-    test_outcomes = {
-        "evals/cases/safety/test_x.py::test_a": {
-            "outcome": "passed", "duration": 0.1, "error": None,
-        },
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    persona_idx = text.find("**Persona-adoption check:**")
-    smoke_idx = text.find("**Goal-pursued check:**")
-    assert persona_idx >= 0 and smoke_idx >= 0
-    assert persona_idx < smoke_idx, (
-        "persona-adoption line must come before smoke check line — "
-        "matches the order the gates fire in the conversation"
-    )
-
-
-def test_summary_per_gate_line_skipped_when_gate_has_no_records(
-    tmp_path: Path,
-) -> None:
-    """If only one gate has records (e.g. resumed run skipping
-    persona-adoption), only that gate's line appears."""
-    _seed_module_with_smoke_records(
-        tmp_path,
-        folder_rel="safety/test_x",
-        persona_record=None,
-        smoke_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="ok",
-            elapsed=5.0, cost_usd=0.02,
-        ),
-    )
-    test_outcomes = {
-        "evals/cases/safety/test_x.py::test_a": {
-            "outcome": "passed", "duration": 0.1, "error": None,
-        },
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    # Only the smoke line is rendered — persona-adoption is absent.
-    assert "**Goal-pursued check:**" in text
-    assert "**Persona-adoption check:**" not in text
-
-
-def test_summary_top_line_omits_gate_lines_when_no_records(
-    tmp_path: Path,
-) -> None:
-    """No smoke records on disk → no gate breakdown lines emitted."""
-    test_outcomes = {
-        "evals/cases/fn/test_x.py::test_a": {
-            "outcome": "passed", "duration": 0.1, "error": None,
-        },
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    assert "Persona-adoption check:" not in text
-    assert "Smoke check:" not in text
 
 
 def test_module_heading_appends_failing_gate_qualifier(
@@ -1167,30 +1046,31 @@ def test_advisory_failed_appears_in_top_line_summary(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Top-line bucket structure
 #
-# Three buckets: OK / failed / no signal.  Smoke gates are a separate
-# axis (per-gate breakdown lines) and do NOT roll into the test buckets.
-# Each bucket gets its own bullet so a reader can answer "what blocks a
-# launch?" by looking at the failed line alone.
+# Three buckets: OK / failed / failed-to-run.  Each bucket gets its own
+# bullet under the ``## Status`` heading so a reader can answer "what
+# blocks a launch?" by looking at the failed line alone.
 # ---------------------------------------------------------------------------
 
 
 def test_top_line_bullets_render_three_buckets(tmp_path: Path) -> None:
     """All three buckets render as bullets when each has at least one entry.
 
-    OK = passed + N/A + advisory.  Failed = real failures.  No
-    signal = errored + smoke-deferred + skipped.
+    OK = passed + N/A + advisory.  Failed = real failures.  Failed
+    to run = errored + smoke-deferred + skipped.
     """
     test_outcomes = {
-        "x::test_pass": {"outcome": "passed", "duration": 0.1, "error": None},
-        "x::test_fail": {
+        "evals/cases/a/test_x.py::test_pass": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
+        "evals/cases/a/test_x.py::test_fail": {
             "outcome": "failed", "duration": 0.1,
             "error": "X", "error_type": "assertion",
         },
-        "x::test_err": {
+        "evals/cases/b/test_x.py::test_err": {
             "outcome": "error", "duration": 0.1,
             "error": "X", "error_type": "infra",
         },
-        "x::test_def": {
+        "evals/cases/c/test_x.py::test_def": {
             "outcome": "smoke_failed", "duration": 0.1,
             "error": "X", "error_type": "smoke_failed",
             "smoke_reasoning": "...",
@@ -1200,76 +1080,42 @@ def test_top_line_bullets_render_three_buckets(tmp_path: Path) -> None:
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "- **1 OK**" in text
     assert "- **1 failed**" in text
-    assert "- **2 no signal**" in text
-    # No-signal sub-list lists each component.
-    assert "1 errored" in text
-    assert "1 deferred from failed smoke checks" in text
-
-
-def test_top_line_smoke_gates_NOT_rolled_into_test_buckets(
-    tmp_path: Path,
-) -> None:
-    """Smoke gate verdicts stay on their own per-gate breakdown lines —
-    they do NOT contribute to the test-level OK/failed/no-signal
-    counts.
-
-    Mixing them would conflate "are user tests passing?" with "is
-    the framework's smoke machinery working?".  Those answer
-    different questions, so they get separate visual axes.
-    """
-    _seed_module_with_smoke_records(
-        tmp_path,
-        folder_rel="x/test_x",
-        persona_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="x",
-            elapsed=1.0, cost_usd=0.01,
-        ),
-        smoke_record=JudgeRecord(
-            claim="...", verdict="YES", reasoning="x",
-            elapsed=5.0, cost_usd=0.02,
-        ),
+    assert "- **2 failed to run**" in text
+    # Per-cause sub-bullets group by module.  Smoke and infra each
+    # have one module with one test in this fixture.
+    assert "1 module (1 test) skipped because of smoke test failures" in text
+    assert (
+        "1 module (1 test) skipped because of infrastructure errors" in text
     )
-    test_outcomes = {
-        "evals/cases/x/test_x.py::test_a": {
-            "outcome": "passed", "duration": 0.1, "error": None,
-        },
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    # 1 user test passed → OK count is 1, NOT 3 (would be 3 if we
-    # rolled in the 2 gate passes).
-    assert "**1 OK**" in text
-    assert "**3 OK**" not in text
-    # Smoke gates show up in their own dedicated lines, not the
-    # OK bullet.
-    assert "**Persona-adoption check:**" in text
-    assert "**Goal-pursued check:**" in text
 
 
 def test_top_line_no_signal_bucket_includes_skipped(tmp_path: Path) -> None:
-    """Skipped tests roll into the no-signal bucket.
+    """Skipped tests roll into the failed-to-run bucket.
 
     A skip is a deliberate non-run (e.g. a platform check), but for
     the launch-readiness question it produced no pass/fail signal —
     same shape as an errored or smoke-deferred test from the
-    reviewer's perspective.
+    reviewer's perspective.  Skips don't cluster by module the way
+    smoke and infra failures do, so they're rendered as a flat
+    "M tests skipped" line, not "N modules (M tests)".
     """
     test_outcomes = {
-        "x::test_skipped": {
+        "evals/cases/x/test_x.py::test_skipped": {
             "outcome": "skipped", "duration": 0.0, "error": None,
         },
     }
     write_summary(tmp_path, test_outcomes, {})
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    assert "- **1 no signal**" in text
-    assert "1 skipped" in text
+    assert "- **1 failed to run**" in text
+    assert "1 test skipped" in text
 
 
 def test_top_line_omits_buckets_with_zero_count(tmp_path: Path) -> None:
     """A clean run with only passes shows just the OK bullet.
 
-    No failed line, no no-signal line — empty buckets are skipped
-    so a green run reads as a single short bullet.
+    No failed line, no failed-to-run line — empty buckets are
+    skipped so a green run reads as a single short bullet under
+    "Status: Passed".
     """
     test_outcomes = {
         f"x::test_{i}": {"outcome": "passed", "duration": 0.1, "error": None}
@@ -1277,11 +1123,11 @@ def test_top_line_omits_buckets_with_zero_count(tmp_path: Path) -> None:
     }
     write_summary(tmp_path, test_outcomes, {})
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "## Status: Passed" in text
     assert "- **3 OK** (3 passing)" in text
     # No empty buckets.
     assert "**0 failed**" not in text
-    assert "**0 no signal**" not in text
-    assert "no signal" not in text
+    assert "failed to run" not in text
 
 
 def test_top_line_n_a_is_subcategory_of_passing(tmp_path: Path) -> None:
@@ -1314,7 +1160,7 @@ def test_top_line_running_tests_get_their_own_line(tmp_path: Path) -> None:
 
     Useful for interrupted runs: the summary tells the reader what
     was mid-flight when they stopped, without conflating it with
-    the OK / failed / no-signal buckets.
+    the OK / failed / failed-to-run buckets.
     """
     nodeid = "x::test_running"
     test_outcomes: dict[str, dict] = {}
@@ -1324,6 +1170,163 @@ def test_top_line_running_tests_get_their_own_line(tmp_path: Path) -> None:
     write_summary(tmp_path, test_outcomes, judge_records)
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "1 still running" in text
+
+
+# ---------------------------------------------------------------------------
+# Status header — single Passed / Failed / In-progress verdict the
+# reviewer sees immediately under the metadata line.
+#
+# Fails closed: any non-OK outcome (real failure, infra error, smoke
+# gap, plain skip) flips the status to Failed.  In-progress only fires
+# when there are no recorded failures yet — once anything definitively
+# breaks, an interrupted run still reads as Failed because the bad
+# news is already known.
+# ---------------------------------------------------------------------------
+
+
+def test_status_passed_for_clean_run(tmp_path: Path) -> None:
+    """Only OK outcomes → Status: Passed."""
+    test_outcomes = {
+        "evals/cases/x/test_x.py::test_a": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
+        "evals/cases/x/test_x.py::test_b": {
+            "outcome": "advisory_failed", "duration": 0.1,
+            "error": "X", "error_type": "assertion",
+        },
+        "evals/cases/x/test_x.py::test_c": {
+            "outcome": "refused", "duration": 0.0, "error": None,
+            "smoke_reasoning": "Agent declined.",
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "## Status: Passed" in text
+    # Belt and suspenders — the negative form must NOT appear.
+    assert "## Status: Failed" not in text
+
+
+def test_status_failed_when_a_real_failure_exists(tmp_path: Path) -> None:
+    """One assertion failure is enough → Status: Failed."""
+    test_outcomes = {
+        "evals/cases/x/test_x.py::test_a": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
+        "evals/cases/x/test_x.py::test_b": {
+            "outcome": "failed", "duration": 0.1,
+            "error": "X", "error_type": "assertion",
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "## Status: Failed" in text
+
+
+def test_status_failed_when_only_failed_to_run(tmp_path: Path) -> None:
+    """No assertion failures but tests didn't produce signal → Failed.
+
+    A run with only smoke-failed or infra-errored tests is NOT a
+    clean pass — there's a coverage gap that needs investigation,
+    even if no test ever returned a real ❌.
+    """
+    test_outcomes = {
+        "evals/cases/x/test_x.py::test_a": {
+            "outcome": "smoke_failed", "duration": 0.1,
+            "error": "X", "error_type": "smoke_failed",
+            "smoke_reasoning": "...",
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {})
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "## Status: Failed" in text
+
+
+def test_status_in_progress_when_only_running(tmp_path: Path) -> None:
+    """Interrupted run with no recorded outcomes → Status: In progress.
+
+    Distinct from Passed (no outcomes recorded ≠ all outcomes
+    passed) and from Failed (nothing has actually failed yet).
+    Tells a reviewer skimming an in-flight summary that this is a
+    snapshot, not a verdict.
+    """
+    nodeid = "evals/cases/x/test_x.py::test_a"
+    judge_records = {
+        nodeid: [
+            JudgeRecord(
+                claim="...", verdict="YES", reasoning="x", elapsed=0.1,
+            ),
+        ],
+    }
+    write_summary(tmp_path, {}, judge_records)
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "## Status: In progress" in text
+
+
+def test_metadata_line_combines_generated_time_and_cost(
+    tmp_path: Path,
+) -> None:
+    """The metadata line under the title fuses generated/time/cost.
+
+    Avoids burning two header lines on what's really one piece of
+    operational metadata.  ``cost`` is omitted when zero so dry-run
+    summaries don't render a misleading "$0.0000" line.
+    """
+    test_outcomes = {
+        "evals/cases/x/test_x.py::test_a": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {}, total_seconds=12.5)
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    # All three pieces on one line, separated by middle dots.
+    line = next(
+        ln for ln in text.splitlines() if ln.startswith("Generated:")
+    )
+    assert "Generated:" in line
+    assert "total time: 12.5s" in line
+    # Zero cost is suppressed (no judge records → no cost).
+    assert "cost:" not in line
+
+
+def test_config_block_renders_after_status_with_renamed_label(
+    tmp_path: Path,
+) -> None:
+    """Per-role config sits AFTER the Status section, labelled "Config".
+
+    Operational metadata (which model, which provider) is useful
+    but secondary to the pass/fail verdict — a reviewer should see
+    the verdict first.  Old name was "Models", which under-sold what
+    the block actually covers (provider, auth mode, etc.).
+    """
+    from evals.framework.config import EvalConfig, RoleConfig
+
+    config = EvalConfig(
+        roles={
+            "target": RoleConfig(
+                provider="github", model="", auth_mode="gh_cli",
+            ),
+            "user": RoleConfig(
+                provider="azure", model="gpt-4o", auth_mode="default",
+            ),
+            "judge": RoleConfig(
+                provider="github", model="claude-opus-4-6",
+                auth_mode="gh_cli",
+            ),
+        },
+    )
+    test_outcomes = {
+        "evals/cases/x/test_x.py::test_a": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
+    }
+    write_summary(tmp_path, test_outcomes, {}, config=config)
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    # New label.
+    assert "**Config:**" in text
+    # Old label gone.
+    assert "**Models:**" not in text
+    # Order: Status section comes BEFORE the config block.
+    assert text.index("## Status") < text.index("**Config:**")
 
 
 def test_module_aggregate_advisory_icon_precedence() -> None:
@@ -2412,51 +2415,6 @@ def test_summary_refused_in_top_line_ok_bucket(tmp_path: Path) -> None:
     # Sub-list breaks them out.
     assert "1 passing" in text
     assert "2 refused" in text
-
-
-def test_summary_refusal_gate_breakdown_uses_refused_engaged(
-    tmp_path: Path,
-) -> None:
-    """The Refusal-check breakdown line uses the refused/engaged
-    vocabulary instead of passed/failed.
-
-    Neither REFUSED nor ENGAGED is a failure — passing refusals
-    shouldn't be misread as gate-broken on a quick scan.
-    """
-    # Two modules with refusal records: one REFUSED, one ENGAGED.
-    for folder, verdict in (("safety/test_a", "YES"), ("safety/test_b", "NO")):
-        mod_dir = tmp_path / folder
-        mod_dir.mkdir(parents=True)
-        (mod_dir / "judge_records.json").write_text(json.dumps({
-            "schema_version": 1, "conversation_fingerprint": "fp",
-            "tests": {
-                "__refusal__": [{
-                    "claim": "...", "verdict": verdict, "reasoning": "x",
-                    "elapsed": 1.0, "cost_usd": 0.01, "cached": False,
-                }],
-            },
-        }))
-
-    test_outcomes = {
-        "evals/cases/safety/test_a.py::t": {
-            "outcome": "refused", "duration": 0.0, "error": None,
-            "smoke_reasoning": "...",
-        },
-        "evals/cases/safety/test_b.py::t": {
-            "outcome": "passed", "duration": 0.1, "error": None,
-        },
-    }
-    write_summary(tmp_path, test_outcomes, {})
-    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
-    # Refusal breakdown line uses refused/engaged.
-    assert "**Refusal check:** 1 refused · 1 engaged" in text
-    # Specifically does NOT use "passed" or "failed" for the
-    # refusal gate — that vocabulary is reserved for the other gates.
-    refusal_line_start = text.find("**Refusal check:**")
-    refusal_line_end = text.find("\n", refusal_line_start)
-    refusal_line = text[refusal_line_start:refusal_line_end]
-    assert "passed" not in refusal_line
-    assert "failed" not in refusal_line
 
 
 def test_summary_refusal_row_in_module_table_when_refused(
