@@ -1138,10 +1138,12 @@ def test_top_line_n_a_is_subcategory_of_passing(tmp_path: Path) -> None:
     count is total passing+advisory; N/A appears in the sub-list
     breakdown.
     """
-    nodeid = "x::test_a"
+    nodeid = "evals/cases/x/test_x.py::test_a"
     test_outcomes = {
         nodeid: {"outcome": "passed", "duration": 0.1, "error": None},
-        "x::test_b": {"outcome": "passed", "duration": 0.1, "error": None},
+        "evals/cases/x/test_x.py::test_b": {
+            "outcome": "passed", "duration": 0.1, "error": None,
+        },
     }
     judge_records = {
         nodeid: [JudgeRecord(claim="...", verdict="NA", reasoning="x", elapsed=0.1)],
@@ -1152,6 +1154,54 @@ def test_top_line_n_a_is_subcategory_of_passing(tmp_path: Path) -> None:
     assert "**2 OK**" in text
     assert "1 passing" in text
     assert "1 N/A" in text
+
+
+def test_results_table_n_a_test_renders_plain_n_a_tag(tmp_path: Path) -> None:
+    """A passing test with N/A verdict(s) renders ``✅ passed (N/A)``
+    in the Results table — not the older ``✅ passed (➖ 1)`` form.
+
+    The icon-plus-count form was cryptic: readers had to parse the
+    icon's meaning, then guess what "1" referred to (criteria? per
+    something else?).  ``(N/A)`` is plain text that says exactly
+    what it means without leaning on iconography.
+    """
+    nodeid = "evals/cases/x/test_x.py::test_a"
+    test_outcomes = {
+        nodeid: {"outcome": "passed", "duration": 0.1, "error": None},
+    }
+    judge_records = {
+        nodeid: [
+            JudgeRecord(
+                claim="...", verdict="NA", reasoning="not applicable",
+                elapsed=0.1,
+            ),
+        ],
+    }
+    write_summary(tmp_path, test_outcomes, judge_records)
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    # New form appears.
+    assert "✅ passed (N/A)" in text
+    # Old form does NOT — guard against accidental regression to
+    # the icon-plus-count rendering.
+    assert "(➖ 1)" not in text
+
+
+def test_results_table_no_n_a_tag_when_all_verdicts_yes(tmp_path: Path) -> None:
+    """Tests with only YES verdicts render plain ``✅ passed`` —
+    the (N/A) tag only appears when at least one criterion was N/A."""
+    nodeid = "evals/cases/x/test_x.py::test_a"
+    test_outcomes = {
+        nodeid: {"outcome": "passed", "duration": 0.1, "error": None},
+    }
+    judge_records = {
+        nodeid: [
+            JudgeRecord(claim="...", verdict="YES", reasoning="ok", elapsed=0.1),
+        ],
+    }
+    write_summary(tmp_path, test_outcomes, judge_records)
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "✅ passed" in text
+    assert "(N/A)" not in text
 
 
 def test_top_line_running_tests_get_their_own_line(tmp_path: Path) -> None:

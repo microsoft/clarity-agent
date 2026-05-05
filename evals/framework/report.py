@@ -984,7 +984,14 @@ def write_summary(
                 outcome_label = f"[{outcome_label}]({issue_url})"
             outcome_cell = f"{test_icon} {outcome_label}"
             if na_count and info["outcome"] == "passed":
-                outcome_cell += f" ({_VERDICT_ICON['NA']} {na_count})"
+                # Just "(N/A)" — no count, no separate icon.  The
+                # count was a leftover from when multiple criteria
+                # per test were common; in practice it's almost
+                # always 1, and "(➖ 1)" reads cryptically.  The
+                # plain "(N/A)" tag tells the reviewer "this test
+                # passed but at least one criterion didn't apply"
+                # without making them parse an icon-plus-number.
+                outcome_cell += " (N/A)"
             test_name_cell = f"[`{test_label}`](#{anchor})"
             lines.append(
                 f"| {test_index} | {test_name_cell} | "
