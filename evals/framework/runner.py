@@ -520,6 +520,7 @@ def make_conversation_fixture(
     goal: str,
     persona: str,
     situation: str = "",
+    meta_goal: str | None = None,
     max_turns: int | None = None,
     timeout_seconds: float | None = None,
     slug: str | None = None,
@@ -538,6 +539,17 @@ def make_conversation_fixture(
 
         def test_criterion_one(result, judge):
             assert judge.check(result.transcript, "...")
+
+    ``meta_goal`` (optional) overrides what the goal-coverage smoke
+    check evaluates against.  Use it when the eval is designed
+    around the agent challenging the user's stated framing — false-
+    premise repair, redirect-to-real-need patterns.  Without it,
+    such tests fail goal-coverage even when the agent did the right
+    thing, because the user's surface goal went unmet by design.
+    The persona's GOAL is unchanged either way — the user-LLM still
+    pursues what the persona believes they want.  ``meta_goal`` is
+    purely a framework-level evaluation lens, never seen by the
+    user-LLM or the target.
 
     ``max_turns`` and ``timeout_seconds`` default to the values in
     ``evals/config.yaml`` (``defaults.max_turns`` /
@@ -763,27 +775,50 @@ def make_conversation_fixture(
                         reasoning=substantivity_rec.reasoning,
                     )
 
-                # Framework-enforced smoke check: did the conversation
-                # actually explore the user's stated goal?  A NO here
-                # means the simulated user drifted from its persona,
-                # broke character, or never adopted the role — making
-                # downstream assertions meaningless.  Raising
-                # SmokeCheckFailedError causes the conftest to mark
-                # every test in this module as ``smoke_failed`` rather
-                # than running them against a corrupt sample.  Cached
-                # like any other judge record, so a passing smoke
-                # check is free on rerun.
-                _phase(f"Running goal-pursued check for {display_slug}")
-                smoke_passed, smoke_reasoning = judge.goal_pursued_check(
+                # User-pursuit gate: did the simulated user-LLM stay
+                # in character and earnestly pursue its goal?  Subject
+                # is the user's MESSAGES, not the agent's responses
+                # or the conversation outcome.  Catches the failure
+                # modes downstream of the persona-reminder defenses:
+                # role inversion, persona dissolution, drift, echo,
+                # repetition.  Run BEFORE goal-coverage so that when
+                # the user-LLM has degraded we surface that as the
+                # reason (the more fundamental issue) rather than
+                # whatever incidental coverage failure also happened.
+                _phase(f"Running user-pursuit check for {display_slug}")
+                user_passed, user_reasoning = judge.user_pursued_check(
                     r.transcript, goal=goal,
                 )
-                if not smoke_passed:
+                if not user_passed:
                     _phase(
-                        f"Goal-pursued check FAILED for {display_slug} — "
+                        f"User-pursuit check FAILED for {display_slug} — "
                         "marking module as smoke_failed"
                     )
                     raise SmokeCheckFailedError(
-                        f"Goal-pursued check failed for {display_slug}: "
+                        f"User-pursuit check failed for {display_slug}: "
+                        f"{user_reasoning}",
+                        reasoning=user_reasoning,
+                    )
+
+                # Goal-coverage gate: did the WHOLE conversation cover
+                # the right ground?  Default lens evaluates against
+                # the user's stated goal; with ``meta_goal`` set, the
+                # judge evaluates against the deeper question the
+                # eval is designed to measure (false-premise repair,
+                # redirect-to-real-need patterns).  Failure here means
+                # the conversation was on-character but didn't engage
+                # with what the test cares about.
+                _phase(f"Running goal-coverage check for {display_slug}")
+                smoke_passed, smoke_reasoning = judge.goal_pursued_check(
+                    r.transcript, goal=goal, meta_goal=meta_goal,
+                )
+                if not smoke_passed:
+                    _phase(
+                        f"Goal-coverage check FAILED for {display_slug} — "
+                        "marking module as smoke_failed"
+                    )
+                    raise SmokeCheckFailedError(
+                        f"Goal-coverage check failed for {display_slug}: "
                         f"{smoke_reasoning}",
                         reasoning=smoke_reasoning,
                     )

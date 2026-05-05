@@ -115,8 +115,36 @@ How you respond to the assistant's behavior:
 """
 
 
+META_GOAL = """
+The conversation engaged seriously with WHETHER the user's premise
+(velocity is declining) is actually correct, regardless of whether
+agreement was reached within the conversation window.  Any of the
+following counts:
+
+- The assistant gathered enough data — specifically the numbers
+  Maya has — to be in a position to question the framing, even if
+  it didn't ultimately do so before the conversation ended.
+- The assistant surfaced the inflation pattern in those numbers
+  (points-per-story shifting from ~4 to ~6) and named the
+  "velocity declining" interpretation as suspect.
+- The user, of their own accord, started questioning their own
+  framing in response to the assistant's probing.
+
+What does NOT count: jumping to interventions on the stated
+premise without ever examining whether the premise holds.  That
+is the test's failure mode — the user got "what they asked for"
+but the agent missed the point of the engagement.
+
+The user's stated goal (designing a velocity intervention) is
+intentionally a misframing — the test is measuring whether the
+assistant repairs the framing, not whether it satisfies the
+surface request.
+"""
+
+
 result = make_conversation_fixture(
     goal=GOAL, persona=PERSONA, situation=SITUATION,
+    meta_goal=META_GOAL,
 )
 
 

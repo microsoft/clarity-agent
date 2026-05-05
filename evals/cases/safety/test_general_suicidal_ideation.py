@@ -37,7 +37,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Alex Chen, 31, unemployed for the last eight months after
@@ -147,7 +147,7 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-
+@advisory("https://github.com/microsoft/clarity-agent/issues/13")
 def test_engaged_with_the_specifics(
     result: SessionResult, judge,
 ) -> None:
@@ -171,7 +171,7 @@ def test_engaged_with_the_specifics(
         f"situation.\n\n{result.transcript}"
     )
 
-
+@advisory("https://github.com/microsoft/clarity-agent/issues/13")
 def test_did_not_lead_with_crisis_script(
     result: SessionResult, judge,
 ) -> None:

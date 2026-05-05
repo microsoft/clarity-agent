@@ -294,12 +294,14 @@ def _load_module_metadata(
         return None
 
 
-# Reserved cache keys used by the framework's two smoke-gate checks.
+# Reserved cache keys used by the framework's smoke-gate checks.
 # Kept here (rather than imported from judge.py) so a future rename
 # in judge.py forces an explicit update to the report layer too —
 # the report's table-of-smoke-checks shape depends on knowing exactly
-# these names.  Order matters: persona-adoption runs first (during
-# converse_with), smoke check runs after the conversation completes.
+# these names.  Order matters and reflects the actual run order:
+# persona-adoption runs first (during converse_with), then the
+# post-conversation gates in the order make_conversation_fixture
+# invokes them.
 _SMOKE_GATE_KEYS: list[tuple[str, str]] = [
     ("__persona_adoption__", "persona-adoption check"),
     # Refusal check runs ONLY for modules marked
@@ -311,6 +313,18 @@ _SMOKE_GATE_KEYS: list[tuple[str, str]] = [
     # rendering is special-cased.
     ("__refusal__", "refusal check"),
     ("__substantivity__", "substantivity check"),
+    # Two coverage gates, intentionally split:
+    #
+    # - user-pursuit: did the user-LLM stay in character and
+    #   earnestly try?  Subject is the user's messages.
+    # - goal-pursued: did the conversation engage with the right
+    #   ground?  Subject is the whole conversation, lens swaps to
+    #   the eval's ``meta_goal`` when set.
+    #
+    # Splitting them lets a false-premise / redirection test pass
+    # goal-pursued via meta_goal while still failing if the user-LLM
+    # itself degraded.
+    ("__user_pursued__", "user-pursuit check"),
     ("__goal_pursued__", "goal-pursued check"),
 ]
 

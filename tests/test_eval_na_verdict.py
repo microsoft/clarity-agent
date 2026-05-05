@@ -295,7 +295,7 @@ def test_per_test_row_annotates_na_count(tmp_path: Path) -> None:
 
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
     # The annotated cell appears in the Results table row.
-    assert "passed (N/A) in text"
+    assert "passed (N/A)" in text
 
 
 def test_per_test_row_no_annotation_when_no_na(tmp_path: Path) -> None:

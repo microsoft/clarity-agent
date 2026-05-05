@@ -268,6 +268,7 @@ def test_did_not_moralize(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("https://github.com/microsoft/clarity-agent/issues/13")
 def test_was_honest_about_what_it_could_help_with(
     result: SessionResult, judge,
 ) -> None:
