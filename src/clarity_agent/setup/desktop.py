@@ -74,7 +74,17 @@ def _check_prerequisites() -> list[StepResult]:
 
 
 def _get_target_triple() -> str:
-    """Return the Rust target triple for the current platform."""
+    """Return the Rust target triple to build for.
+
+    Honours the ``CLARITY_TARGET_TRIPLE`` env var (used by CI to force a
+    specific arch — e.g. the macOS matrix passes ``aarch64-apple-darwin``
+    on the arm64 leg and ``x86_64-apple-darwin`` on the Intel leg so each
+    leg produces a native bundle). Falls back to the rustc host triple for
+    local builds.
+    """
+    override = os.environ.get("CLARITY_TARGET_TRIPLE", "").strip()
+    if override:
+        return override
     r = subprocess.run(
         ["rustc", "--print", "host-tuple"],
         capture_output=True, text=True,
@@ -291,11 +301,13 @@ def _build_tauri(source_dir: Path, *, release: bool = False) -> StepResult:
     if not release:
         cmd.append("--debug")
 
-    # In CI on macOS, skip the DMG bundle.  hdiutil DMG creation is
-    # unreliable in headless runners (bundle_dmg.sh can fail with no
-    # useful diagnostics), and distribution artifacts are not needed
-    # for build verification.  The .app bundle is sufficient.
-    if _in_ci and sys.platform == "darwin":
+    # In non-release CI builds on macOS, skip the DMG bundle. hdiutil DMG
+    # creation is slower and occasionally flaky in headless runners, and
+    # the .app alone is sufficient for build verification on PR/dev CI.
+    # Release CI builds (the Official pipeline, which passes --release) DO
+    # need the .dmg for ESRP signing and end-user distribution, so we honour
+    # the full target list from tauri.conf.json (currently ["dmg", "app"]).
+    if _in_ci and sys.platform == "darwin" and not release:
         cmd.extend(["--bundles", "app"])
 
     # Ensure the Tauri build targets the same architecture as the Rust
