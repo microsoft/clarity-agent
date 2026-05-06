@@ -123,7 +123,7 @@ class AzureInferenceClient(LLMClient):
     TIER_DEFAULTS = _AZURE_TIER_DEFAULTS
 
     # Models that require max_completion_tokens instead of max_tokens.
-    _MODERN_MODELS = {"gpt-5", "gpt-5.2", "gpt-5-mini", "o3", "o3-mini", "o4-mini"}
+    _MODERN_MODELS = {"gpt-5", "gpt-5.2", "gpt-5.3", "gpt-5.4", "gpt-5-mini", "o3", "o3-mini", "o4-mini"}
 
     def __init__(
         self,
@@ -178,6 +178,7 @@ class AzureInferenceClient(LLMClient):
         self._is_azure_openai = (
             ".openai.azure.com" in endpoint
             or ".cognitiveservices.azure.com" in endpoint
+            or ".services.ai.azure.com" in endpoint
         )
         self._clients: dict[str, Any] = {}
 
