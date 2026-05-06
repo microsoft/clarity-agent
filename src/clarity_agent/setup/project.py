@@ -247,6 +247,8 @@ def run_project_embed(
 
     _record(insert_agent_snippet(project_dir, agent_dir))
     _record(create_project_wrapper(project_dir, agent_dir))
+    if (project_dir / ".vscode").exists() or (project_dir / ".vscode" / "settings.json").exists():
+        _record(create_mcp_json(project_dir, agent_dir))
     for r in update_gitignore(project_dir):
         _record(r)
 

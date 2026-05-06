@@ -74,6 +74,9 @@ def test_all_tools_registered() -> None:
         "list_mailbox_items",
         "read_mailbox_item",
         "archive_mailbox_item",
+        "check_decision",
+        "dismiss_check",
+        "check_snippet_version",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
@@ -90,6 +93,9 @@ def test_resources_registered() -> None:
     assert "process_guide_resource" in template_names
     assert "thinker_guide_resource" in template_names
     assert "protocol_document_resource" in template_names
+
+    resource_names = {r.name for r in mcp._resource_manager.list_resources()}
+    assert "decisions_resource" in resource_names
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +450,103 @@ class TestArchiveMailboxItem:
         assert "Archived" in result
         remaining = list_mailbox_items("failure-brainstorm")
         assert filename not in remaining
+
+
+class TestCheckDecision:
+    def test_no_protocol(self, empty_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns should_pause=False when no protocol exists."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(empty_project))
+        from clarity_agent.mcp.server import check_decision
+        result = json.loads(check_decision("Add a new auth service"))
+        assert result["should_pause"] is False
+
+    def test_with_decisions(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns relevant documents when decisions exist."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import check_decision, record_decision
+        record_decision(
+            title="Use OAuth",
+            context="Auth needed",
+            decision="Use OAuth 2.0",
+            rationale="Industry standard",
+        )
+        result = json.loads(check_decision("Switch to API keys"))
+        assert result["should_pause"] is True
+        assert len(result["relevant_documents"]) > 0
+
+    def test_with_requirements(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns requirements when they exist."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import check_decision, write_protocol_document
+        write_protocol_document("goal/requirements.md", "# Requirements\n\nMust support SSO.")
+        result = json.loads(check_decision("Add basic auth"))
+        assert result["should_pause"] is True
+        docs = [d["type"] for d in result["relevant_documents"]]
+        assert "requirements" in docs
+
+
+class TestDismissCheck:
+    def test_no_protocol(self, empty_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns error when no protocol exists."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(empty_project))
+        from clarity_agent.mcp.server import dismiss_check
+        result = dismiss_check("no conflict")
+        assert "No protocol" in result
+
+    def test_records_dismissal(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Appends dismissal entry to notes.md."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import dismiss_check
+        result = dismiss_check("no conflict found")
+        assert "Recorded dismissal" in result
+        from clarity_agent.app_paths import protocol_dir
+        notes = (protocol_dir(initialized_project) / "notes.md").read_text(encoding="utf-8")
+        assert "no conflict found" in notes
+
+
+class TestCheckSnippetVersion:
+    def test_no_snippet(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns not found when no AGENTS.md exists."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+        from clarity_agent.mcp.server import check_snippet_version
+        result = json.loads(check_snippet_version())
+        assert result["up_to_date"] is False
+        assert result["embedded_version"] is None
+
+    def test_current_version(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns up_to_date when snippet version matches."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+        (tmp_path / "AGENTS.md").write_text(
+            "# Project\n<!-- clarity-begin -->\n<!-- clarity-version: 2 -->\nstuff\n<!-- clarity-end -->",
+            encoding="utf-8",
+        )
+        from clarity_agent.mcp.server import check_snippet_version
+        result = json.loads(check_snippet_version())
+        assert result["up_to_date"] is True
+        assert result["embedded_version"] == 2
+
+    def test_old_version(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns not up_to_date when snippet version is old."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+        (tmp_path / "AGENTS.md").write_text(
+            "# Project\n<!-- clarity-begin -->\n<!-- clarity-version: 1 -->\nstuff\n<!-- clarity-end -->",
+            encoding="utf-8",
+        )
+        from clarity_agent.mcp.server import check_snippet_version
+        result = json.loads(check_snippet_version())
+        assert result["up_to_date"] is False
+        assert result["embedded_version"] == 1
+
+    def test_no_version_marker(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Treats snippet without version marker as version 1."""
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+        (tmp_path / "AGENTS.md").write_text(
+            "# Project\n<!-- clarity-begin -->\nold snippet\n<!-- clarity-end -->",
+            encoding="utf-8",
+        )
+        from clarity_agent.mcp.server import check_snippet_version
+        result = json.loads(check_snippet_version())
+        assert result["embedded_version"] == 1
 
 
 # ---------------------------------------------------------------------------

@@ -35,13 +35,19 @@ from mcp.server.fastmcp import FastMCP
 SLUG_MAX_LENGTH = 40
 DEFAULT_SSE_PORT = 8421
 
+SNIPPET_VERSION = 2
+
 mcp = FastMCP(
     "clarity-agent",
     instructions=(
-        "Clarity Agent — structured thinking about what you're building, "
-        "why, and what could go wrong.  Use run_clarity to assess project "
-        "state, read process guides via resources, and use support tools "
-        "to manage protocol documents."
+        "Clarity Agent provides structured thinking about what you're building, "
+        "why, and what could go wrong. "
+        "IMPORTANT: Before making architectural decisions (new services, auth/trust "
+        "models, data schemas, external integrations, significant API contracts), "
+        "call check_decision with a description of what you plan to do. "
+        "Call run_clarity when starting work on a project or returning after a break. "
+        "After completing significant implementation, call get_packet_status to check "
+        "if protocol documents need updating."
     ),
 )
 
@@ -102,12 +108,10 @@ def _resolve_agent_dir() -> Path:
 def run_clarity(project_dir: str | None = None) -> str:
     """Assess project state and recommend what to work on next.
 
-    This is the main entry point.  It checks whether a clarity protocol
-    exists, evaluates document staleness, and returns a structured
-    assessment with the recommended next process to follow.
-
-    Call this when starting work, returning to a project, or when
-    unsure what to do next.
+    This is the main entry point. Call this when starting work on a project,
+    returning after a break, or when unsure what to do next. It checks whether
+    a clarity protocol exists, evaluates document staleness, and returns a
+    structured assessment with the recommended next process to follow.
     """
     proto_dir = _resolve_protocol_dir(project_dir)
 
@@ -188,6 +192,7 @@ def run_clarity(project_dir: str | None = None) -> str:
 def init_protocol(project_dir: str | None = None) -> str:
     """Initialize a .clarity-protocol/ directory for a project.
 
+    Call this at the start of a new project before any protocol work.
     Creates directory structure, config.json, and template files.
     Safe to run on partially-initialized projects.
     """
@@ -274,6 +279,8 @@ def get_packet_status(
     """Check the status of all protocol documents: staleness, dependencies,
     what needs updating.
 
+    Call this after completing significant implementation work (new features,
+    architectural changes) to see if protocol documents need updating.
     Returns a structured report showing which documents are current,
     stale, empty, or untracked.
     """
@@ -382,7 +389,9 @@ def record_failure(
 ) -> str:
     """Record a potential failure mode during brainstorming.
 
-    Writes to the failure-brainstorm mailbox in the protocol directory.
+    Call this during failure brainstorming sessions when you identify
+    a way the system could fail. Writes to the failure-brainstorm
+    mailbox in the protocol directory.
     """
     from clarity_agent.ai_actions.brainstorm import record_failure as _record
 
@@ -439,7 +448,9 @@ def record_decision(
 ) -> str:
     """Record a project decision with structured analysis.
 
-    Creates a decision document in the protocol's decisions/ directory.
+    Call this after making a significant architectural or design choice
+    to create a permanent record. Creates a decision document in the
+    protocol's decisions/ directory.
     """
     from clarity_agent.protocol.packet_status import (
         record_decision as _record_decision,
@@ -819,6 +830,150 @@ def archive_mailbox_item(
 
 
 # ===================================================================
+# SUPPORT TOOLS — Decision Checking
+# ===================================================================
+
+
+@mcp.tool()
+def check_decision(
+    description: str,
+    project_dir: str | None = None,
+) -> str:
+    """Check whether a proposed change conflicts with existing decisions or requirements.
+
+    Call this BEFORE making choices that would be expensive to reverse:
+    new services, auth/trust models, data schemas, external integrations,
+    significant API contracts. Returns any relevant existing decisions and
+    requirements so you can check for conflicts before proceeding.
+
+    Args:
+        description: What you plan to do or change.
+        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+    """
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return json.dumps({"should_pause": False, "reason": "No protocol exists yet."})
+
+    relevant: list[dict[str, str]] = []
+
+    decisions_dir = proto_dir / "decisions"
+    if decisions_dir.exists():
+        for dec_file in sorted(decisions_dir.glob("decision-*.md")):
+            content = dec_file.read_text(encoding="utf-8")
+            relevant.append({
+                "type": "decision",
+                "file": dec_file.name,
+                "preview": content[:500],
+            })
+
+    req_path = proto_dir / "goal" / "requirements.md"
+    if req_path.exists():
+        content = req_path.read_text(encoding="utf-8").strip()
+        if content:
+            relevant.append({
+                "type": "requirements",
+                "file": "goal/requirements.md",
+                "preview": content[:500],
+            })
+
+    arch_path = proto_dir / "solution" / "architecture.md"
+    if arch_path.exists():
+        content = arch_path.read_text(encoding="utf-8").strip()
+        if content:
+            relevant.append({
+                "type": "architecture",
+                "file": "solution/architecture.md",
+                "preview": content[:500],
+            })
+
+    return json.dumps({
+        "should_pause": len(relevant) > 0,
+        "reason": (
+            f"Found {len(relevant)} existing document(s) to review before proceeding."
+            if relevant
+            else "No existing decisions, requirements, or architecture to conflict with."
+        ),
+        "proposed_change": description,
+        "relevant_documents": relevant,
+    }, indent=2)
+
+
+@mcp.tool()
+def dismiss_check(
+    reason: str,
+    project_dir: str | None = None,
+) -> str:
+    """Record that a decision check was reviewed and dismissed.
+
+    Call this when check_decision surfaced documents but the user decided
+    to proceed without changes. Logs the dismissal to notes.md to avoid
+    re-triggering on the same topic.
+
+    Args:
+        reason: Why the check was dismissed (e.g., "no conflict found").
+        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+    """
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return "No protocol directory found."
+
+    notes_path = proto_dir / "notes.md"
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    entry = f"\n- [{timestamp}] Decision check dismissed: {reason}\n"
+
+    existing = notes_path.read_text(encoding="utf-8") if notes_path.exists() else ""
+    notes_path.write_text(existing + entry, encoding="utf-8")
+    return f"Recorded dismissal in notes.md: {reason}"
+
+
+@mcp.tool()
+def check_snippet_version(project_dir: str | None = None) -> str:
+    """Check if the Clarity snippet in the project's AGENTS.md is up to date.
+
+    Compares the embedded snippet version against the current template version.
+    Call this periodically to ensure the project has the latest intervention
+    instructions.
+
+    Args:
+        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+    """
+    proj_dir = _resolve_project_dir(project_dir)
+
+    embedded_version = None
+    for candidate_name in ("AGENTS.md", "CLAUDE.md"):
+        candidate = proj_dir / candidate_name
+        if candidate.exists():
+            content = candidate.read_text(encoding="utf-8")
+            match = re.search(r"<!--\s*clarity-version:\s*(\d+)\s*-->", content)
+            if match:
+                embedded_version = int(match.group(1))
+                break
+            if "<!-- clarity-begin -->" in content:
+                embedded_version = 1
+                break
+
+    if embedded_version is None:
+        return json.dumps({
+            "up_to_date": False,
+            "reason": "No Clarity snippet found in AGENTS.md or CLAUDE.md.",
+            "current_version": SNIPPET_VERSION,
+            "embedded_version": None,
+        }, indent=2)
+
+    return json.dumps({
+        "up_to_date": embedded_version >= SNIPPET_VERSION,
+        "current_version": SNIPPET_VERSION,
+        "embedded_version": embedded_version,
+        "reason": (
+            "Snippet is current."
+            if embedded_version >= SNIPPET_VERSION
+            else f"Snippet is version {embedded_version}, current is {SNIPPET_VERSION}. "
+                 "Re-run 'clarity embed' to update."
+        ),
+    }, indent=2)
+
+
+# ===================================================================
 # MCP RESOURCES
 # ===================================================================
 
@@ -861,6 +1016,21 @@ def thinker_guide_resource(name: str) -> str:
     if not guide_path.exists():
         return f"Thinker guide not found: {name}"
     return guide_path.read_text(encoding="utf-8")
+
+
+@mcp.resource("clarity://decisions")
+def decisions_resource() -> str:
+    """Read all project decision records concatenated into one document."""
+    proto_dir = _resolve_protocol_dir()
+    decisions_dir = proto_dir / "decisions"
+    if not decisions_dir.exists():
+        return "No decisions directory found."
+    parts: list[str] = []
+    for dec_file in sorted(decisions_dir.glob("decision-*.md")):
+        parts.append(dec_file.read_text(encoding="utf-8"))
+    if not parts:
+        return "No decision records found."
+    return "\n\n---\n\n".join(parts)
 
 
 @mcp.resource("clarity://protocol/{path}")
