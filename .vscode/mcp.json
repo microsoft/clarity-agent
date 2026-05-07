@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "clarity-agent": {
+      "type": "stdio",
+      "command": "C:/Python314/Scripts/uv.exe",
+      "args": [
+        "run", "--extra", "mcp",
+        "--directory", "c:/Users/evekazarian/Documents/Repos/clarity-agent",
+        "python", "-m", "clarity_agent.mcp",
+        "--project-dir", "${workspaceFolder}"
+      ]
+    }
+  }
+}

@@ -3,6 +3,7 @@
 Usage::
 
     python -m clarity_agent.mcp [--project-dir DIR] [--transport stdio|sse]
+    python -m clarity_agent.mcp --mode embed  # lite mode for embedded use
 """
 
 from __future__ import annotations
@@ -37,21 +38,29 @@ def main() -> None:
         default=None,
         help="Port for SSE/HTTP transport (default: 8421)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["full", "embed"],
+        default="full",
+        help="Server mode: full (all tools) or embed (essential tools only, default: full)",
+    )
 
     args = parser.parse_args()
 
-    # Set project dir in environment so all tools can resolve it
     if args.project_dir:
         os.environ["CLARITY_PROJECT_DIR"] = args.project_dir
 
-    from clarity_agent.mcp.server import mcp
+    if args.mode == "embed":
+        from clarity_agent.mcp.embed_server import mcp_embed as server
+    else:
+        from clarity_agent.mcp.server import mcp as server
 
     if args.transport != "stdio":
         from clarity_agent.mcp.server import DEFAULT_SSE_PORT
-        mcp.settings.host = "127.0.0.1"
-        mcp.settings.port = args.port or DEFAULT_SSE_PORT
+        server.settings.host = "127.0.0.1"
+        server.settings.port = args.port or DEFAULT_SSE_PORT
 
-    mcp.run(transport=args.transport)
+    server.run(transport=args.transport)
 
 
 if __name__ == "__main__":
