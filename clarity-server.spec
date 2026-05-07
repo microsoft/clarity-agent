@@ -62,6 +62,14 @@ hidden_imports = [
     "azure.core.credentials",
     "azure.identity",
     "claude_agent_sdk",
+    # GitHub Copilot SDK
+    "copilot",
+    "copilot.client",
+    "copilot.session",
+    "copilot._jsonrpc",
+    "copilot.generated",
+    "copilot.generated.rpc",
+    "copilot.generated.session_events",
     # Config and utilities
     "dotenv",
     "yaml",
@@ -87,12 +95,20 @@ hidden_imports = [
 # Data files: non-Python assets that must be available at runtime.
 # Each tuple is (source_path, dest_path_in_bundle).
 # ---------------------------------------------------------------------------
+# Locate the Copilot SDK's bundled CLI binary so it's available at runtime.
+_copilot_bin = Path(sys.prefix, "Lib", "site-packages", "copilot", "bin")
+if not _copilot_bin.exists():
+    # Also check the venv (editable installs).
+    _copilot_bin = Path(".venv", "Lib", "site-packages", "copilot", "bin")
+
 datas = [
     ("processes", "processes"),
     ("thinkers", "thinkers"),
     ("web/dist", "web/dist"),
     ("src/clarity_agent", "clarity_agent"),
 ]
+if _copilot_bin.exists():
+    datas.append((str(_copilot_bin), "copilot/bin"))
 
 a = Analysis(
     ["clarity.py"],
