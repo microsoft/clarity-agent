@@ -819,12 +819,14 @@ class TestInsertAgentSnippet:
         assert "already" in r.message.lower()
         assert (tmp_path / "AGENTS.md").read_text() == first
 
-    def test_substitutes_processes_dir(self, tmp_path: Path) -> None:
+    def test_snippet_references_mcp_tools(self, tmp_path: Path) -> None:
+        """The snippet should reference MCP tool names, not CLI commands."""
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
         insert_agent_snippet(tmp_path, agent)
         content = (tmp_path / "AGENTS.md").read_text()
-        assert f"{CLARITY_DIR}/processes/clarity-agent.md" in content
+        assert "run_clarity" in content
+        assert "check_decision" in content
         assert "{{PROCESSES_DIR}}" not in content
 
     def test_skip_when_no_template(self, tmp_path: Path) -> None:

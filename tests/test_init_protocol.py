@@ -195,17 +195,18 @@ class TestSnippetInsertion:
         assert "# Custom agents config" in content
         assert BEGIN_DELIMITER in content
 
-    def test_substitutes_processes_dir(self, tmp_path: Path) -> None:
+    def test_snippet_references_mcp_tools(self, tmp_path: Path) -> None:
+        """The snippet should reference MCP tool names, not CLI commands."""
         project = tmp_path / "project"
         project.mkdir()
-        # Simulate embedded install.
         (project / ".clarity-agent").mkdir()
 
         init_protocol(project, clarity_agent_dir=Path(__file__).resolve().parent.parent)
 
         from clarity_agent.setup.snippet import find_target
         content = find_target(project).read_text()
-        assert ".clarity-agent/processes/clarity-agent.md" in content
+        assert "run_clarity" in content
+        assert "check_decision" in content
         assert "{{PROCESSES_DIR}}" not in content
 
     def test_no_snippet_without_clarity_agent_dir(self, tmp_path: Path) -> None:

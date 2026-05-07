@@ -1,9 +1,11 @@
 """Clarity Agent MCP Server.
 
-Exposes the complete clarity-agent process as MCP tools and resources
-using the FastMCP framework.  Tools are thin wrappers around existing
-Python infrastructure in ``clarity_agent.protocol``, ``clarity_agent.packet``,
-and ``clarity_agent.ai_actions``.
+Exposes the clarity-agent process as MCP tools and resources using the
+FastMCP framework. The tool surface is intentionally small: a coding
+agent needs only a handful of tools to integrate clarity into its
+workflow. Internal helper functions (process guide access, mailbox
+management, packet generation) remain available as plain functions for
+the desktop/web/CLI modes but are not exposed as MCP tools.
 
 Run via::
 
@@ -38,10 +40,16 @@ DEFAULT_SSE_PORT = 8421
 mcp = FastMCP(
     "clarity-agent",
     instructions=(
-        "Clarity Agent — structured thinking about what you're building, "
-        "why, and what could go wrong.  Use run_clarity to assess project "
-        "state, read process guides via resources, and use support tools "
-        "to manage protocol documents."
+        "Clarity Agent provides structured thinking about what you're "
+        "building, why, and what could go wrong. "
+        "IMPORTANT: Before making architectural decisions (new services, "
+        "auth/trust models, data schemas, external integrations, "
+        "significant API contracts), call check_decision with a "
+        "description of what you plan to do. "
+        "Call run_clarity when starting work on a project or returning "
+        "after a break. "
+        "After completing significant implementation, call "
+        "get_packet_status to check if protocol documents need updating."
     ),
 )
 
@@ -79,13 +87,10 @@ def _resolve_agent_dir() -> Path:
     if (candidate / "processes").is_dir():
         return candidate
 
-    # Installed via pip: processes/ and thinkers/ are bundled as
-    # package data under clarity_agent/_data/
     pkg_data = Path(__file__).resolve().parent.parent / "_data"
     if (pkg_data / "processes").is_dir():
         return pkg_data
 
-    # Last resort: check if CLARITY_AGENT_DIR env var is set
     env = os.environ.get("CLARITY_AGENT_DIR")
     if env:
         return Path(env).resolve()
@@ -94,7 +99,7 @@ def _resolve_agent_dir() -> Path:
 
 
 # ===================================================================
-# TOP-LEVEL SKILL
+# MCP TOOLS (8 tools — the coding agent surface)
 # ===================================================================
 
 
@@ -102,28 +107,26 @@ def _resolve_agent_dir() -> Path:
 def run_clarity(project_dir: str | None = None) -> str:
     """Assess project state and recommend what to work on next.
 
-    This is the main entry point.  It checks whether a clarity protocol
-    exists, evaluates document staleness, and returns a structured
-    assessment with the recommended next process to follow.
+    This is the main entry point. Call this when starting work on a project,
+    returning after a break, or when unsure what to do next. It checks whether
+    a clarity protocol exists, evaluates document staleness, and returns a
+    structured assessment with the recommended next process to follow.
 
-    Call this when starting work, returning to a project, or when
-    unsure what to do next.
+    Auto-initializes the protocol if it doesn't exist yet.
     """
     proto_dir = _resolve_protocol_dir(project_dir)
 
     if not proto_dir.exists():
-        # New project — return the clarity-agent guide
         agent_dir = _resolve_agent_dir()
         guide_path = agent_dir / "processes" / "clarity-agent.md"
         guide = guide_path.read_text(encoding="utf-8") if guide_path.exists() else ""
         return (
             "# New Project\n\n"
-            "No clarity protocol found.  This is a new project.\n\n"
+            "No clarity protocol found. This is a new project.\n\n"
             "Follow the clarity-agent process guide below to get started.\n\n"
             "---\n\n" + guide
         )
 
-    # Existing project — run packet status
     from clarity_agent.protocol.packet_status import (
         check_decision_triggers,
         check_packet_status,
@@ -137,17 +140,14 @@ def run_clarity(project_dir: str | None = None) -> str:
     phases = check_process_availability(report)
     dreport = check_decision_triggers(proto_dir)
 
-    # Format the status report
     status_text = format_for_agent(report)
 
-    # Add decision info if there are triggers
     if dreport.get("triggers"):
         status_text += "\n\n## Triggered Decisions\n\n"
         for t in dreport["triggers"]:
             docs = ", ".join(t["changed_docs"])
             status_text += f"- **{t['decision']}**: grounding documents changed ({docs})\n"
 
-    # Add process availability
     if phases:
         status_text += "\n\n## Process Availability\n\n"
         for p in phases:
@@ -156,7 +156,6 @@ def run_clarity(project_dir: str | None = None) -> str:
                 status_text += f" — {p['reason']}"
             status_text += "\n"
 
-    # Read notes.md if it exists
     notes_path = proto_dir / "notes.md"
     if notes_path.exists():
         notes_content = notes_path.read_text(encoding="utf-8").strip()
@@ -171,99 +170,81 @@ def run_clarity(project_dir: str | None = None) -> str:
         if action.get("reason"):
             status_text += f": {action['reason']}"
         if action.get("process"):
-            status_text += (
-                f"\n\nUse `read_process_guide` with process_name="
-                f'"{action["process"]}" to get the full process guide.'
-            )
+            agent_dir = _resolve_agent_dir()
+            guide_path = agent_dir / "processes" / f"{action['process']}.md"
+            if guide_path.exists():
+                guide_content = guide_path.read_text(encoding="utf-8")
+                status_text += (
+                    f"\n\n---\n\n"
+                    f"## Process Guide: {action['process']}\n\n"
+                    f"{guide_content}"
+                )
+            else:
+                status_text += (
+                    f"\n\nProcess: {action['process']}"
+                )
 
     return status_text
 
 
-# ===================================================================
-# SUPPORT TOOLS — Protocol I/O
-# ===================================================================
-
-
 @mcp.tool()
-def init_protocol(project_dir: str | None = None) -> str:
-    """Initialize a .clarity-protocol/ directory for a project.
+def check_decision(
+    description: str,
+    project_dir: str | None = None,
+) -> str:
+    """Check whether a proposed change conflicts with existing decisions or requirements.
 
-    Creates directory structure, config.json, and template files.
-    Safe to run on partially-initialized projects.
+    Call this BEFORE making choices that would be expensive to reverse:
+    new services, auth/trust models, data schemas, external integrations,
+    significant API contracts. Returns any relevant existing decisions and
+    requirements so you can check for conflicts before proceeding.
+
+    Args:
+        description: What you plan to do or change.
+        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
     """
-    from clarity_agent.protocol.initialize import init_protocol as _init
-
-    proj = _resolve_project_dir(project_dir)
-    created = _init(proj)
-    if created:
-        return f"Initialized clarity protocol at {_resolve_protocol_dir(project_dir)}"
-    return f"Protocol directory already exists at {_resolve_protocol_dir(project_dir)}"
-
-
-@mcp.tool()
-def list_protocol_documents(project_dir: str | None = None) -> str:
-    """List all files in the project's .clarity-protocol/ directory tree."""
     proto_dir = _resolve_protocol_dir(project_dir)
     if not proto_dir.exists():
-        return "No protocol directory found."
+        return "No protocol directory found. No existing decisions to check against."
 
-    files: list[str] = []
-    for root, dirs, filenames in os.walk(proto_dir):
-        dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
-        rel_root = Path(root).relative_to(proto_dir)
-        for f in sorted(filenames):
-            if f.startswith("."):
-                continue
-            rel_path = str(rel_root / f) if str(rel_root) != "." else f
-            files.append(rel_path)
+    sections: list[str] = []
 
-    if not files:
-        return "Protocol directory exists but is empty."
-    return "\n".join(files)
+    decisions_dir = proto_dir / "decisions"
+    if decisions_dir.exists():
+        decision_files = sorted(decisions_dir.glob("decision-*.md"))
+        if decision_files:
+            sections.append("## Existing Decisions\n")
+            for df in decision_files:
+                content = df.read_text(encoding="utf-8")
+                sections.append(f"### {df.stem}\n\n{content}\n")
 
+    req_path = proto_dir / "goal" / "requirements.md"
+    if req_path.exists():
+        from clarity_agent.protocol.packet_status import is_template
+        if not is_template(req_path):
+            content = req_path.read_text(encoding="utf-8")
+            sections.append(f"## Current Requirements\n\n{content}\n")
 
-@mcp.tool()
-def read_protocol_document(
-    document_path: str,
-    project_dir: str | None = None,
-) -> str:
-    """Read a document from the project's .clarity-protocol/ directory.
+    arch_path = proto_dir / "solution" / "architecture.md"
+    if arch_path.exists():
+        from clarity_agent.protocol.packet_status import is_template
+        if not is_template(arch_path):
+            content = arch_path.read_text(encoding="utf-8")
+            sections.append(f"## Current Architecture\n\n{content}\n")
 
-    Use list_protocol_documents to see available files.
-    """
-    proto_dir = _resolve_protocol_dir(project_dir)
-    file_path = (proto_dir / document_path).resolve()
+    if not sections:
+        return (
+            "No decisions, requirements, or architecture documents found. "
+            "Proceed, but consider recording this as a decision with "
+            "record_decision if it is significant."
+        )
 
-    # Path traversal protection
-    if not str(file_path).startswith(str(proto_dir.resolve())):
-        return "Error: path traversal not allowed."
-    if not file_path.exists():
-        return f"Error: document not found: {document_path}"
-
-    return file_path.read_text(encoding="utf-8")
-
-
-@mcp.tool()
-def write_protocol_document(
-    document_path: str,
-    content: str,
-    project_dir: str | None = None,
-) -> str:
-    """Write or update a document in the project's .clarity-protocol/ directory."""
-    proto_dir = _resolve_protocol_dir(project_dir)
-    file_path = (proto_dir / document_path).resolve()
-
-    if not str(file_path).startswith(str(proto_dir.resolve())):
-        return "Error: path traversal not allowed."
-
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding="utf-8")
-    return f"Written: {document_path}"
-
-
-# ===================================================================
-# SUPPORT TOOLS — Status & Navigation
-# ===================================================================
+    header = (
+        f"## Proposed Change\n\n{description}\n\n"
+        "Review the following existing context for conflicts "
+        "before proceeding.\n\n"
+    )
+    return header + "\n".join(sections)
 
 
 @mcp.tool()
@@ -274,6 +255,8 @@ def get_packet_status(
     """Check the status of all protocol documents: staleness, dependencies,
     what needs updating.
 
+    Call this after completing significant implementation work (new features,
+    architectural changes) to see if protocol documents need updating.
     Returns a structured report showing which documents are current,
     stale, empty, or untracked.
     """
@@ -299,132 +282,52 @@ def get_packet_status(
 
 
 @mcp.tool()
-def record_packet_status(
-    documents: list[str] | None = None,
+def read_protocol_document(
+    document_path: str,
     project_dir: str | None = None,
 ) -> str:
-    """Record the current content hashes for protocol documents.
+    """Read a document from the project's .clarity-protocol/ directory.
 
-    Call this after writing or updating protocol documents so the
-    staleness tracker knows they are current. If no documents are
-    specified, records all tracked documents that have real content.
-
-    Args:
-        documents: List of document paths relative to .clarity-protocol/
-                   (e.g. ["goal/problem.md", "goal/stakeholders.md"]).
-                   If omitted, records all documents with content.
-        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+    Use forward slashes for nested paths (e.g., 'goal/problem.md').
     """
-    from clarity_agent.protocol.packet_status import record_hashes
-
     proto_dir = _resolve_protocol_dir(project_dir)
-    if not proto_dir.exists():
-        return "No protocol directory found. Run init_protocol first."
+    file_path = (proto_dir / document_path).resolve()
+
+    if not str(file_path).startswith(str(proto_dir.resolve())):
+        return "Error: path traversal not allowed."
+    if not file_path.exists():
+        return f"Error: document not found: {document_path}"
+
+    return file_path.read_text(encoding="utf-8")
+
+
+@mcp.tool()
+def write_protocol_document(
+    document_path: str,
+    content: str,
+    project_dir: str | None = None,
+) -> str:
+    """Write or update a document in the project's .clarity-protocol/ directory.
+
+    Automatically records the content hash so the staleness tracker
+    knows the document is current.
+    """
+    proto_dir = _resolve_protocol_dir(project_dir)
+    file_path = (proto_dir / document_path).resolve()
+
+    if not str(file_path).startswith(str(proto_dir.resolve())):
+        return "Error: path traversal not allowed."
+
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
 
     try:
-        recorded = record_hashes(proto_dir, documents)
-    except (json.JSONDecodeError, OSError) as exc:
-        return f"Error recording packet status: {exc}"
+        from clarity_agent.protocol.packet_status import record_hashes
+        record_hashes(proto_dir, [document_path])
+    except Exception:
+        pass
 
-    if not recorded:
-        return "No documents to record (all empty or untracked)."
-    _MAX_LISTED = 5
-    if len(recorded) <= _MAX_LISTED:
-        names = ", ".join(recorded)
-    else:
-        names = ", ".join(recorded[:_MAX_LISTED]) + f" + {len(recorded) - _MAX_LISTED} more"
-    return f"Recorded baselines for {len(recorded)} document(s): {names}"
-
-
-@mcp.tool()
-def get_next_action(project_dir: str | None = None) -> str:
-    """Determine what clarity process should be run next based on the
-    current state of the protocol documents.
-
-    Returns the recommended next step with rationale.
-    """
-    from clarity_agent.protocol.packet_status import (
-        check_packet_status as _check,
-    )
-    from clarity_agent.protocol.packet_status import (
-        next_action as _next,
-    )
-
-    proto_dir = _resolve_protocol_dir(project_dir)
-    if not proto_dir.exists():
-        return "No protocol directory found. Run init_protocol first."
-
-    report = _check(proto_dir)
-    action = _next(report)
-    if action is None:
-        return "All documents are current. No immediate action needed."
-
-    result = f"**{action.get('document', 'unknown')}**"
-    if action.get("reason"):
-        result += f"\n\n{action['reason']}"
-    if action.get("process"):
-        result += f"\n\nProcess: {action['process']}"
-    return result
-
-
-# ===================================================================
-# SUPPORT TOOLS — Recording
-# ===================================================================
-
-
-@mcp.tool()
-def record_failure(
-    title: str,
-    description: str,
-    additional_context: str = "",
-    pre_existing: bool | None = None,
-    project_dir: str | None = None,
-) -> str:
-    """Record a potential failure mode during brainstorming.
-
-    Writes to the failure-brainstorm mailbox in the protocol directory.
-    """
-    from clarity_agent.ai_actions.brainstorm import record_failure as _record
-
-    proto_dir = _resolve_protocol_dir(project_dir)
-    _, msg = _record(
-        proto_dir,
-        title=title,
-        description=description,
-        source="mcp",
-        additional_context=additional_context,
-        pre_existing=pre_existing,
-    )
-    return msg
-
-
-@mcp.tool()
-def record_suggestion(
-    title: str,
-    target_document: str,
-    suggestion: str,
-    rationale: str = "",
-    project_dir: str | None = None,
-) -> str:
-    """Record a suggestion to update a project document.
-
-    Writes to the suggestions mailbox so the suggestion can be
-    reviewed and applied later.
-    """
-    from clarity_agent.ai_actions.suggestion import (
-        record_suggestion as _record,
-    )
-
-    proto_dir = _resolve_protocol_dir(project_dir)
-    _, msg = _record(
-        proto_dir,
-        title=title,
-        target_document=target_document,
-        suggestion=suggestion,
-        source="mcp",
-        rationale=rationale,
-    )
-    return msg
+    return f"Written: {document_path}"
 
 
 @mcp.tool()
@@ -439,7 +342,9 @@ def record_decision(
 ) -> str:
     """Record a project decision with structured analysis.
 
-    Creates a decision document in the protocol's decisions/ directory.
+    Call this after making a significant architectural or design choice
+    to create a permanent record. Creates a decision document in the
+    protocol's decisions/ directory.
     """
     from clarity_agent.protocol.packet_status import (
         record_decision as _record_decision,
@@ -488,16 +393,157 @@ def record_decision(
     return f"Recorded decision: {title} → decisions/{filename}"
 
 
-# ===================================================================
-# SUPPORT TOOLS — Process & Thinker Access
-# ===================================================================
+@mcp.tool()
+def record_failure(
+    title: str,
+    description: str,
+    additional_context: str = "",
+    pre_existing: bool | None = None,
+    project_dir: str | None = None,
+) -> str:
+    """Record a potential failure mode during brainstorming.
+
+    Call this during failure brainstorming sessions when you identify
+    a way the system could fail. Writes to the failure-brainstorm
+    mailbox in the protocol directory.
+    """
+    from clarity_agent.ai_actions.brainstorm import record_failure as _record
+
+    proto_dir = _resolve_protocol_dir(project_dir)
+    _, msg = _record(
+        proto_dir,
+        title=title,
+        description=description,
+        source="mcp",
+        additional_context=additional_context,
+        pre_existing=pre_existing,
+    )
+    return msg
 
 
 @mcp.tool()
-def list_processes() -> str:
-    """List all available clarity-agent processes with their descriptions,
-    tiers, and categories.
+def record_suggestion(
+    title: str,
+    target_document: str,
+    suggestion: str,
+    rationale: str = "",
+    project_dir: str | None = None,
+) -> str:
+    """Record a suggestion to update a project document.
+
+    Writes to the suggestions mailbox so the suggestion can be
+    reviewed and applied later.
     """
+    from clarity_agent.ai_actions.suggestion import (
+        record_suggestion as _record,
+    )
+
+    proto_dir = _resolve_protocol_dir(project_dir)
+    _, msg = _record(
+        proto_dir,
+        title=title,
+        target_document=target_document,
+        suggestion=suggestion,
+        source="mcp",
+        rationale=rationale,
+    )
+    return msg
+
+
+# ===================================================================
+# INTERNAL FUNCTIONS (not exposed as MCP tools)
+#
+# These remain importable for desktop/web/CLI modes and for tests,
+# but coding agents don't need them as separate tools.
+# ===================================================================
+
+
+def init_protocol(project_dir: str | None = None) -> str:
+    """Initialize a .clarity-protocol/ directory for a project."""
+    from clarity_agent.protocol.initialize import init_protocol as _init
+
+    proj = _resolve_project_dir(project_dir)
+    created = _init(proj)
+    if created:
+        return f"Initialized clarity protocol at {_resolve_protocol_dir(project_dir)}"
+    return f"Protocol directory already exists at {_resolve_protocol_dir(project_dir)}"
+
+
+def list_protocol_documents(project_dir: str | None = None) -> str:
+    """List all files in the project's .clarity-protocol/ directory tree."""
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return "No protocol directory found."
+
+    files: list[str] = []
+    for root, dirs, filenames in os.walk(proto_dir):
+        dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+        rel_root = Path(root).relative_to(proto_dir)
+        for f in sorted(filenames):
+            if f.startswith("."):
+                continue
+            rel_path = str(rel_root / f) if str(rel_root) != "." else f
+            files.append(rel_path)
+
+    if not files:
+        return "Protocol directory exists but is empty."
+    return "\n".join(files)
+
+
+def record_packet_status(
+    documents: list[str] | None = None,
+    project_dir: str | None = None,
+) -> str:
+    """Record the current content hashes for protocol documents."""
+    from clarity_agent.protocol.packet_status import record_hashes
+
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return "No protocol directory found. Run init_protocol first."
+
+    try:
+        recorded = record_hashes(proto_dir, documents)
+    except (json.JSONDecodeError, OSError) as exc:
+        return f"Error recording packet status: {exc}"
+
+    if not recorded:
+        return "No documents to record (all empty or untracked)."
+    _MAX_LISTED = 5
+    if len(recorded) <= _MAX_LISTED:
+        names = ", ".join(recorded)
+    else:
+        names = ", ".join(recorded[:_MAX_LISTED]) + f" + {len(recorded) - _MAX_LISTED} more"
+    return f"Recorded baselines for {len(recorded)} document(s): {names}"
+
+
+def get_next_action(project_dir: str | None = None) -> str:
+    """Determine what clarity process should be run next."""
+    from clarity_agent.protocol.packet_status import (
+        check_packet_status as _check,
+    )
+    from clarity_agent.protocol.packet_status import (
+        next_action as _next,
+    )
+
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return "No protocol directory found. Run init_protocol first."
+
+    report = _check(proto_dir)
+    action = _next(report)
+    if action is None:
+        return "All documents are current. No immediate action needed."
+
+    result = f"**{action.get('document', 'unknown')}**"
+    if action.get("reason"):
+        result += f"\n\n{action['reason']}"
+    if action.get("process"):
+        result += f"\n\nProcess: {action['process']}"
+    return result
+
+
+def list_processes() -> str:
+    """List all available clarity-agent processes."""
     from clarity_agent.process_registry import PROCESS_METADATA
 
     lines: list[str] = []
@@ -509,17 +555,11 @@ def list_processes() -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
 def read_process_guide(process_name: str) -> str:
-    """Read the full markdown guide for a specific clarity-agent process.
-
-    This contains the step-by-step instructions the AI follows when
-    running the process.
-    """
+    """Read the full markdown guide for a specific clarity-agent process."""
     agent_dir = _resolve_agent_dir()
     guide_path = agent_dir / "processes" / f"{process_name}.md"
     if not guide_path.exists():
-        # Check without .md extension
         if not process_name.endswith(".md"):
             guide_path = agent_dir / "processes" / process_name
         if not guide_path.exists():
@@ -534,13 +574,8 @@ def read_process_guide(process_name: str) -> str:
     return guide_path.read_text(encoding="utf-8")
 
 
-@mcp.tool()
 def list_thinkers() -> str:
-    """List all available specialist thinkers for failure brainstorming.
-
-    Each thinker brings a specific analytical perspective (security,
-    human factors, adversarial, etc.).
-    """
+    """List all available specialist thinkers for failure brainstorming."""
     from clarity_agent.protocol.thinker_registry import discover_thinkers
 
     agent_dir = _resolve_agent_dir()
@@ -555,13 +590,8 @@ def list_thinkers() -> str:
     return "\n".join(lines) if lines else "No thinkers found."
 
 
-@mcp.tool()
 def read_thinker_guide(thinker_name: str) -> str:
-    """Read the full methodology guide for a specialist thinker.
-
-    Use this to apply their analytical framework when brainstorming
-    failures.
-    """
+    """Read the full methodology guide for a specialist thinker."""
     from clarity_agent.ai_actions.brainstorm import (
         read_thinker_guide as _read,
     )
@@ -570,12 +600,8 @@ def read_thinker_guide(thinker_name: str) -> str:
     return _read(agent_dir, thinker_name)
 
 
-@mcp.tool()
 def read_behaviors() -> str:
-    """Read the cross-cutting behavioral guidelines from AGENTS.md.
-
-    These apply to all clarity processes.
-    """
+    """Read the cross-cutting behavioral guidelines from AGENTS.md."""
     agent_dir = _resolve_agent_dir()
     agents_path = agent_dir / "AGENTS.md"
     if not agents_path.exists():
@@ -583,23 +609,13 @@ def read_behaviors() -> str:
     return agents_path.read_text(encoding="utf-8")
 
 
-# ===================================================================
-# SUPPORT TOOLS — Output
-# ===================================================================
-
-
-@mcp.tool()
 def generate_packet(
     output_format: str = "markdown",
     sections: str | None = None,
     view: str | None = None,
     project_dir: str | None = None,
 ) -> str:
-    """Generate a review packet document from protocol content.
-
-    Assembles problem statement, solution, failures, decisions, etc.
-    into a readable document for human reviewers.
-    """
+    """Generate a review packet document from protocol content."""
     from clarity_agent.packet import generate_packet as _generate
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -622,11 +638,8 @@ def generate_packet(
         return f"Error generating packet: {e}"
 
 
-@mcp.tool()
 def get_mailbox_status(project_dir: str | None = None) -> str:
-    """Check the status of async operation mailboxes (failure brainstorming
-    results, suggestions, etc.).
-    """
+    """Check the status of async operation mailboxes."""
     from clarity_agent.protocol.packet_status import check_mailbox_status
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -646,12 +659,8 @@ def get_mailbox_status(project_dir: str | None = None) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
 def check_failure_state(project_dir: str | None = None) -> str:
-    """Check the current state of failure analysis: what phase the project
-    is in (brainstorming, analysis, management) and what the next
-    failure-related step should be.
-    """
+    """Check the current state of failure analysis."""
     from clarity_agent.protocol.failure_state import (
         check_failure_state as _check,
     )
@@ -676,24 +685,11 @@ def check_failure_state(project_dir: str | None = None) -> str:
     return "\n".join(lines)
 
 
-# ===================================================================
-# SUPPORT TOOLS — Mailbox Operations
-# ===================================================================
-
-
-@mcp.tool()
 def snapshot_mailbox(
     name: str,
     project_dir: str | None = None,
 ) -> str:
-    """Freeze a mailbox by moving all items into a timestamped archive snapshot.
-
-    Used at the start of failure-analysis to lock in brainstorming results.
-
-    Args:
-        name: Mailbox name (e.g. "failure-brainstorm").
-        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
-    """
+    """Freeze a mailbox by moving all items into a timestamped archive snapshot."""
     from clarity_agent.protocol.mailbox import Mailbox, MailboxError
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -712,19 +708,11 @@ def snapshot_mailbox(
     return f"Snapshot created: {snapshot_path.name}"
 
 
-@mcp.tool()
 def list_mailbox_items(
     name: str,
     project_dir: str | None = None,
 ) -> str:
-    """List all item filenames in a mailbox.
-
-    Returns one filename per line, suitable for passing to read_mailbox_item.
-
-    Args:
-        name: Mailbox name (e.g. "failure-brainstorm").
-        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
-    """
+    """List all item filenames in a mailbox."""
     from clarity_agent.protocol.mailbox import Mailbox, MailboxError
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -745,22 +733,12 @@ def list_mailbox_items(
     return "\n".join(item.name for item in items)
 
 
-@mcp.tool()
 def read_mailbox_item(
     name: str,
     filename: str,
     project_dir: str | None = None,
 ) -> str:
-    """Read the content of a single mailbox item.
-
-    Also checks the archive snapshot directories if the item is not
-    in the active mailbox.
-
-    Args:
-        name: Mailbox name (e.g. "failure-brainstorm").
-        filename: Item filename (from list_mailbox_items).
-        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
-    """
+    """Read the content of a single mailbox item."""
     from clarity_agent.protocol.mailbox import Mailbox
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -769,12 +747,10 @@ def read_mailbox_item(
 
     mailbox = Mailbox(proto_dir, name)
 
-    # Check active mailbox
     item_path = mailbox.mailbox_dir / filename
     if item_path.is_file():
         return item_path.read_text(encoding="utf-8")
 
-    # Check archive snapshots
     if mailbox.archive_dir.exists():
         for snapshot in sorted(mailbox.archive_dir.iterdir(), reverse=True):
             if snapshot.is_dir():
@@ -785,21 +761,12 @@ def read_mailbox_item(
     return f"Item '{filename}' not found in mailbox '{name}' or its archive."
 
 
-@mcp.tool()
 def archive_mailbox_item(
     name: str,
     filename: str,
     project_dir: str | None = None,
 ) -> str:
-    """Move a single item from the active mailbox to the archive.
-
-    Marks the item as processed so it no longer appears in list_mailbox_items.
-
-    Args:
-        name: Mailbox name (e.g. "failure-brainstorm").
-        filename: Item filename to archive.
-        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
-    """
+    """Move a single item from the active mailbox to the archive."""
     from clarity_agent.protocol.mailbox import Mailbox, MailboxError
 
     proto_dir = _resolve_protocol_dir(project_dir)
@@ -831,6 +798,23 @@ def project_summary() -> str:
     if not summary_path.exists():
         return "No project summary found."
     return summary_path.read_text(encoding="utf-8")
+
+
+@mcp.resource("clarity://decisions")
+def decisions_resource() -> str:
+    """Read all project decision records concatenated into one document."""
+    proto_dir = _resolve_protocol_dir()
+    decisions_dir = proto_dir / "decisions"
+    if not decisions_dir.exists():
+        return "No decisions directory found."
+
+    parts: list[str] = []
+    for df in sorted(decisions_dir.glob("decision-*.md")):
+        parts.append(df.read_text(encoding="utf-8"))
+
+    if not parts:
+        return "No decision records found."
+    return "\n\n---\n\n".join(parts)
 
 
 @mcp.resource("clarity://behaviors")
@@ -871,7 +855,6 @@ def protocol_document_resource(path: str) -> str:
     """
     proto_dir = _resolve_protocol_dir()
     file_path = (proto_dir / path).resolve()
-    # Path traversal protection
     if not str(file_path).startswith(str(proto_dir.resolve())):
         return "Error: path traversal not allowed."
     if not file_path.exists():
