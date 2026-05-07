@@ -41,8 +41,8 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         choices=["full", "embed"],
-        default="full",
-        help="Server mode: full (all tools) or embed (essential tools only, default: full)",
+        default="embed",
+        help="Server mode: embed (8 essential tools, default) or full (all 25+ tools)",
     )
 
     args = parser.parse_args()
@@ -50,10 +50,10 @@ def main() -> None:
     if args.project_dir:
         os.environ["CLARITY_PROJECT_DIR"] = args.project_dir
 
-    if args.mode == "embed":
-        from clarity_agent.mcp.embed_server import mcp_embed as server
-    else:
+    if args.mode == "full":
         from clarity_agent.mcp.server import mcp as server
+    else:
+        from clarity_agent.mcp.embed_server import mcp_embed as server
 
     if args.transport != "stdio":
         from clarity_agent.mcp.server import DEFAULT_SSE_PORT
