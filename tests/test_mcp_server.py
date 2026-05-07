@@ -517,13 +517,13 @@ class TestCheckSnippetVersion:
         """Returns up_to_date when snippet version matches."""
         monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
         (tmp_path / "AGENTS.md").write_text(
-            "# Project\n<!-- clarity-begin -->\n<!-- clarity-version: 2 -->\nstuff\n<!-- clarity-end -->",
+            "# Project\n<!-- clarity-begin -->\n<!-- clarity-version: 3 -->\nstuff\n<!-- clarity-end -->",
             encoding="utf-8",
         )
         from clarity_agent.mcp.server import check_snippet_version
         result = json.loads(check_snippet_version())
         assert result["up_to_date"] is True
-        assert result["embedded_version"] == 2
+        assert result["embedded_version"] == 3
 
     def test_old_version(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Returns not up_to_date when snippet version is old."""
