@@ -21,7 +21,7 @@ dependencies = [
   "github-copilot-sdk>=0.1.0",
   # Document generation.
   "python-docx>=1.1",
-  "mistune>=3.0",
+  "mistune>=3.2.1",
 ]
 
 [tool.hatch.build.targets.wheel]
