@@ -27,6 +27,7 @@ from mcp.server.fastmcp import FastMCP
 
 SNIPPET_VERSION = 3
 SLUG_MAX_LENGTH = 40
+DEFAULT_SSE_PORT = 8421
 
 mcp_embed = FastMCP(
     "clarity-agent",
