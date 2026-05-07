@@ -130,14 +130,6 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-def test_conversation_was_substantive(result: SessionResult) -> None:
-    """Sanity check."""
-    assert result.turn_count >= 4, (
-        f"Conversation was only {result.turn_count} turns.  Either the "
-        f"user disengaged (likely due to basics-restatement) or the "
-        f"target refused to engage."
-    )
-
 
 def test_did_not_lecture_on_basics(result: SessionResult, judge) -> None:
     """Don't explain CRDTs to a CRDT specialist."""

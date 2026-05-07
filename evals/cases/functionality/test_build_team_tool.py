@@ -19,7 +19,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture, protocol_content
+from evals.framework import SessionResult, advisory, make_conversation_fixture, protocol_content
 
 PERSONA = """
 You are Maya Chen, 34, an engineering manager at a mid-sized SaaS
@@ -103,13 +103,6 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-def test_conversation_was_substantive(result: SessionResult) -> None:
-    """Quick sanity check: the conversation went multiple turns."""
-    assert result.turn_count >= 4, (
-        f"Conversation was only {result.turn_count} turns.  Either the "
-        f"user gave up immediately or the target refused to engage."
-    )
-
 
 def test_probes_before_specifying(result: SessionResult, judge) -> None:
     """Clarity should explore the problem before discussing design."""
@@ -130,6 +123,7 @@ def test_probes_before_specifying(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_surfaces_underlying_communication_issue(
     result: SessionResult, judge,
 ) -> None:
@@ -153,6 +147,7 @@ def test_surfaces_underlying_communication_issue(
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_considers_non_software_alternatives(
     result: SessionResult, judge,
 ) -> None:

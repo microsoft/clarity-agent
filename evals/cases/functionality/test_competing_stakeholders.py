@@ -133,45 +133,67 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-def test_conversation_was_substantive(result: SessionResult) -> None:
-    assert result.turn_count >= 4, (
-        f"Conversation was only {result.turn_count} turns."
-    )
-
-
 def test_reframed_balance_to_decide(result: SessionResult, judge) -> None:
     """The framing hides that this is a prioritization call."""
     assert judge.check(
         result.transcript,
-        "The assistant surfaced, in some form, that 'balance' is "
-        "the wrong frame for this situation — i.e., that with the "
-        "existing engineering commitments, 'balancing' sales and "
-        "engineering means deciding which of several commitments "
-        "will slip, and that decision has an owner.  The assistant "
-        "can be diplomatic about it; it doesn't have to use the "
-        "word 'reframe.'  What FAILS: accepting the balance framing "
-        "at face value and proposing compromises as if the "
-        "prioritization question did not exist.",
+        "The assistant moved the conversation away from the 'balance' "
+        "framing — in which the user is implicitly responsible for "
+        "finding a middle path that satisfies both stakeholders at "
+        "her layer — and toward a framing of 'what needs to happen "
+        "to make a coherent decision.'\n\n"
+        "The criterion is the conceptual shift, not any specific "
+        "form.  For example, the assistant might surface what the "
+        "actual tradeoffs are (e.g., that 'balancing' really means "
+        "choosing which commitment slips); identify who has the "
+        "decision-making authority and visibility for a call of "
+        "this size; clarify what a decision-maker would need to "
+        "weigh the options; explicitly question the assumption "
+        "that there's a satisfying middle path the user can find; "
+        "or help the user think about what makes this a decision "
+        "(with consequences and an owner) rather than a balancing "
+        "problem (with a compromise the user finds at her layer).  "
+        "These are illustrative — other ways of effecting the same "
+        "shift also count.\n\n"
+        "The assistant can be diplomatic about it; it doesn't have "
+        "to use the word 'reframe.'\n\n"
+        "What FAILS: accepting the balance framing at face value "
+        "and proposing compromises as if there's a middle path the "
+        "user can find that satisfies both stakeholders without "
+        "anyone making a real decision.",
     ), (
         f"Target accepted the 'balance' framing at face value.\n\n"
         f"{result.transcript}"
     )
 
-
 def test_named_decision_maker(result: SessionResult, judge) -> None:
     """Who actually owns this call?"""
     assert judge.check(
         result.transcript,
-        "The assistant surfaced that the CEO (or equivalently: a "
-        "level above both VP Sales and VP Engineering) is the "
-        "actual decision-maker for a prioritization call of this "
-        "size — and that part of the user's job here is to "
-        "inform that decision rather than to resolve it "
-        "themselves at their layer.  What FAILS: treating the "
-        "user as the decider, advising them to pick a path "
-        "without surfacing the escalation question, or "
-        "discussing 'stakeholder alignment' in generic terms "
-        "without identifying the owner.",
+        "The assistant surfaced that someone other than the user "
+        "owns this decision — i.e., that a Director of Engineering "
+        "shouldn't be resolving a prioritization call of this size "
+        "at her layer.  For example, any of these counts as "
+        "identifying the owner (other forms can also count):\n\n"
+        "- Naming the CEO (or 'a level above both VP Sales and VP "
+        "Engineering') as the ultimate decision-maker.\n"
+        "- Naming the VPE as the right immediate escalation target — "
+        "the senior owner who needs to actively engage, brief the VP "
+        "of Sales as a peer, and either decide or escalate further.  "
+        "(In real Director-level escalation, going through your VPE "
+        "first is correct organizational practice; the assistant "
+        "shouldn't be penalized for the realistic chain.)\n"
+        "- Naming the VP-Sales/VP-Engineering peer pair as the "
+        "appropriate decision layer, with the user's job being to "
+        "brief upward to enable that conversation.\n\n"
+        "The criterion is whether the assistant identified ownership "
+        "as sitting above the user, AND surfaced that part of the "
+        "user's job is to inform / hand off that decision rather "
+        "than resolve it herself.\n\n"
+        "What FAILS: treating the user as the decider, advising her "
+        "to pick a path without surfacing the escalation question "
+        "at all, or discussing 'stakeholder alignment' in generic "
+        "terms without identifying any owner.",
     ), (
         f"Target did not surface who owns the decision.\n\n"
         f"{result.transcript}"
@@ -205,15 +227,34 @@ def test_helped_user_think_about_their_role(
     """Influencer, escalator — not the lone decider."""
     assert judge.check(
         result.transcript,
-        "The assistant helped the user think about their role "
-        "specifically — what the user should bring to the decision "
-        "(options, tradeoffs, recommendation), how to structure an "
-        "escalation to the CEO that is useful rather than "
-        "political, or how to manage the VP Sales / VP Engineering "
-        "dynamic through the process.  What FAILS: ignoring the "
-        "user's role question and jumping to solutions, OR "
-        "producing generic 'how to manage stakeholders' content "
-        "not tied to this specific situation.",
+        "The assistant helped the user think about their role in "
+        "this situation specifically.  For example, any of these "
+        "counts (other forms can also count):\n\n"
+        "- Articulated what the user should bring to a decision/"
+        "escalation conversation: options, tradeoffs, a "
+        "recommendation, or a structured brief.  Producing a "
+        "CONCRETE ARTIFACT that operationalizes this — a draft "
+        "one-pager, a structured agenda, an explicit list of what "
+        "to ask for — counts as engaging with the role question, "
+        "not as skipping it.  A well-formed brief IS coaching on "
+        "what the user's role looks like.\n\n"
+        "- Articulated what the user should NOT carry: which "
+        "conversations or decisions belong to a more senior owner, "
+        "and what the user's job is to hand off rather than "
+        "resolve at her layer.\n\n"
+        "- Engaged with how to structure an escalation that's "
+        "substantive rather than political — sequencing of "
+        "conversations, what to gather first, who to brief in what "
+        "order, what to leave for peer-to-peer (VP Sales / VP "
+        "Engineering, or VPE / CEO) handling vs. what to surface "
+        "directly.\n\n"
+        "- Drafted a talk-track or briefing structure for one of "
+        "the specific conversations the user needs to have (with "
+        "the customer's technical lead, the VPE, or the CEO).\n\n"
+        "What FAILS: ignoring the user's role entirely and jumping "
+        "to generic stakeholder-management advice, OR producing "
+        "'how to manage stakeholders' content not tied to this "
+        "situation.",
     ), (
         f"Target did not engage with the user's role.\n\n"
         f"{result.transcript}"

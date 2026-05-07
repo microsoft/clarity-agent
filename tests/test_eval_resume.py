@@ -132,6 +132,116 @@ def test_cache_writes_are_atomic(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# JudgeCache.prune_unseen — stale-entry cleanup
+#
+# When a smoke-gate or judge claim is rewritten between runs, the new
+# claim's record gets stored alongside the old one (JudgeCache keys
+# by (test_name, claim)).  prune_unseen removes the on-disk records
+# left behind, but only for test_names that saw at least one lookup
+# this session — test_names with zero activity are left untouched
+# because there's no evidence their records are stale.
+# ---------------------------------------------------------------------------
+
+def test_prune_unseen_drops_records_with_unseen_claims(
+    tmp_path: Path,
+) -> None:
+    """A test_name that was looked up under one claim drops other claims
+    under the same test_name.  Models the claim-rewrite scenario:
+    old claim's record sits on disk, new claim's record is stored
+    fresh — prune drops the old."""
+    path = tmp_path / "judge_records.json"
+    seed = JudgeCache(path=path, fingerprint="fp")
+    seed.store("__user_pursued__", _make_record(claim="OLD claim text"))
+    seed.store("__user_pursued__", _make_record(claim="NEW claim text"))
+
+    # Fresh cache, simulating a new session: only the NEW claim is
+    # looked up.
+    cache = JudgeCache(path=path, fingerprint="fp")
+    cache.lookup("__user_pursued__", "NEW claim text")
+    cache.prune_unseen()
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    claims_on_disk = [
+        e["claim"] for e in data["tests"]["__user_pursued__"]
+    ]
+    assert claims_on_disk == ["NEW claim text"], (
+        f"expected only NEW claim retained, got {claims_on_disk}"
+    )
+
+
+def test_prune_unseen_leaves_untouched_test_names_alone(
+    tmp_path: Path,
+) -> None:
+    """A test_name with zero lookups in this session keeps all its
+    records.  Models a smoke-gate that doesn't fire on this run
+    (e.g., __refusal__ for non-refusal-acceptable modules) — we
+    don't have evidence those records are stale, just unused."""
+    path = tmp_path / "judge_records.json"
+    seed = JudgeCache(path=path, fingerprint="fp")
+    seed.store("__refusal__", _make_record(claim="some refusal claim"))
+    seed.store("__user_pursued__", _make_record(claim="user claim"))
+
+    cache = JudgeCache(path=path, fingerprint="fp")
+    # Only __user_pursued__ is touched this session.
+    cache.lookup("__user_pursued__", "user claim")
+    cache.prune_unseen()
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    # __refusal__ records remain untouched.
+    assert "__refusal__" in data["tests"]
+    refusal_claims = [e["claim"] for e in data["tests"]["__refusal__"]]
+    assert refusal_claims == ["some refusal claim"]
+
+
+def test_prune_unseen_no_writes_when_nothing_to_drop(
+    tmp_path: Path,
+) -> None:
+    """Idempotent: if no stale entries, prune doesn't rewrite the file.
+
+    Defensive against churning the file's mtime or wear on the disk
+    when there's no actual cleanup to do.
+    """
+    path = tmp_path / "judge_records.json"
+    cache = JudgeCache(path=path, fingerprint="fp")
+    cache.store("__user_pursued__", _make_record(claim="C"))
+    cache.lookup("__user_pursued__", "C")  # mark as seen
+    mtime_before = path.stat().st_mtime_ns
+    cache.prune_unseen()
+    mtime_after = path.stat().st_mtime_ns
+    assert mtime_before == mtime_after, (
+        "prune_unseen rewrote the file when there was nothing to drop"
+    )
+
+
+def test_prune_unseen_records_lookup_misses_too(
+    tmp_path: Path,
+) -> None:
+    """A lookup that misses still counts as 'seen' — important so
+    that after a fresh judge call follows the miss, the new claim's
+    record is retained on a subsequent prune."""
+    path = tmp_path / "judge_records.json"
+    seed = JudgeCache(path=path, fingerprint="fp")
+    seed.store("__user_pursued__", _make_record(claim="OLD"))
+
+    cache = JudgeCache(path=path, fingerprint="fp")
+    # Lookup for the NEW claim text — this is a miss against the
+    # seed (which has only OLD), but the lookup should still mark
+    # NEW as seen.
+    assert cache.lookup("__user_pursued__", "NEW") is None
+    # Now the judge would normally store a fresh record for NEW.
+    cache.store("__user_pursued__", _make_record(claim="NEW"))
+    cache.prune_unseen()
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    claims_on_disk = sorted(
+        e["claim"] for e in data["tests"]["__user_pursued__"]
+    )
+    assert claims_on_disk == ["NEW"], (
+        f"expected OLD pruned and NEW retained, got {claims_on_disk}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Judge integration
 # ---------------------------------------------------------------------------
 
@@ -143,8 +253,8 @@ def _make_judge(
 ) -> Judge:
     """Build a Judge with minimal scaffolding and a no-op recorder list."""
     eval_config = EvalConfig(
-        roles={"judge": RoleConfig(provider="openai", model="judge-model",
-                                    auth_mode="api_key")},
+        roles={"_judge": RoleConfig(provider="openai", model="judge-model",
+                                     auth_mode="api_key")},
     )
     recorder: Any = None
     if recorded is not None:

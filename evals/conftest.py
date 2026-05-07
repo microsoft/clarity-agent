@@ -14,13 +14,13 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from evals.framework import (
+    AgentRefusedError,
     EvalConfig,
     Judge,
     SimulatedUser,
@@ -60,7 +60,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "<DIR>/<category>/<module>/ as the conversation runs — "
             "tail files there to watch progress during long runs.  "
             "A summary.md is written at the root at session end.  "
-            "Default: ./eval-runs/<timestamp>/."
+            "REQUIRED when running tests under evals/cases/ — pytest "
+            "exits with an error at collection time if any eval test "
+            "is collected without this flag.  No default."
         ),
     )
     group.addoption(
@@ -121,6 +123,29 @@ def pytest_configure(config: pytest.Config) -> None:
     will surface them later); ``--print-config`` treats the same
     failure as fatal because the flag's whole purpose is diagnostic.
     """
+    # Register the ``advisory`` marker so pytest doesn't warn when
+    # an eval imports it from ``evals.framework`` and applies it to
+    # a test.  See ``evals.framework.advisory`` for the decorator
+    # definition and the makereport hook below for the outcome
+    # rewrite.
+    config.addinivalue_line(
+        "markers",
+        "advisory: a test whose failure is informative but should "
+        "not block the suite (no contribution to pytest exit code, "
+        "rendered as 💡 advisory-failed in summary.md)",
+    )
+    # Module-level marker: in this test, agent refusal is an
+    # acceptable / desired outcome.  Triggers the optional refusal
+    # gate in make_conversation_fixture before substantivity, and
+    # routes every test in the module to the ``refused`` outcome
+    # (a success flavor) when the agent refused cleanly.
+    config.addinivalue_line(
+        "markers",
+        "refusal_acceptable: refusal-by-the-agent is a valid "
+        "success path for this test/module (rendered as ✅ refused "
+        "in summary.md)",
+    )
+
     print_and_exit = bool(config.getoption("--print-config"))
     try:
         eval_cfg = load_default()
@@ -141,6 +166,35 @@ def pytest_configure(config: pytest.Config) -> None:
         pytest.exit("--print-config: done", returncode=0)
 
 
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item],  # noqa: ARG001
+) -> None:
+    """Require ``--output-dir`` whenever an eval test is collected.
+
+    Fails the session loudly at collection time — before any test
+    runs — so the user gets a clear "you forgot the flag" message
+    rather than discovering hours into a long run that nothing
+    was being recorded.
+
+    Mixed sessions (``pytest tests/ evals/cases/...``) without the
+    flag also fail.  Pure unit-test sessions (``pytest tests/``)
+    are unaffected because no item matches the eval-cases prefix.
+    """
+    has_eval_test = any(
+        item.nodeid.startswith("evals/cases/") for item in items
+    )
+    if has_eval_test and not config.getoption("--output-dir"):
+        pytest.exit(
+            "Eval tests require --output-dir=DIR.\n\n"
+            "  Example: pytest evals/cases --output-dir=./eval-runs/my-run\n\n"
+            "Pass a path on the command line and re-run.  We don't "
+            "default to ./eval-runs/<timestamp>/ anymore — too easy "
+            "to miss the directory afterwards, and unit-test runs "
+            "were leaving stray empties behind.",
+            returncode=2,
+        )
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:  # noqa: ARG001
     """Record session start so the summary can report total wall time."""
     global _session_start
@@ -154,11 +208,17 @@ def _snapshot_summary(pytest_config: pytest.Config) -> None:
     judge check, each test outcome, and at session end.  Failures
     are swallowed so a disk-full or permissions issue can't abort
     a running eval.
+
+    No-ops when ``--output-dir`` wasn't given.  This keeps unit-test
+    runs (``pytest tests/``) from generating spurious summary
+    artifacts: the conftest's runtest hooks fire for every test in
+    the session, but without an output directory there's nowhere
+    to write so we just return.
     """
     if not _test_outcomes and not _judge_records:
         return
     outputs_dir = _resolve_output_dir(pytest_config)
-    if not outputs_dir.exists():
+    if outputs_dir is None or not outputs_dir.exists():
         return
     try:
         eval_cfg = load_default()
@@ -186,17 +246,23 @@ def _snapshot_summary(pytest_config: pytest.Config) -> None:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _resolve_output_dir(config: pytest.Config) -> Path:
+def _resolve_output_dir(config: pytest.Config) -> Path | None:
     """Compute the output directory, caching on *config* so the fixture
     and the session-finish hook see the same path.
+
+    Returns ``None`` when ``--output-dir`` wasn't given.  Callers
+    that need a path either short-circuit (the snapshot/sessionfinish
+    hooks) or surface a clear error before they get here (the
+    ``output_dir`` fixture and the collection guard, both of which
+    fail loudly when an eval test asks for an output dir but none
+    was configured).
     """
     cached = getattr(config, "_eval_output_dir", None)
     if cached is not None:
         return cached
     raw: str | None = config.getoption("--output-dir")
     if not raw:
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        raw = f"./eval-runs/{timestamp}"
+        return None
     path = Path(raw).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
     config._eval_output_dir = path  # type: ignore[attr-defined]
@@ -225,10 +291,22 @@ def output_dir(pytestconfig: pytest.Config) -> Path:
     transcripts land there live as the conversation runs.  The
     ``summary.md`` is written at the root at session end.
 
-    Default: ``./eval-runs/<YYYYmmdd-HHMMSS>/``.  Override with
-    ``--output-dir=DIR``.
+    REQUIRED: pass ``--output-dir=DIR`` when running eval tests.
+    The collection guard (``pytest_collection_modifyitems`` below)
+    fails loudly before any test runs if eval tests were collected
+    without the flag, so reaching this fixture without one means a
+    test outside the normal collection path requested it — also
+    a hard error.
     """
-    return _resolve_output_dir(pytestconfig)
+    path = _resolve_output_dir(pytestconfig)
+    if path is None:
+        pytest.exit(
+            "Eval tests require --output-dir=DIR.  This fixture was "
+            "requested without one — pass --output-dir on the pytest "
+            "command line.",
+            returncode=2,
+        )
+    return path
 
 
 @pytest.fixture(scope="session")
@@ -282,7 +360,7 @@ def target_session(
     (project_dir / ".git").mkdir()
 
     backend, llm_config = eval_config.create_backend(
-        "target",
+        slot="target",
         project_dir=project_dir,
         clarity_agent_dir=clarity_agent_dir,
     )
@@ -320,7 +398,7 @@ def user_factory(
         *, goal: str, persona: str, situation: str = "",
     ) -> SimulatedUser:
         backend, _ = eval_config.create_backend(
-            "user",
+            slot="user",
             project_dir=tmp_path,
             clarity_agent_dir=clarity_agent_dir,
         )
@@ -403,6 +481,11 @@ def pytest_runtest_protocol(item, nextitem):  # noqa: ARG001 — hook signature
 def _classify_error(call) -> str:
     """Return the error category for a failed test.
 
+    - ``"refused"`` — the framework's refusal gate fired for a
+      ``@refusal_acceptable`` module.  This is a SUCCESS flavor
+      (the agent refused cleanly, which is the desired outcome
+      for these tests), routed to its own bucket.  Does NOT
+      trigger session abort.
     - ``"smoke_failed"`` — the framework's smoke check rejected the
       module's conversation (drift, role failure, etc.).  Routed to a
       dedicated outcome bucket and does NOT trigger session abort, so
@@ -414,6 +497,8 @@ def _classify_error(call) -> str:
     """
     if call.excinfo is None:
         return "infra"
+    if call.excinfo.errisinstance(AgentRefusedError):
+        return "refused"
     if call.excinfo.errisinstance(SmokeCheckFailedError):
         return "smoke_failed"
     return "assertion" if call.excinfo.type is AssertionError else "infra"
@@ -422,12 +507,18 @@ def _classify_error(call) -> str:
 def _extract_smoke_reasoning(call) -> str | None:
     """Pull the judge's reasoning off a SmokeCheckFailedError, if any.
 
-    Stored on the exception by ``Judge.smoke_check`` so the summary
+    Stored on the exception by ``Judge.goal_pursued_check`` so the summary
     can render WHY the smoke check failed, not just that it did.
     """
     if call is None or call.excinfo is None:
         return None
-    if not call.excinfo.errisinstance(SmokeCheckFailedError):
+    # Both SmokeCheckFailedError (a failure) and AgentRefusedError
+    # (a success short-circuit) carry a ``reasoning`` attribute the
+    # report renders.  Recognize either so the same downstream
+    # field name works for both.
+    if not call.excinfo.errisinstance(
+        (SmokeCheckFailedError, AgentRefusedError),
+    ):
         return None
     exc = call.excinfo.value
     return getattr(exc, "reasoning", None)
@@ -455,13 +546,57 @@ def pytest_runtest_makereport(item, call):
         error_type: str | None = None
         if report.outcome == "failed":
             error_type = _classify_error(call)
+
+        # @advisory interception.  If a test marked ``@advisory``
+        # failed an assertion, route it to the ``advisory_failed``
+        # outcome bucket and rewrite pytest's report outcome to
+        # ``"passed"`` so the suite's exit code stays 0.  Only
+        # applies to assertion-style failures — infrastructure
+        # errors and smoke failures are always blocking, even on an
+        # advisory-marked test, because they signal something broken
+        # about the run rather than a behavior the eval is probing.
+        advisory_marker = item.get_closest_marker("advisory")
+        outcome_label = report.outcome
+        advisory_issue: str | None = None
+        if (
+            advisory_marker is not None
+            and report.outcome == "failed"
+            and error_type == "assertion"
+        ):
+            outcome_label = "advisory_failed"
+            # Rewrite the pytest report so the test contributes to
+            # neither pytest's exit code nor its terminal summary's
+            # "failed" line.  Our own summary tracks the original
+            # failure via ``outcome_label`` above.
+            #
+            # Do NOT set ``report.wasxfail`` here.  It looks like a
+            # convenient way to make ``-v`` print "ADVISORY" next
+            # to the test, but pytest's terminal reporter then
+            # reclassifies the result as XPASSED — polluting the
+            # session line ("12 xpassed") with our advisory tests.
+            # A clean ``"passed"`` outcome is enough; the real
+            # advisory accounting lives in summary.md.
+            report.outcome = "passed"
+            # Optional issue-tracker URL passed to the marker:
+            # ``@advisory("https://...")`` (positional) or
+            # ``@advisory(issue="https://...")`` (keyword).  Stored
+            # as-is on _test_outcomes so the report can render it
+            # next to the failure.  We only capture it on the
+            # actual advisory_failed path — a passing advisory test
+            # has no failure to point at, so the URL is noise.
+            if advisory_marker.args:
+                advisory_issue = str(advisory_marker.args[0])
+            elif "issue" in advisory_marker.kwargs:
+                advisory_issue = str(advisory_marker.kwargs["issue"])
+
         _test_outcomes[item.nodeid] = {
-            "outcome": report.outcome,
+            "outcome": outcome_label,
             "duration": report.duration,
             "error": (
-                report.longreprtext if report.outcome == "failed" else None
+                report.longreprtext if outcome_label != "passed" else None
             ),
             "error_type": error_type,
+            "advisory_issue": advisory_issue,
         }
         _snapshot_summary(item.config)
 
@@ -474,15 +609,24 @@ def pytest_runtest_makereport(item, call):
     elif report.when == "setup" and report.outcome in ("failed", "skipped"):
         # Setup-phase failures usually mean the fixture (backend,
         # conversation runner, etc.) couldn't get the test off the
-        # ground.  Two paths now matter:
+        # ground.  Three paths matter:
         #
-        # 1. SmokeCheckFailedError from the framework smoke check:
-        #    the conversation ran but didn't actually exercise the
-        #    persona's goal.  Reported as ``smoke_failed`` (its own
-        #    bucket), recorded for the whole module, does NOT abort
-        #    the run — other modules' samples may be fine.
+        # 1. AgentRefusedError from the refusal-acceptable gate:
+        #    the agent declined cleanly, which is the desired
+        #    outcome for these tests.  Reported as ``refused`` (a
+        #    SUCCESS flavor), recorded for the whole module.  Like
+        #    smoke_failed, does NOT abort the run, AND does NOT
+        #    contribute to pytest's exit code — we rewrite the
+        #    report outcome to "passed" so pytest sees a clean run.
         #
-        # 2. Any other setup failure: real infrastructure problem
+        # 2. SmokeCheckFailedError from any of the three framework
+        #    gates (persona-adoption, substantivity, goal-pursued):
+        #    the conversation ran but downstream assertions can't
+        #    meaningfully run on it.  Reported as ``smoke_failed``
+        #    (its own bucket), recorded for the whole module, does
+        #    NOT abort the run — other modules' samples may be fine.
+        #
+        # 3. Any other setup failure: real infrastructure problem
         #    (fixture exception, backend crash).  Aborts the session
         #    via pytest.exit so a wedged backend doesn't repeat the
         #    same error once per test in the module.
@@ -490,11 +634,66 @@ def pytest_runtest_makereport(item, call):
             error_type = _classify_error(call)
         else:
             error_type = None
-        outcome_label = (
-            "smoke_failed" if error_type == "smoke_failed"
-            else report.outcome
-        )
         smoke_reasoning = _extract_smoke_reasoning(call)
+        if error_type == "refused":
+            outcome_label = "refused"
+            # Pytest skip semantics: setup-skipped → call phase
+            # doesn't run, test doesn't count toward failure / exit
+            # code.  We can't use ``"passed"`` here (the @advisory
+            # trick) because passed-setup makes pytest proceed to
+            # the call phase, which then KeyErrors on the missing
+            # ``result`` fixture argument (the fixture raised, so
+            # never produced a value).  Skipped-setup is the right
+            # signal — pytest skips the call cleanly and exits 0.
+            report.outcome = "skipped"
+            # Replace the AgentRefusedError traceback with a short
+            # human-readable reason — pytest renders ``longrepr``
+            # as the skip reason in its terminal output, and we
+            # don't want a stack trace appearing for what is
+            # semantically a success short-circuit.
+            #
+            # Format MUST be a 3-tuple ``(filename, lineno, reason)``
+            # — that's what pytest's ``pytest.skip()`` produces and
+            # what the terminal reporter expects.  A plain string
+            # crashes ``_pytest.terminal._get_raw_skip_reason`` with
+            # an AssertionError because that helper does
+            # ``assert isinstance(report.longrepr, tuple)``.
+            short_reason = smoke_reasoning or "agent refused"
+            location = getattr(item, "location", None)
+            if location and len(location) >= 2:
+                filename, lineno = location[0], location[1] or 0
+            else:
+                filename, lineno = (
+                    str(getattr(item, "fspath", "<refused>")), 0,
+                )
+            report.longrepr = (
+                filename, lineno, f"refused: {short_reason}",
+            )
+        elif error_type == "smoke_failed":
+            outcome_label = "smoke_failed"
+            # Same skipped-setup trick as the refused branch above:
+            # without rewriting the outcome, pytest renders these as
+            # ERROR in the terminal (one line per test in the module)
+            # which buries the rest of the run.  ``"skipped"`` plus
+            # a short reason matches our own classification — the
+            # test never ran (no signal), the suite isn't blocked,
+            # and pytest's terminal stays readable.  summary.md
+            # still surfaces these as ``smoke_failed`` in the
+            # no-signal bucket.
+            report.outcome = "skipped"
+            short_reason = smoke_reasoning or "smoke check failed"
+            location = getattr(item, "location", None)
+            if location and len(location) >= 2:
+                filename, lineno = location[0], location[1] or 0
+            else:
+                filename, lineno = (
+                    str(getattr(item, "fspath", "<smoke-failed>")), 0,
+                )
+            report.longrepr = (
+                filename, lineno, f"smoke-failed: {short_reason}",
+            )
+        else:
+            outcome_label = report.outcome
         _test_outcomes.setdefault(item.nodeid, {
             "outcome": outcome_label,
             "duration": report.duration,
@@ -521,7 +720,7 @@ def pytest_sessionfinish(
     if not _test_outcomes and not _judge_records:
         return
     outputs_dir = _resolve_output_dir(session.config)
-    if not outputs_dir.exists():
+    if outputs_dir is None or not outputs_dir.exists():
         return
 
     _snapshot_summary(session.config)

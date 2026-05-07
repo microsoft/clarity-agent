@@ -55,6 +55,14 @@ class SessionResult:
     extraction).  Empty for resumed conversations: the LLM didn't
     actually run, so there's nothing to record."""
 
+    persona_check_failed: str | None = None
+    """If the turn-1 persona-adoption validator rejected the opening
+    message, the judge's reasoning.  ``None`` means either the check
+    passed or no validator was configured.  The fixture treats a
+    non-None value as a smoke failure — the simulated user
+    substituted a different persona than requested, so the rest of
+    the conversation isn't worth running."""
+
     @property
     def transcript(self) -> str:
         """The full conversation as a single markdown string, for judging."""

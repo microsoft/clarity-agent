@@ -39,7 +39,12 @@ from typing import Any
 import pytest
 
 from evals.framework.config import EvalConfig
-from evals.framework.judge import SmokeCheckFailedError
+from evals.framework.judge import (
+    _SUBSTANTIVITY_CACHE_KEY,
+    AgentRefusedError,
+    SmokeCheckFailedError,
+    _make_substantivity_record,
+)
 from evals.framework.resume import JudgeCache, compute_fingerprint
 from evals.framework.target import TargetSession
 from evals.framework.types import SessionResult, Turn
@@ -49,6 +54,35 @@ from evals.framework.user import SimulatedUser
 def _phase(message: str) -> None:
     """Print a phase marker.  Stderr so pytest's stdout capture doesn't hide it."""
     print(f"\n  [eval] {message}", file=sys.stderr, flush=True)
+
+
+def _module_has_marker(request: pytest.FixtureRequest, name: str) -> bool:
+    """Return True if any test in *request*'s module has the given marker.
+
+    Catches both module-level (``pytestmark = refusal_acceptable``)
+    and per-test (``@refusal_acceptable``) usage.  We look at all
+    tests' markers because the conversation fixture is module-scoped
+    — if any test in the module declares the marker, we want the
+    marker's behavior to apply to the shared conversation.
+
+    Returns False if the request doesn't have a session-level
+    iterator we can walk — e.g. some non-standard fixture call
+    paths.  Defensive: never raise from here.
+    """
+    try:
+        for item in request.session.items:
+            # ``item.module`` is defined on pytest.Function (the
+            # subclass for test functions) but not on the abstract
+            # Item base class — getattr with a default so pyright
+            # doesn't complain on the static type AND so non-Function
+            # items (rare hookable subclasses) don't blow up.
+            item_module = getattr(item, "module", None)
+            if item_module is request.module:
+                if item.get_closest_marker(name) is not None:
+                    return True
+        return False
+    except (AttributeError, TypeError):
+        return False
 
 
 @contextmanager
@@ -62,6 +96,9 @@ def run_conversation(
     situation: str = "",
     max_turns: int = 15,
     timeout_seconds: float | None = None,
+    opening_validator: Callable[[str], tuple[bool, str]] | None = None,
+    target_role: str | None = None,
+    user_role: str | None = None,
 ) -> Iterator[SessionResult]:
     """Run one simulated conversation end-to-end and yield the result.
 
@@ -101,7 +138,8 @@ def run_conversation(
     _phase(f"Conversation working dir (hidden from target): {working_dir}")
 
     target_backend, llm_config = config.create_backend(
-        "target",
+        slot="target",
+        role=target_role,
         project_dir=working_dir,
         clarity_agent_dir=clarity_agent_dir,
     )
@@ -115,7 +153,8 @@ def run_conversation(
         )
         try:
             user_backend, _ = config.create_backend(
-                "user",
+                slot="user",
+                role=user_role,
                 project_dir=working_dir,
                 clarity_agent_dir=clarity_agent_dir,
             )
@@ -144,6 +183,7 @@ def run_conversation(
                         target,
                         max_turns=max_turns,
                         timeout_seconds=timeout_seconds,
+                        opening_validator=opening_validator,
                     )
                 except BaseException:
                     # Preserve whatever partial state is on disk —
@@ -232,6 +272,16 @@ def _write_test_artifacts(
         "stopped_early": result.stopped_early,
         "timed_out": result.timed_out,
         "duration_seconds": result.duration_seconds,
+        # Captured from the turn-1 persona-adoption gate (run inside
+        # converse_with via opening_validator).  Persisted so resume
+        # can preserve the original gate-failure classification —
+        # without this, a resume of a persona-failed conversation
+        # gets reclassified as a substantivity failure (or whatever
+        # other gate happens to fire on the cached transcript), and
+        # the summary's "which gate failed" label is wrong.  Stored
+        # as ``None`` for conversations where the persona gate
+        # passed; ``_load_session_result`` reads it back.
+        "persona_check_failed": result.persona_check_failed,
         "persona": persona.strip(),
         "situation": situation.strip(),
         "goal": goal.strip(),
@@ -476,6 +526,14 @@ def _load_session_result(project_dir: Path) -> SessionResult | None:
         stopped_early=metadata.get("stopped_early", False),
         timed_out=metadata.get("timed_out", False),
         duration_seconds=metadata.get("duration_seconds", 0.0),
+        # Restore the original turn-1 persona-adoption verdict so
+        # the resume path classifies the smoke-failure the same way
+        # the original run did.  Older metadata files predating
+        # this field default to None (persona gate passed), which
+        # is the same behavior as before this fix — so existing
+        # resumed runs that DIDN'T fail persona-adoption are
+        # unaffected.
+        persona_check_failed=metadata.get("persona_check_failed"),
     )
 
 
@@ -484,9 +542,13 @@ def make_conversation_fixture(
     goal: str,
     persona: str,
     situation: str = "",
+    meta_goal: str | None = None,
     max_turns: int | None = None,
     timeout_seconds: float | None = None,
     slug: str | None = None,
+    target: str | None = None,
+    user: str | None = None,
+    judge: str | None = None,
 ) -> Callable:
     """Build a module-scoped pytest fixture for a shared conversation.
 
@@ -502,6 +564,17 @@ def make_conversation_fixture(
 
         def test_criterion_one(result, judge):
             assert judge.check(result.transcript, "...")
+
+    ``meta_goal`` (optional) overrides what the goal-coverage smoke
+    check evaluates against.  Use it when the eval is designed
+    around the agent challenging the user's stated framing — false-
+    premise repair, redirect-to-real-need patterns.  Without it,
+    such tests fail goal-coverage even when the agent did the right
+    thing, because the user's surface goal went unmet by design.
+    The persona's GOAL is unchanged either way — the user-LLM still
+    pursues what the persona believes they want.  ``meta_goal`` is
+    purely a framework-level evaluation lens, never seen by the
+    user-LLM or the target.
 
     ``max_turns`` and ``timeout_seconds`` default to the values in
     ``evals/config.yaml`` (``defaults.max_turns`` /
@@ -520,7 +593,24 @@ def make_conversation_fixture(
 
     ``slug`` overrides the per-test subdirectory name; defaults to
     ``<category>/<module-stem>`` derived from the test's file path.
+
+    ``target``, ``user``, and ``judge`` (optional) override which model
+    profile to use for that role on this specific eval.  Each must
+    name a profile defined in ``evals/config.yaml`` (i.e., a key under
+    ``models:``).  ``None`` falls back to the reserved default
+    (``_target`` / ``_user`` / ``_judge``).  Use these to route a
+    safety-test eval to a less-safety-tuned user-LLM
+    (``user="unsafe_user"``), point an adversarial test at a stronger
+    judge, etc., without affecting the default profile that other
+    evals continue to use.
     """
+    # Capture overrides in locally-renamed names so the inner fixture
+    # can reference them without shadowing its pytest-injected
+    # ``judge`` fixture parameter (which is the Judge *instance*, not
+    # the role-name override).
+    _target_role_override = target
+    _user_role_override = user
+    _judge_role_override = judge
 
     @pytest.fixture(scope="module")
     def _fixture(
@@ -598,6 +688,24 @@ def make_conversation_fixture(
                 f"(max {effective_max_turns} turns{timeout_label})"
             )
             _phase(f"Output directory: {project_dir}")
+
+            # Turn-1 persona-adoption gate, run inside converse_with.
+            # The closure routes the live opening message through the
+            # judge so we can abort the run before turn 2 if the
+            # simulated user substituted a sanitized persona.  See
+            # persona-robustness-analysis.md for the failure modes
+            # this catches (and which it doesn't).  The judge's cache
+            # is set up after the conversation completes (see below)
+            # — the live persona check therefore always issues a
+            # fresh judgment, which is the right behavior because the
+            # check only fires on fresh runs (resumes skip
+            # converse_with entirely).
+            def _persona_validator(opening_message: str) -> tuple[bool, str]:
+                return judge.persona_adoption_check(
+                    opening_message,
+                    persona=persona, situation=situation, goal=goal,
+                )
+
             conversation_ctx = run_conversation(
                 eval_config,
                 goal=goal,
@@ -607,6 +715,9 @@ def make_conversation_fixture(
                 project_dir=project_dir,
                 max_turns=effective_max_turns,
                 timeout_seconds=effective_timeout,
+                opening_validator=_persona_validator,
+                target_role=_target_role_override,
+                user_role=_user_role_override,
             )
 
         with conversation_ctx as r:
@@ -629,34 +740,145 @@ def make_conversation_fixture(
                 fingerprint=compute_fingerprint(r.transcript),
             )
             judge.set_cache(cache)
+            judge.set_role(_judge_role_override)
             try:
-                # Framework-enforced smoke check: did the conversation
-                # actually explore the user's stated goal?  A NO here
-                # means the simulated user drifted from its persona,
-                # broke character, or never adopted the role — making
-                # downstream assertions meaningless.  Raising
-                # SmokeCheckFailedError causes the conftest to mark
-                # every test in this module as ``smoke_failed`` rather
-                # than running them against a corrupt sample.  Cached
-                # like any other judge record, so a passing smoke
-                # check is free on rerun.
-                _phase(f"Running smoke check for {display_slug}")
-                smoke_passed, smoke_reasoning = judge.smoke_check(
-                    r.transcript, goal=goal,
-                )
-                if not smoke_passed:
+                # Turn-1 persona-adoption result, if a fresh
+                # converse_with run flagged it.  Surfaces with the
+                # same smoke_failed semantics as the post-conversation
+                # smoke check, but with a more specific reason ("user
+                # never adopted the persona" vs. "conversation didn't
+                # explore the goal").  Resumed conversations carry
+                # ``persona_check_failed=None`` because converse_with
+                # didn't run — the resume path trusts whatever
+                # smoke/persona verdicts were cached previously.
+                if r.persona_check_failed is not None:
+                    reason = r.persona_check_failed
                     _phase(
-                        f"Smoke check FAILED for {display_slug} — "
+                        f"Persona-adoption check FAILED for {display_slug} — "
                         "marking module as smoke_failed"
                     )
                     raise SmokeCheckFailedError(
-                        f"Smoke check failed for {display_slug}: "
+                        f"Persona-adoption check failed for "
+                        f"{display_slug}: {reason}",
+                        reasoning=reason,
+                    )
+
+                # Optional refusal gate, only for modules marked
+                # ``@refusal_acceptable``.  Runs BEFORE substantivity
+                # because a clean turn-1 "go away" is a valid pass
+                # for these tests — substantivity's >= 2 turns
+                # threshold would otherwise smoke-fail it.  If the
+                # judge agrees the agent refused cleanly, every
+                # test in the module is short-circuited to the
+                # ``refused`` outcome (a success flavor).  If the
+                # judge says the agent engaged, we fall through to
+                # the normal gates.
+                if _module_has_marker(request, "refusal_acceptable"):
+                    _phase(f"Running refusal check for {display_slug}")
+                    is_refused, refusal_reasoning = judge.refusal_check(
+                        r.transcript, goal=goal,
+                    )
+                    if is_refused:
+                        _phase(
+                            f"Refusal check PASSED for {display_slug} — "
+                            "agent refused cleanly; marking module as refused "
+                            "(success short-circuit)"
+                        )
+                        raise AgentRefusedError(
+                            f"Agent refused for {display_slug}: "
+                            f"{refusal_reasoning}",
+                            reasoning=refusal_reasoning,
+                        )
+                    _phase(
+                        f"Refusal check ENGAGED for {display_slug} — "
+                        "agent engaged with the request; continuing to "
+                        "substantivity / goal-pursued gates"
+                    )
+
+                # Substantivity gate.  Pure code, no LLM call —
+                # checks ``turn_count >= 2``.  Below that, the
+                # conversation didn't have enough exchange for any
+                # downstream criterion to differentiate behavior, so
+                # goal_pursued_check would just produce a meaningless verdict
+                # too.  Promoted from the old per-test
+                # ``test_conversation_was_substantive`` assertion to
+                # a framework gate so the whole module aborts cleanly.
+                # Synthetic record stored in the cache so the report
+                # renders this gate alongside the other smoke gates.
+                substantivity_rec = _make_substantivity_record(r.turn_count)
+                cache.store(
+                    _SUBSTANTIVITY_CACHE_KEY, substantivity_rec,
+                )
+                if substantivity_rec.verdict != "YES":
+                    _phase(
+                        f"Substantivity check FAILED for {display_slug} — "
+                        "marking module as smoke_failed"
+                    )
+                    raise SmokeCheckFailedError(
+                        f"Substantivity check failed for "
+                        f"{display_slug}: {substantivity_rec.reasoning}",
+                        reasoning=substantivity_rec.reasoning,
+                    )
+
+                # User-pursuit gate: did the simulated user-LLM stay
+                # in character and earnestly pursue its goal?  Subject
+                # is the user's MESSAGES, not the agent's responses
+                # or the conversation outcome.  Catches the failure
+                # modes downstream of the persona-reminder defenses:
+                # role inversion, persona dissolution, drift, echo,
+                # repetition.  Run BEFORE goal-coverage so that when
+                # the user-LLM has degraded we surface that as the
+                # reason (the more fundamental issue) rather than
+                # whatever incidental coverage failure also happened.
+                _phase(f"Running user-pursuit check for {display_slug}")
+                user_passed, user_reasoning = judge.user_pursued_check(
+                    r.transcript, goal=goal,
+                )
+                if not user_passed:
+                    _phase(
+                        f"User-pursuit check FAILED for {display_slug} — "
+                        "marking module as smoke_failed"
+                    )
+                    raise SmokeCheckFailedError(
+                        f"User-pursuit check failed for {display_slug}: "
+                        f"{user_reasoning}",
+                        reasoning=user_reasoning,
+                    )
+
+                # Goal-coverage gate: did the WHOLE conversation cover
+                # the right ground?  Default lens evaluates against
+                # the user's stated goal; with ``meta_goal`` set, the
+                # judge evaluates against the deeper question the
+                # eval is designed to measure (false-premise repair,
+                # redirect-to-real-need patterns).  Failure here means
+                # the conversation was on-character but didn't engage
+                # with what the test cares about.
+                _phase(f"Running goal-coverage check for {display_slug}")
+                smoke_passed, smoke_reasoning = judge.goal_pursued_check(
+                    r.transcript, goal=goal, meta_goal=meta_goal,
+                )
+                if not smoke_passed:
+                    _phase(
+                        f"Goal-coverage check FAILED for {display_slug} — "
+                        "marking module as smoke_failed"
+                    )
+                    raise SmokeCheckFailedError(
+                        f"Goal-coverage check failed for {display_slug}: "
                         f"{smoke_reasoning}",
                         reasoning=smoke_reasoning,
                     )
                 yield r
             finally:
+                # Drop on-disk cache entries from earlier runs that
+                # weren't touched this session — typically records
+                # left behind when a smoke-gate or judge claim was
+                # rewritten between runs.  See JudgeCache.prune_unseen
+                # for the full rationale.  Runs after all per-test
+                # judge calls have completed (per pytest's
+                # yield-then-teardown ordering).
+                cache.prune_unseen()
                 judge.set_cache(None)
+                judge.set_role(None)
 
     return _fixture
 

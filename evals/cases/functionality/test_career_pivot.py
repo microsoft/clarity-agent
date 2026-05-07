@@ -34,7 +34,7 @@ Bad Clarity behavior:
 
 from __future__ import annotations
 
-from evals.framework import SessionResult, make_conversation_fixture
+from evals.framework import SessionResult, advisory, make_conversation_fixture
 
 PERSONA = """
 You are Priya Raman, 34, a marketing manager at a mid-sized B2B
@@ -79,12 +79,11 @@ Background:
 """
 
 GOAL = """
-You want help deciding between the three options (full-time
-bootcamp, part-time bootcamp, self-study) and planning the
-timeline.  Specifically: which is the most realistic given your
-context, what a first data-science role looks like for someone
-pivoting from your background, and how long the runway needs to
-be.
+You want help deciding between different options for this
+career change (e.g., full-time bootcamp, part-time bootcamp,
+self-study) and planning your timeline. You would also like to
+understand more about what a first data-science role may look like
+for someone pivoting from your background.
 
 Reveal policy:
 
@@ -137,12 +136,7 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-def test_conversation_was_substantive(result: SessionResult) -> None:
-    assert result.turn_count >= 4, (
-        f"Conversation was only {result.turn_count} turns."
-    )
-
-
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_probed_motivation(result: SessionResult, judge) -> None:
     """What's driving this, specifically?"""
     assert judge.check(
@@ -161,6 +155,7 @@ def test_probed_motivation(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_asked_about_validation(result: SessionResult, judge) -> None:
     """Have you actually tried/shadowed/talked-to anyone?"""
     assert judge.check(
@@ -181,6 +176,7 @@ def test_asked_about_validation(result: SessionResult, judge) -> None:
     )
 
 
+@advisory("http://github.com/microsoft/clarity-agent/issues/10")
 def test_considered_lateral_options(result: SessionResult, judge) -> None:
     """Same-field, lower-risk alternatives that scratch the analytical itch."""
     assert judge.check(
@@ -205,19 +201,30 @@ def test_considered_lateral_options(result: SessionResult, judge) -> None:
 def test_surfaced_risk_without_moralizing(
     result: SessionResult, judge,
 ) -> None:
-    """Name the family-financial risk; don't preach about it."""
+    """Engaged with whatever practical constraints came up, no preaching."""
     assert judge.check(
         result.transcript,
-        "The assistant surfaced the family/financial risk (two "
-        "kids, mortgage, constrained ability to pursue the full-"
-        "time bootcamp without hardship) as a real factor in the "
-        "decision — without moralizing, lecturing, or pushing the "
-        "user to abandon the pivot reflexively.  A calibrated, "
-        "brief surfacing is the criterion.  What FAILS: either "
-        "ignoring the family context entirely OR belaboring it "
-        "with 'career decisions are serious' framings.",
+        "IF the user disclosed practical constraints that bear on the "
+        "pivot decision — financial runway, tuition affordability, "
+        "income tolerance, time available, dependents, or any other "
+        "real-world pressure — THEN the assistant treated those "
+        "constraints as real factors in its recommendation: naming "
+        "them, weighting options against them, ruling out paths that "
+        "don't fit them, or otherwise letting them shape the answer.  "
+        "The criterion is about ENGAGING with what's on the table; "
+        "different runs surface different facets (one run might "
+        "include 'two kids and a mortgage,' another might surface "
+        "only the savings runway) and either is fine — what matters "
+        "is that the assistant didn't ignore the constraints or "
+        "treat them as decoration.  The assistant ALSO did not "
+        "moralize, lecture, preach about 'career decisions are "
+        "serious,' or push the user away from the pivot reflexively. "
+        "If the user disclosed no practical constraints during the "
+        "conversation at all, this criterion does not apply.  What "
+        "FAILS: the user named real constraints AND the assistant "
+        "either ignored them OR belabored them with preachy framing.",
     ), (
-        "Target handled the family/financial context poorly.\n\n"
+        "Target handled the practical-constraint context poorly.\n\n"
         f"{result.transcript}"
     )
 

@@ -1,9 +1,26 @@
 """Load and apply eval framework configuration.
 
-The config file (``evals/config.yaml``) specifies which LLM backend to
-use for each role: the target (system under test), the simulated user,
-and the judge.  Each role resolves credentials from environment
-variables using the same mechanism as the main app.
+The config file (``evals/config.yaml``) defines named **roles** —
+each role is one provider+auth+model combination the framework
+can dispatch a backend call to.  Three reserved role names map
+to the framework's three role slots (target, user, judge):
+
+  ``_target`` — default role for the system under test (a
+            ClaritySession).  Runs the normal Clarity tier
+            routing, so the model choice per process is governed
+            by the target provider's tier defaults — the
+            ``model`` field is NOT used for this role.
+  ``_user``  — default role for the simulated user, a
+            single-call LLM.  ``model`` picks the exact model.
+  ``_judge`` — default role for the evaluator, a single-call
+            LLM.  ``model`` picks the exact model; a strong model
+            here makes verdicts reliable.
+
+Additional non-underscore names can be defined alongside these
+defaults as **alternative roles**.  Tests can override the default
+for a given role slot by passing the alternative role's name to
+:func:`make_conversation_fixture` (e.g., ``user='unsafe_user'`` to
+use a less-safety-tuned model on a specific safety test).
 """
 
 from __future__ import annotations
@@ -18,10 +35,31 @@ import yaml
 from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.llm.config import LLMConfig
 
+# Reserved role names — defaults for the framework's three role
+# slots.  A config file MUST define each of these.  Additional
+# roles (for per-test overrides) use any other name; the
+# underscore prefix is reserved so user-defined roles can't
+# collide.
+_RESERVED_TARGET = "_target"
+_RESERVED_USER = "_user"
+_RESERVED_JUDGE = "_judge"
+_RESERVED_ROLES = (_RESERVED_TARGET, _RESERVED_USER, _RESERVED_JUDGE)
+_SLOT_TO_RESERVED: dict[str, str] = {
+    "target": _RESERVED_TARGET,
+    "user": _RESERVED_USER,
+    "judge": _RESERVED_JUDGE,
+}
+
 
 @dataclass
 class RoleConfig:
-    """LLM backend configuration for a single eval role."""
+    """One LLM backend configuration — provider, model, auth.
+
+    Roles are named (the dict key in :class:`EvalConfig.roles`).
+    The framework's three role slots each have a reserved default
+    role (``_target`` / ``_user`` / ``_judge``); additional roles
+    can be defined for per-test overrides.
+    """
 
     provider: str
     model: str | None = None
@@ -33,7 +71,10 @@ class EvalConfig:
     """Top-level configuration for the eval framework."""
 
     roles: dict[str, RoleConfig] = field(default_factory=dict)
-    """Keyed by role name: ``target``, ``user``, ``judge``."""
+    """All configured roles, keyed by name.  Must include the three
+    reserved defaults: ``_target``, ``_user``, ``_judge``.  May
+    include any number of additional named roles for per-test
+    overrides."""
 
     max_turns: int = 15
     """Default turn cap for conversations.  Per-test overrides via
@@ -46,12 +87,34 @@ class EvalConfig:
 
     @classmethod
     def load(cls, path: Path) -> EvalConfig:
-        """Load config from a YAML file."""
+        """Load config from a YAML file.
+
+        The YAML must define a ``roles:`` block with all three
+        reserved-default roles (``_target`` / ``_user`` /
+        ``_judge``).  Missing reserveds raise ``ValueError`` at
+        load time — fail-fast on misconfiguration rather than at
+        first use.
+        """
         data = yaml.safe_load(path.read_text())
+        roles_data = data.get("roles")
+        if not isinstance(roles_data, dict):
+            raise ValueError(
+                f"{path}: missing or invalid top-level 'roles:' block.  "
+                "Expected a mapping of role-name → "
+                "{provider, model, auth_mode}."
+            )
         roles = {
             name: RoleConfig(**spec)
-            for name, spec in (data.get("roles") or {}).items()
+            for name, spec in roles_data.items()
         }
+        missing = [name for name in _RESERVED_ROLES if name not in roles]
+        if missing:
+            raise ValueError(
+                f"{path}: missing required reserved role(s): "
+                f"{', '.join(missing)}.  All three of "
+                f"{', '.join(_RESERVED_ROLES)} must be defined "
+                "as the defaults for the target / user / judge slots."
+            )
         defaults = data.get("defaults") or {}
         # ``timeout_seconds: null`` in YAML disables the timeout;
         # an absent key falls back to the dataclass default.
@@ -62,32 +125,75 @@ class EvalConfig:
             timeout_seconds=timeout_raw,
         )
 
+    def resolve_role(
+        self, slot: str, override: str | None = None,
+    ) -> str:
+        """Return the role name to use for *slot*, honoring an override.
+
+        ``slot`` is one of ``"target"``, ``"user"``, ``"judge"``.
+        ``override``, if given, names a role defined in
+        ``self.roles`` — used for per-test selection of an
+        alternative role.  ``None`` falls back to the reserved
+        default (``_target`` / ``_user`` / ``_judge``).
+
+        Raises ``KeyError`` if the override names a role that
+        isn't defined.
+        """
+        if override is not None:
+            if override not in self.roles:
+                raise KeyError(
+                    f"Role {override!r} is not defined. "
+                    f"Available: {sorted(self.roles.keys())}"
+                )
+            return override
+        try:
+            return _SLOT_TO_RESERVED[slot]
+        except KeyError as exc:
+            raise KeyError(
+                f"Unknown slot {slot!r}.  Expected one of "
+                f"{list(_SLOT_TO_RESERVED.keys())}."
+            ) from exc
+
     def create_backend(
         self,
-        role: str,
         *,
+        slot: str,
+        role: str | None = None,
         project_dir: Path,
         clarity_agent_dir: Path,
     ) -> tuple[ChatBackend, LLMConfig]:
-        """Instantiate a ChatBackend + LLMConfig for *role*.
+        """Instantiate a ChatBackend + LLMConfig for *slot*.
+
+        ``slot`` is one of ``"target"``, ``"user"``, ``"judge"``.
+        Selects which role's configuration to dispatch against
+        (default is the reserved ``_target``/``_user``/``_judge``)
+        AND determines the backend's behavior — specifically, the
+        target slot uses Clarity's tier-based per-process model
+        routing, while the user and judge slots dispatch to the
+        role's specific model.
+
+        ``role``, if given, overrides which named role to use.
+        That role must exist in :attr:`roles`; ``None`` falls back
+        to the reserved default for the slot.  The slot + tier
+        routing decision is independent of which role is selected
+        — an alternative role used for the target slot still gets
+        tier routing, an alternative role used for the user slot
+        still gets exact-model dispatch.
 
         Credentials are resolved by ``LLMConfig.create()`` from the
         environment, keyring, or settings — same as the main app.
-
-        Note: for the ``target`` role the ``model`` field is ignored —
-        the target runs the normal Clarity tier routing (default/deep/fast)
-        so the per-process model is chosen by the target provider's tier
-        defaults, not by a single fixed model.
         """
-        role_cfg = self.roles.get(role)
-        if role_cfg is None:
-            raise KeyError(
-                f"Role {role!r} not configured. "
-                f"Available roles: {list(self.roles.keys())}"
-            )
+        resolved_role = self.resolve_role(slot, role)
+        role_cfg = self.roles[resolved_role]
 
-        # The target uses tier-based routing; ignore any explicit model.
-        model = None if role == "target" else role_cfg.model
+        # The target slot uses tier-based routing — Clarity decides
+        # which model to call per-tier (default/deep/fast) based on
+        # the provider's tier defaults — so the role's ``model``
+        # field is ignored regardless of which role is selected.
+        # User and judge slots dispatch to the exact configured
+        # model.
+        is_target_slot = slot == "target"
+        model = None if is_target_slot else role_cfg.model
 
         ns = argparse.Namespace(
             provider=role_cfg.provider,
@@ -121,10 +227,14 @@ def missing_credentials(config: EvalConfig) -> list[str]:
     """Return a list of role names whose credentials are missing.
 
     Used by pytest fixtures to skip eval tests cleanly when creds
-    aren't present (e.g., in forked-PR CI where secrets aren't injected).
+    aren't present (e.g., in forked-PR CI where secrets aren't
+    injected).
 
-    Checks the same sources as the main app — env vars, keyring, and
-    ``.env`` — via :class:`Settings`.
+    Checks the same sources as the main app — env vars, keyring,
+    and ``.env`` — via :class:`Settings`.  Each defined role is
+    checked independently; a missing-cred error is reported
+    against the role name (which makes it actionable for the
+    operator).
     """
     import os
 
@@ -166,25 +276,32 @@ def missing_credentials(config: EvalConfig) -> list[str]:
 
 
 def describe_resolved_config(config: EvalConfig) -> str:
-    """Return a human-readable summary of how each role will be wired up.
+    """Return a human-readable summary of the configured roles.
 
     Used by the ``--print-config`` pytest option to verify endpoint /
     deployment / auth before paying for a real run.  Reads
     :class:`Settings` for endpoint values but does **not** instantiate
     backends — there are no network calls or auth probes here, so this
     works even when credentials would later fail.
+
+    The three reserved-default roles (``_target`` / ``_user`` /
+    ``_judge``) are listed first with slot labels; alternative roles
+    follow.
     """
     from clarity_agent.settings import Settings
 
     s = Settings.current()
     lines: list[str] = []
 
-    for role_name in ("target", "user", "judge"):
-        role_cfg = config.roles.get(role_name)
+    def _role_block(name: str, slot_label: str | None = None) -> None:
+        role_cfg = config.roles.get(name)
         if role_cfg is None:
-            continue
+            return
         lines.append("")
-        lines.append(f"  {role_name}:")
+        if slot_label:
+            lines.append(f"  {name}  (default for {slot_label} slot):")
+        else:
+            lines.append(f"  {name}:")
         lines.append(f"    provider:    {role_cfg.provider}")
         if role_cfg.auth_mode:
             lines.append(f"    auth_mode:   {role_cfg.auth_mode}")
@@ -199,9 +316,9 @@ def describe_resolved_config(config: EvalConfig) -> str:
                 f"{endpoint or '(unset — set AZURE_AI_ENDPOINT)'}"
             )
 
-        if role_name == "target":
-            # Target uses per-process tier routing; the model field is
-            # ignored (provider tier defaults apply).
+        if name == _RESERVED_TARGET:
+            # Target-slot role uses per-process tier routing; the
+            # model field is ignored (provider tier defaults apply).
             lines.append("    model:       per-process tier routing")
         elif role_cfg.model:
             lines.append(f"    model:       {role_cfg.model}")
@@ -215,17 +332,15 @@ def describe_resolved_config(config: EvalConfig) -> str:
         else:
             lines.append("    model:       (unset)")
 
-    # Other configured roles (forward-compat with future role names).
-    extra_roles = [r for r in config.roles if r not in ("target", "user", "judge")]
-    for role_name in extra_roles:
-        role_cfg = config.roles[role_name]
-        lines.append("")
-        lines.append(f"  {role_name}:")
-        lines.append(f"    provider:    {role_cfg.provider}")
-        if role_cfg.auth_mode:
-            lines.append(f"    auth_mode:   {role_cfg.auth_mode}")
-        if role_cfg.model:
-            lines.append(f"    model:       {role_cfg.model}")
+    # Reserved defaults first, in slot order.
+    _role_block(_RESERVED_TARGET, "target")
+    _role_block(_RESERVED_USER, "user")
+    _role_block(_RESERVED_JUDGE, "judge")
+
+    # Alternative roles (non-underscore-prefixed names) follow.
+    for name in config.roles:
+        if name not in _RESERVED_ROLES:
+            _role_block(name)
 
     lines.append("")
     lines.append("  defaults:")

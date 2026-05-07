@@ -25,10 +25,10 @@ jobs:
           uv pip install --system -e ".[dev]"
 
       - name: Lint (ruff)
-        run: ruff check src/ tests/ dev-tools/
+        run: ruff check src/ tests/ dev-tools/ evals/
 
       - name: Type check (pyright)
-        run: pyright src/
+        run: pyright src/ evals/
 
       - name: Run tests
         run: pytest tests/ -q

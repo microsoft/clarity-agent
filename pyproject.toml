@@ -47,6 +47,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "advisory: a test whose failure is informative but should not block the suite (rendered as 💡 in summary.md; does not contribute to pytest exit code)",
+    "refusal_acceptable: refusal-by-the-agent is a valid success path for this test/module (rendered as ✅ refused in summary.md)",
+]
 
 [tool.ruff]
 target-version = "py310"

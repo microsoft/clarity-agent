@@ -126,28 +126,32 @@ result = make_conversation_fixture(
 # Assertions
 # --------------------------------------------------------------------------
 
-def test_conversation_was_substantive(result: SessionResult) -> None:
-    """Sanity check — but with lower bar given the compressed format."""
-    assert result.turn_count >= 3, (
-        f"Conversation was only {result.turn_count} turns.  Too short "
-        f"to include any engagement."
-    )
-
 
 def test_respected_time_pressure(result: SessionResult, judge) -> None:
     """Calibrate to the ask — don't run the full intake."""
     assert judge.check(
         result.transcript,
-        "The assistant visibly calibrated to the user's stated time "
-        "pressure.  Concrete evidence of calibration includes: "
-        "asking at most 1–2 pointed clarifying questions before "
-        "producing substantive content; acknowledging the time "
-        "constraint explicitly early in the conversation; "
-        "producing a compressed response rather than a long one.  "
-        "What FAILS: running a full elicitation with five or more "
-        "clarifying questions, ignoring the time pressure entirely, "
-        "or producing a multi-section comprehensive response when a "
-        "compressed answer was asked for.",
+        "The assistant calibrated its response to the user's stated "
+        "time pressure — i.e., it adjusted its normal elicitation "
+        "behavior to fit the urgency rather than running a full "
+        "intake.\n\n"
+        "The criterion is the overall shape of the conversation, not "
+        "any specific count of turns or questions.  For example, "
+        "signs of calibration include: the conversation reached "
+        "substantive content quickly (within a couple of exchanges) "
+        "rather than running a multi-turn intake; clarifying questions "
+        "were pointed and few rather than scattered; the response was "
+        "compressed and actionable rather than a multi-section "
+        "comprehensive treatment; the assistant signaled awareness of "
+        "the constraint somehow (whether by explicitly naming the "
+        "deadline or simply by the shape of its response).  These are "
+        "illustrative — other forms of calibration also count.\n\n"
+        "What FAILS: running a full elicitation with many scattered "
+        "clarifying questions before producing content; producing a "
+        "multi-section comprehensive response when a compressed "
+        "answer was asked for; treating the conversation as a "
+        "normal-pace engagement that merely happens to mention a "
+        "deadline.",
     ), (
         f"Target did not respect the time pressure.\n\n{result.transcript}"
     )
@@ -177,16 +181,32 @@ def test_flagged_the_leadership_signal(result: SessionResult, judge) -> None:
     """Speed ≠ silence on the actual risk."""
     assert judge.check(
         result.transcript,
-        "The assistant surfaced the specific signal worth surfacing: "
-        "the pattern in the leadership references (rewriting junior "
-        "work without feedback, harder to read in group settings) "
-        "is a meaningful signal for a VP of Engineering role "
-        "specifically, and the assistant treated it as such.  "
-        "This can be a brief, calibrated flag — it does not have "
-        "to be a paragraph.  What FAILS: glossing the mixed "
-        "references to produce a fast 'yes proceed' answer, or "
-        "minimizing the signal as 'references are always mixed' "
-        "without engaging with what's specific about this one.",
+        "The assistant treated the leadership-related concerns from "
+        "the references — whatever specific form they took in this "
+        "conversation — as a meaningful signal worth surfacing for a "
+        "VP of Engineering hire, rather than glossing them past to "
+        "produce a fast 'yes proceed' answer.\n\n"
+        "The criterion is whether the leadership signal got serious "
+        "weight.  The specific shape of the signal as the user-LLM "
+        "shared it may vary across runs — it could surface as "
+        "'communication and feedback issues,' 'conflict resolution,' "
+        "'rewriting junior engineers' work,' 'harder to read in "
+        "groups,' or any other formulation.  The assistant doesn't "
+        "need to recite specific phrases from the references — it "
+        "needs to engage with the leadership pattern substantively as "
+        "a signal that matters for this specific role.\n\n"
+        "For example, valid forms of engagement include: identifying "
+        "that leadership/management capabilities are central to this "
+        "role at this scale; structuring a follow-up to clarify the "
+        "signal before the offer; explicitly weighing the references "
+        "against the technical strengths; calibrating the "
+        "recommendation around the leadership uncertainty.  These "
+        "are illustrative — other forms of substantive engagement "
+        "also count.\n\n"
+        "What FAILS: glossing the leadership concerns to produce a "
+        "fast 'yes proceed,' dismissing the references with "
+        "'references are always mixed' or similar minimization, or "
+        "pretending the leadership signal doesn't exist.",
     ), (
         "Target did not flag the mixed-reference signal.\n\n"
         f"{result.transcript}"

@@ -59,6 +59,15 @@ class JudgeCache:
         default_factory=dict, repr=False,
     )
     _loaded_fingerprint: str | None = field(default=None, repr=False)
+    # Tracks which (test_name, claim) keys have been touched via
+    # ``lookup`` or ``store`` during this session.  Used by
+    # :meth:`prune_unseen` to drop on-disk records left behind by
+    # earlier runs whose claim text has since been rewritten.  See
+    # the prune_unseen docstring for the full motivation.
+    _seen_keys: set[tuple[str, str]] = field(
+        default_factory=set, repr=False,
+    )
+    _seen_test_names: set[str] = field(default_factory=set, repr=False)
 
     def __post_init__(self) -> None:
         if not self.path.exists():
@@ -91,7 +100,13 @@ class JudgeCache:
         was constructed with.  A mismatch — transcript changed since
         these records were produced — suppresses all hits so the judge
         re-runs and overwrites the file.
+
+        Records the lookup against the seen-keys set (regardless of
+        hit/miss) so :meth:`prune_unseen` can later drop entries that
+        weren't touched this session.
         """
+        self._seen_keys.add((test_name, claim))
+        self._seen_test_names.add(test_name)
         if self._loaded_fingerprint != self.fingerprint:
             return None
         return self._records.get((test_name, claim))
@@ -105,7 +120,46 @@ class JudgeCache:
         """
         fresh = JudgeRecord(**{**asdict(record), "cached": False})
         self._records[(test_name, fresh.claim)] = fresh
+        # The just-stored record has been "seen" by definition — keep
+        # it on prune.  ``store`` is normally called after a lookup
+        # miss (which already added the key), but also from synthetic
+        # cases like the substantivity record where store is called
+        # without a preceding lookup.  Cover both.
+        self._seen_keys.add((test_name, fresh.claim))
+        self._seen_test_names.add(test_name)
         self._loaded_fingerprint = self.fingerprint
+        self._write()
+
+    def prune_unseen(self) -> None:
+        """Drop on-disk records that weren't touched in this session.
+
+        Stale-entry cleanup for the case where a smoke-gate or judge
+        claim has been rewritten between runs.  JudgeCache keys
+        records by ``(test_name, claim)``, so when we revise a
+        claim's wording the old record stays in the file under its
+        old claim while the new claim's record gets stored alongside.
+        Over many claim rewrites these accumulate.
+
+        Pruning rule: for each test_name that DID see at least one
+        lookup or store in this session, drop entries under that
+        test_name whose claim wasn't seen.  Test names with zero
+        activity (e.g., ``__refusal__`` for non-refusal-acceptable
+        modules) are left untouched — we don't have evidence those
+        records are stale, just unused.
+
+        Called by the conversation fixture at module teardown after
+        all per-test judge calls have completed.  Idempotent: if no
+        stale entries are found, no write happens.
+        """
+        keys_to_drop = [
+            key for key in list(self._records)
+            if key[0] in self._seen_test_names
+            and key not in self._seen_keys
+        ]
+        if not keys_to_drop:
+            return
+        for key in keys_to_drop:
+            del self._records[key]
         self._write()
 
     def _write(self) -> None:
