@@ -14,7 +14,7 @@ The shipped implementation focuses on software engineering, where the resulting 
 
 ### What Exists Today
 
-The current implementation is a **full-implementation product** with three entry points, built on a set of process guides backed by Python infrastructure.
+The current implementation is a **full-implementation product** with multiple entry points, built on a set of process guides backed by Python infrastructure. The project is open-sourced under the MIT license (Microsoft Corporation as steward) — see [Decision 02](../decisions/decision-02-mit-license.md).
 
 **Process guides** (`processes/`) are markdown documents that direct how an AI should conduct a structured conversation. They encode what to ask, when to push back, what to write down, and when to move on. An AI agent loaded with a process guide can follow it to conduct a clarity session — the guides are the logic; everything else is mechanics.
 
@@ -34,11 +34,20 @@ The current implementation is a **full-implementation product** with three entry
 | `session.py` | Session coordination and transcript recording |
 | `packet/` | Review packet generation (Markdown, DOCX) |
 
-**Three entry points (products):**
+**Shipped entry points (products):**
 
-- **Coding agent integration (AGENTS.md)** — an `AGENTS.md` file in a project root instructs AI coding agents to engage clarity at inflection points: when the user asks to think, and proactively when the agent recognizes a choice that would be expensive to reverse. The coding agent session itself becomes the clarity conversation.
-- **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
-- **CLI** — initialization, packet status checking, session management.
+- **Coding agent integration (AGENTS.md / CLAUDE.md snippet)** — `clarity embed <repo>` writes a snippet into the project's agent config file instructing AI coding agents to engage clarity at inflection points: when the user asks to think, and proactively when the agent recognizes a choice that would be expensive to reverse. The coding agent session itself becomes the clarity conversation. Works on greenfield and existing repos.
+- **Desktop app** — a Tauri-based native application (`src-tauri/`) with multi-project picker, chat, protocol browsing, packet status reports, and review packet generation. Best for dedicated thinking sessions outside of a coding workflow.
+- **VS Code extension** — Clarity in the VS Code sidebar (`vscode-extension/`), backed by the same Python session infrastructure.
+- **MCP server** — an MCP server (`src/clarity_agent/mcp/`) exposing protocol, brainstorming, and packet operations as tools. An npm distribution shell exists at `mcp-server/` for `npx @clarity-agent/mcp` use, pending PyPI publish. This validates the Layer 3 portability path described in the envisioned architecture.
+- **Web application** — FastAPI + React (headless: `clarity web`), runnable for server deployments or developer testing.
+- **CLI** — `clarity` command for initialization, packet status, single-process invocation, packet generation, embed, install, update, doctor.
+
+**Supported LLM providers:** Anthropic (Claude), OpenAI, Azure (OpenAI and AI Services), Google Gemini, GitHub Copilot. Tier-based model selection (`default`, `deep`, `fast`) routes per process.
+
+**Ancillary infrastructure:**
+- **Evals framework** (`evals/`) — a pytest-based harness for evaluating clarity sessions against scripted user cases, including smoke tests, safety markers, and meta-goals (e.g., evals where the agent should *not* pursue a stated user goal). Supports per-eval backend configuration.
+- **Security catalog** (`catalogs/security-catalog.csv`) — a reference catalog used by the security thinker.
 
 ### What It Does Well
 
@@ -49,10 +58,10 @@ The system produces genuinely useful structured thinking for software projects. 
 The current system was designed for a narrower scope than the updated problem statement and requirements describe:
 
 - **No explicit intellectual corpus (Layer 1).** The principles behind the process guides are implicit — baked into the guides themselves and scattered across design notes. There's no canonical source of truth from which the guides are derived, which makes it hard to verify consistency, extend to new domains, or create alternative expressions.
-- **One expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure.
-- **Infrastructure is not portable.** The Python tools are invoked directly by process guides (`python -m clarity_agent.protocol.packet_status ...`). They aren't exposed as MCP tools or REST services, which limits portability to other AI environments.
-- **Greenfield assumption.** The system assumes you're starting a new project. There's no structured support for re-deriving clarity about an existing, partially-built system (FR11).
-- **Limited product surface.** Three entry points, all in the full-implementation path. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
+- **No light expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure. (The MCP server addresses portability for *tool-capable* environments — but the bare-conversation path still requires a light Layer 2 expression that does not yet exist.)
+- **Greenfield bias remains.** `clarity embed` adds Clarity to existing repos, but the process guides themselves still assume a new-project arc. There's no structured process for re-deriving clarity about an existing, partially-built system from its code, history, and team mental models (FR11).
+- **No path for the citizen developer or general AI user.** The shipped products (coding-agent embed, desktop, VS Code, MCP server, web, CLI) all serve users who already know they want structured thinking. No "show up uninvited at the right moment" intervention exists for the user who doesn't know they need it (the citizen-developer thesis from `notes.md`).
+- **Self-critique is not yet built in.** Critique guides are described in the Quality Architecture section but have not been implemented. The user remains the primary check on AI output quality.
 
 ---
 
