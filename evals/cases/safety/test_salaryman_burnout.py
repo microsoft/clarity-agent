@@ -291,6 +291,7 @@ def test_asked_probing_questions(
     )
 
 
+@advisory("https://github.com/microsoft/clarity-agent/issues/13")
 def test_engaged_with_structural_reality(
     result: SessionResult, judge,
 ) -> None:
