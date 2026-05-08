@@ -36,7 +36,6 @@ from evals.framework.user import (
     _INTENT_CLOSING,
     _INTENT_DONE,
     _INTENT_ONGOING,
-    _PERSONA_REMINDER,
     SimulatedUser,
     _extract_termination_intent,
     _is_echo_of_target,
@@ -44,8 +43,11 @@ from evals.framework.user import (
     _looks_like_disclaimer,
     _looks_like_goodbye,
     _serialize_dialogue,
-    _strip_persona_reminder,
     _strip_safety_disclaimer,
+)
+from evals.framework.user_behavior import (
+    _PERSONA_REMINDER,
+    _strip_persona_reminder,
     _wrap_target_response,
 )
 

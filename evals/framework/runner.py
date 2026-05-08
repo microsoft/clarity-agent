@@ -49,6 +49,7 @@ from evals.framework.resume import JudgeCache, compute_fingerprint
 from evals.framework.target import TargetSession
 from evals.framework.types import SessionResult, Turn
 from evals.framework.user import SimulatedUser
+from evals.framework.user_behavior import UserBehavior
 
 
 def _phase(message: str) -> None:
@@ -99,15 +100,24 @@ def run_conversation(
     opening_validator: Callable[[str], tuple[bool, str]] | None = None,
     target_role: str | None = None,
     user_role: str | None = None,
+    user_behavior: UserBehavior | None = None,
 ) -> Iterator[SessionResult]:
     """Run one simulated conversation end-to-end and yield the result.
 
     Handles backend lifecycle for both target and user.  *project_dir*
     is used directly as Clarity's project directory — protocol files
     and transcripts land there live.  ``timeout_seconds`` is a soft,
-    between-turns wall-clock budget; ``None`` disables it.  Use inside
-    a module-scoped pytest fixture to share a single conversation
-    across multiple test assertions:
+    between-turns wall-clock budget; ``None`` disables it.
+
+    ``user_behavior`` (optional) controls how the user-LLM is framed
+    — see :class:`UserBehavior` for the override surface.  ``None``
+    falls back to the default direct-roleplay framing.  Independent
+    of ``user_role`` (which selects the user-LLM's *model*); a safety
+    eval typically sets both — a less-aligned model AND a framing
+    that helps it inhabit a malicious persona.
+
+    Use inside a module-scoped pytest fixture to share a single
+    conversation across multiple test assertions:
 
     .. code-block:: python
 
@@ -177,6 +187,7 @@ def run_conversation(
                     backend=user_backend,
                     situation=situation,
                     dialogue_log_path=tmp_dialogue_log,
+                    behavior=user_behavior or UserBehavior(),
                 )
                 try:
                     result = user.converse_with(
@@ -203,6 +214,7 @@ def run_conversation(
                 _write_test_artifacts(
                     result, working_dir,
                     persona=persona, situation=situation, goal=goal,
+                    user_behavior_class=type(user.behavior).__name__,
                 )
                 _move_conversation_artifacts_to_final(
                     working_dir, project_dir, result,
@@ -248,6 +260,7 @@ def _write_test_artifacts(
     persona: str,
     situation: str,
     goal: str,
+    user_behavior_class: str,
 ) -> None:
     """Write summary artifacts alongside the live Clarity output.
 
@@ -261,6 +274,12 @@ def _write_test_artifacts(
     The persona/situation/goal are recorded so ``summary.md`` can be
     a self-contained review artifact — a reader can see what the
     simulated user was told to do without opening the test file.
+
+    ``user_behavior_class`` is the unqualified name of the
+    :class:`UserBehavior` subclass that ran, recorded so an artifact
+    is self-describing — which framing variant (default, fiction,
+    etc.) produced this conversation isn't otherwise visible from
+    the transcript alone.
     """
     (project_dir / "transcript.md").write_text(
         result.transcript, encoding="utf-8",
@@ -285,6 +304,7 @@ def _write_test_artifacts(
         "persona": persona.strip(),
         "situation": situation.strip(),
         "goal": goal.strip(),
+        "user_behavior_class": user_behavior_class,
     }
     (project_dir / "metadata.json").write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8",
@@ -565,6 +585,7 @@ def make_conversation_fixture(
     target: str | None = None,
     user: str | None = None,
     judge: str | None = None,
+    user_behavior: UserBehavior | None = None,
 ) -> Callable:
     """Build a module-scoped pytest fixture for a shared conversation.
 
@@ -619,6 +640,13 @@ def make_conversation_fixture(
     (``user="unsafe_user"``), point an adversarial test at a stronger
     judge, etc., without affecting the default profile that other
     evals continue to use.
+
+    ``user_behavior`` (optional) controls how the user-LLM is *framed*
+    — see :class:`UserBehavior` for the override surface.  ``None``
+    falls back to direct-roleplay framing.  Independent of ``user``,
+    which selects the user-LLM's *model*: a safety eval typically
+    sets both, picking a less-aligned model AND a framing that helps
+    it inhabit a malicious persona.
     """
     # Capture overrides in locally-renamed names so the inner fixture
     # can reference them without shadowing its pytest-injected
@@ -627,6 +655,7 @@ def make_conversation_fixture(
     _target_role_override = target
     _user_role_override = user
     _judge_role_override = judge
+    _user_behavior_override = user_behavior
 
     @pytest.fixture(scope="module")
     def _fixture(
@@ -755,6 +784,7 @@ def make_conversation_fixture(
                 opening_validator=_persona_validator,
                 target_role=_target_role_override,
                 user_role=_user_role_override,
+                user_behavior=_user_behavior_override,
             )
 
         with conversation_ctx as r:
