@@ -28,15 +28,15 @@
 
 ### Architecture Overview
 
-The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. A **Web UI** and **CLI** are both thin entry points into the same session infrastructure. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
+The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. Multiple entry points feed the same session infrastructure: a **Web UI**, a **CLI**, a **Tauri-based desktop app**, a **VS Code extension**, and an **MCP server** that exposes the infrastructure as tools to any MCP-capable AI. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
 
 ```
 User ──► Entry Point ──► Session ──► LLM Provider
-         (Web/CLI/        │  ▲         │
-          Snippet)    reads│  │responses│
-                     guides│  └─────────┘
-                          │
-                          ▼
+         (Web / CLI /     │  ▲         │
+          Desktop /   reads│  │responses│
+          VS Code /  guides│  └─────────┘
+          MCP /            │
+          Snippet)         ▼
                      .clarity-protocol/
                           │
                      ┌────┴────────┐
@@ -91,7 +91,7 @@ Two-tier design:
 - **`LLMClient`** (low level): wraps a single provider's API, normalizes to `LLMResponse` with typed `TextBlock` and `ToolUseBlock` content. Async-only. Stateless.
 - **`ChatBackend`** (high level): conversation-oriented — maintains message history, runs tool-use loops, emits callbacks for cost and tool events. Stateful per session. `ClientChatBackend` is the generic implementation; `SdkChatBackend` wraps the Claude Agent SDK directly for IDE integration.
 
-Provider implementations live in `llm/impl/` with lazy imports. A tier system (`default`, `deep`, `fast`) maps to models per provider and per process, configurable via environment variables.
+Provider implementations live in `llm/impl/` with lazy imports. Currently shipped: Anthropic, OpenAI, Azure (OpenAI and Azure AI Inference), Google Gemini, GitHub Copilot, and a Claude Agent SDK wrapper for IDE integration. A tier system (`default`, `deep`, `fast`) maps to models per provider and per process, configurable via environment variables.
 
 **Tier system:** Processes have different quality/cost tradeoffs: `problem-clarification` and `architecture-design` use `deep` (higher capability); `failure-analysis` uses `default`; routing uses `fast`. Tiers map to concrete models per provider and are overridable, so teams can tune cost without changing process logic.
 
@@ -110,6 +110,21 @@ FastAPI serves the React SPA and a WebSocket endpoint for chat. A `WebSessionAda
 
 #### Web Frontend (`web/`)
 React 18 + TypeScript + Vite + Tailwind. Chat history is managed via a reducer in `useChat.tsx`. WebSocket for real-time events; REST for static protocol data (file tree, staleness reports, transcripts). Build output served statically by FastAPI.
+
+#### Desktop App (`src-tauri/`)
+A Tauri-based native shell wrapping the same web frontend. Bundles the Python backend as a sidecar binary so the desktop app runs without requiring the user to install Python or manage a venv. Adds a multi-project picker not present in the bare web app. Best for dedicated thinking sessions outside a coding workflow.
+
+#### VS Code Extension (`vscode-extension/`)
+Surfaces Clarity inside the editor sidebar. Connects to the same Python session infrastructure used by the web and desktop products. Distributed as a `.vsix`. Lets users iterate on protocol documents without leaving their development environment.
+
+#### MCP Server (`src/clarity_agent/mcp/`)
+Exposes protocol, brainstorming, and packet operations as MCP tools (`server.py`). This is the Layer 3 portability mechanism described in the solution: any MCP-capable AI client can invoke staleness checks, record documents, run thinkers, and generate packets without embedding the codebase. An npm distribution shell at `mcp-server/` enables `npx @clarity-agent/mcp` invocation pending PyPI publish.
+
+#### Evals Framework (`evals/`)
+A pytest-based harness for evaluating clarity sessions against scripted user cases. Cases live in `evals/cases/`; the framework supports smoke tests, safety markers, meta-goals (sessions where the agent should *not* pursue a stated user goal), and per-eval backend configuration. Used to detect regressions in process-guide behavior across LLM providers.
+
+#### Security Catalog (`catalogs/security-catalog.csv`)
+A reference catalog of security failure patterns consumed by the security thinker during failure brainstorming. Adding entries to the CSV extends the thinker's coverage without changing code.
 
 ---
 
@@ -240,13 +255,16 @@ Tool-use events stream to the web frontend in real time. Session transcripts wri
 flowchart TB
     subgraph untrusted["Untrusted"]
         User["User"]
-        LLMProviders{"LLM Providers\nAnthropic / OpenAI / Azure"}
+        LLMProviders{"LLM Providers\nAnthropic / OpenAI / Azure / Gemini / Copilot"}
     end
 
     subgraph low_trust["Low Trust — No Auth"]
         WebServer["Web Server\nFastAPI + React SPA"]
         CLI["CLI Tool"]
         Snippet["Clarity Snippet\nCoding Agent Integration"]
+        Desktop["Desktop App\nTauri Shell"]
+        VSCode["VS Code Extension"]
+        MCPServer["MCP Server\nTool Exposure"]
     end
 
     subgraph trusted["Trusted — Application Core"]
@@ -270,6 +288,14 @@ flowchart TB
     User -->|"chat messages"| WebServer
     User -->|"commands"| CLI
     User -->|"coding agent session"| Snippet
+    User -->|"native app"| Desktop
+    User -->|"editor sidebar"| VSCode
+    User -->|"MCP tool calls"| MCPServer
+    Desktop -->|"messages"| Session
+    VSCode -->|"messages"| Session
+    MCPServer -->|"tool calls"| Session
+    MCPServer -->|"tool calls"| BrainstormRunner
+    MCPServer -->|"tool calls"| PacketStatusChecker
     WebServer -->|"messages"| Session
     CLI -->|"messages"| Session
     Snippet -->|"follows guides"| ProcessGuides

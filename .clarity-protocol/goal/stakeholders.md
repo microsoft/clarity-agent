@@ -10,7 +10,7 @@ The most fundamental job. Someone has a rough notion — a feature, a product, a
 
 This user might be a solo developer, a founder, a PM, or someone planning a non-software project. They know they need to think things through (or at least suspect it) and are looking for a thinking partner.
 
-**Entry point:** Comes to the clarity agent directly — web UI, CLI, or embedded in their coding agent.
+**Entry point:** Comes to the clarity agent directly — web UI, CLI, desktop app, VS Code sidebar, or embedded in their coding agent.
 
 ### "I'm about to build something and I need to think about what could go wrong."
 
@@ -54,16 +54,16 @@ Beyond jobs-to-be-done, several dimensions shape what a user needs:
 
 **Values quality vs. wants to externalize risk.** Most users fall somewhere on a spectrum. Some genuinely want to build well. Others want to ship fast and are content to let failures land on end users or downstream teams, so long as they never have to overtly acknowledge the choice. The clarity agent serves both — the first group through better thinking, the second group because compliance and communication are non-controversial values, and a well-structured record quietly makes it harder to claim that risks weren't known.
 
-## UX Implications (Open Questions for Solution Design)
+## UX Implications
 
-These stakeholder patterns suggest the system may need multiple entry points and interaction models:
+These stakeholder patterns required multiple entry points and interaction models — all now shipped:
 
-- A **conversational mode** for deep thinking (Jobs 1, 2, 3)
-- An **embedded mode** that integrates into coding agent workflows and intercepts users who wouldn't seek out the tool deliberately (Job 2, and critically, the user who doesn't know they need to think)
-- A **reading/reference mode** for the protocol as a navigable artifact (Jobs 4, 6)
-- A **status/alert mode** for change tracking (Job 5)
+- A **conversational mode** for deep thinking (Jobs 1, 2, 3) — web UI, CLI, desktop app, VS Code sidebar
+- An **embedded mode** that integrates into coding agent workflows and intercepts users who wouldn't seek out the tool deliberately (Job 2) — AGENTS.md/CLAUDE.md snippet, MCP server
+- A **reading/reference mode** for the protocol as a navigable artifact (Jobs 4, 6) — protocol viewer in web/desktop/VS Code, generated review packets
+- A **status/alert mode** for change tracking (Job 5) — packet status checker at session start, status panel in web/desktop
 
-Whether these are four features of one product, or different products sharing a protocol format, is a solution-level question. But the stakeholder analysis makes clear that a single UX can't serve all these jobs well.
+These are different products sharing a protocol format and session infrastructure, confirming the stakeholder analysis: a single UX can't serve all these jobs well.
 
 ## Other Stakeholders
 
@@ -72,3 +72,5 @@ Whether these are four features of one product, or different products sharing a 
 **End users of systems built with the clarity agent.** They never interact with the tool, but benefit (or suffer) based on whether the clarity process produced well-designed systems with appropriate failure mitigations. Their proxy voice in the process is the failure analysis — especially the human-factors thinker.
 
 **Framework maintainers.** The people building and extending the clarity agent itself. They need the architecture to be extensible (new thinkers, process guides, and LLM backends via file addition, not core changes) and the self-hosting model to work well — if using the clarity protocol on this project is awkward, it'll be awkward for users too.
+
+**Open source contributors and integrators.** With the project open-sourced under MIT, contributors may submit new thinkers, process guides, LLM backends, or bug fixes. Integrators may embed Clarity's process guides, protocol format, or MCP server into their own tools. Contributors need a clear contribution path (CLA, coding conventions, registry sync invariants). Integrators need stable interfaces — especially the protocol format and MCP tool surface — and confidence that the framework won't change underneath them without warning.
