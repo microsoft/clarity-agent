@@ -101,7 +101,7 @@ class TestTemplateContent:
         init_protocol(project_path)
         pd = project_path / ".clarity-protocol"
         for rel_path, expected_content in TEMPLATES.items():
-            actual = (pd / rel_path).read_text()
+            actual = (pd / rel_path).read_text(encoding="utf-8")
             assert actual == expected_content, f"Content mismatch: {rel_path}"
 
     def test_all_goal_templates_have_tbd_markers(self, project_path: Path) -> None:
