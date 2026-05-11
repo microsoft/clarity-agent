@@ -1,68 +1,31 @@
 ## Turn 1
 
 **User:**
-Board at 2, need a quick sanity check before then. VP of Eng candidate — ex-principal at a solid company, strong technical background, I've verified the architectural contributions. Three rounds with me and I like the person. Offer call is tomorrow morning.
+Board at 2, it's noon. Need a quick call on a VP Eng hire — offer conversation is tomorrow morning and I need to decide before my board meeting whether to proceed.
 
-References are mixed. Two directs said "fine, technically great." One direct flagged a pattern of rewriting junior work without giving feedback. One peer said "excellent in 1:1, harder to read in group settings." Former manager was positive but vague. 
+Candidate is ex-principal at a solid company, strong technical track record I've verified. References are mixed: two direct reports said "fine, technically great," one flagged a pattern of rewriting junior work without feedback, one peer said "excellent in 1:1, harder to read in group settings," former manager was positive but vague. I've done three rounds myself and I like the person. Current lead is running hot waiting on this hire.
 
-Is the rewriting-without-feedback thing enough to slow down, or do I proceed and address it in the offer conversation?
+Two questions: Is the rewrite pattern enough of a red flag to slow down? And if I proceed, what's the one thing I should change about tomorrow's offer conversation based on what the references said?
 
 **Assistant:**
-The rewriting-without-feedback pattern is the most important signal in your reference set, and it's worth taking seriously — not because it's disqualifying, but because it's exactly the thing that breaks engineering orgs at scale.
+**On the rewrite pattern:** It's a yellow flag, not a red one — but it's a meaningful one specifically *because* this is a VP Eng role. VP Eng success is 60% people development; rewriting without feedback doesn't scale and demotivates the engineers you need most. One reference flagging it (not two) and the second direct report saying "fine" suggests it's real but situational — probably surfaces under pressure. That's actually manageable if you name it explicitly. I wouldn't slow down over this alone given your timeline and how strong the other signals are.
 
-Here's why it weighs heavier than it might look: A VP of Eng's leverage is through other people's growth. Rewriting without feedback is the opposite instinct — it optimizes for short-term code quality over long-term capability. If that's their default under pressure, it will cascade down through your managers.
+**The one thing to change tomorrow:** Don't lead with the offer package. Open with 5 minutes on how you measure VP Eng success, and center *team growth* in that framing — something like: "I'll measure the first year as much by how the junior engineers level up as by what ships." Then ask: "How do you think about developing someone who's technically capable but not yet at principal level?" Listen for self-awareness, specific methods, and whether they distinguish between *doing* and *coaching*. If they say "I'd pair with them" or "I'd rewrite it and walk through why" — you'll learn a lot. This also sets expectations for the role before they sign, which protects you both.
 
-The peer comment ("harder to read in groups") reinforces the same underlying pattern: strong in 1:1 relationships, less so where they have to influence without direct control. That's a VP-scale concern.
+The risk isn't the pattern itself — it's hiring without surfacing it and finding out six months in that your junior engineers are demoralized.
 
-**One question that changes everything:** Was this behavior at principal/IC level, or when they were actually managing people? A principal with low tolerance for messy code is a different problem than a manager who doesn't know how to develop engineers. If the reference was describing their principal years, that's coachable. If it was during a management stint, I'd slow down.
+---
 
-**On the offer conversation as the venue:** It's the wrong place. You can't raise a developmental concern in the same breath as an offer — it undermines the offer and they can't respond honestly. If you want to address it, do it before the offer, directly: "One thing came up in references I want to talk through with you."
-
-**My honest read:** The combination of "fine" (not enthusiastic) from two directs, the rewriting flag, and a vague former manager makes this reference set weaker than you want for a VP hire. Not a hard stop — but worth a 30-minute conversation before tomorrow, not after.
-
-What level was the person when the rewriting pattern was observed?
+Want me to capture this as a decision record so you have a written rationale before the board meeting? I can do it in two minutes.
 
 ## Turn 2
 
 **User:**
-The direct who flagged it was a report during a management stint — not their IC years. So that's the worse version of this.
+That framing lands. The "how do you develop someone who's capable but not yet principal" question is exactly right — I can read a lot from how they answer that.
 
-The pre-offer conversation idea is right. I can do that today. What do I actually say to surface this without it feeling like an ambush?
-
-**Assistant:**
-Frame it as diligence before a decision, not confrontation about a finding. That shift makes it feel like care rather than ambush.
-
-**How to open:**
-
-> "We're close and I want to make sure we've actually talked through everything that matters before we move forward. Can I ask you something directly?"
-
-Then:
-
-> "How do you think about developing engineers whose work isn't where you want it — especially junior folks? What's your instinct in that moment?"
-
-Let them answer fully. You'll learn a lot from what they volunteer unprompted.
-
-**If their answer doesn't address the rewriting pattern, get specific:**
-
-> "One thing that came up in references was a pattern of rewriting work rather than coaching through it. I want to hear your take on that."
-
-Not "someone said" — just "came up in references." Protects the source, still lands the substance.
-
-**What you're listening for:**
-
-- Do they recognize the pattern and own it? *Good sign.*
-- Do they have a story about how their approach evolved? *Better sign.*
-- Do they minimize it ("juniors appreciated knowing the right answer") or get defensive? *Problem.*
-- Do they have a clear current philosophy on developing people? *Essential for this role.*
-
-A strong candidate will tell you something like: "That's fair — I had to learn that my job wasn't to fix the code, it was to fix the engineer's ability to fix the code." If you get that kind of reflection, the pattern is in the past. If you get deflection, it isn't.
-
-You'll know in about five minutes whether this clears or doesn't. Good luck today.
-
-## Turn 3
-
-**User:**
-That's exactly what I needed. I'll make that call before I walk into the board meeting. Thanks.
+Yes, do the decision record. Keep it short — I don't need a document, just a crisp rationale I can refer back to if this goes sideways six months from now.
 
 **Assistant:**
-Good luck with both. Hope the conversation gives you clarity.
+Done. The last line is the one that'll matter six months from now — distinguishing values mismatch from performance issue keeps you from managing it the wrong way if it surfaces.
+
+Good luck with the board meeting and the conversation tomorrow.

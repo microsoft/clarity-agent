@@ -1,412 +1,290 @@
 ## Turn 1
 
 **User:**
-Hi — I'm hoping you can help me think through a research program I'm trying to scope. I run Customer Success at a B2B SaaS company, and we've got a churn problem I need to get a handle on. Gross logo churn has gone from about 7% to 11% over the last three quarters, and my COO asked me point-blank last week whether I actually know why we're losing accounts. Honest answer: not rigorously, no.
+Hi — I'm hoping you can help me think through a research plan. I'm Head of Customer Success at a B2B SaaS company and our gross logo churn has crept up from about 7% to 11% over the last three quarters. My COO asked me point-blank last week why we're losing accounts, and I gave her a list of plausible reasons but nothing I'd actually stand behind.
 
-I have about 6 weeks before our annual planning cycle kicks off and I need to present a "churn plan." I want to design a proper research program — exit surveys, interviews with churned customers, cohort analysis of usage patterns, segmentation by persona and vertical — something I can actually defend. Can you help me scope that out and figure out what to prioritize?
+I want to build a proper research program to get a defensible answer — surveys of churned customers, interviews, cohort analysis of usage patterns, segmentation by persona and vertical. I'm thinking 2–3 months of work. I have about 40 accounts that churned in the last two quarters and annual planning starts in 6 weeks, so the COO wants a "churn plan" as input.
+
+Can you help me scope this out and make sure I'm asking the right questions and using the right methods?
 
 **Assistant:**
-Good context — let me write down what I know already, then ask a few things that will shape how we scope this.Good, I've got the rough shape of the problem captured. A few questions that will significantly affect how we scope this:
+Great problem to dig into — and there's something worth flagging right away before we scope the research.
 
-1. **What do you already suspect?** Before we designed anything — gut instinct, anecdotal signals, patterns your CSMs have noticed. Even rough hypotheses help us design the right research rather than fishing blindly.
+You said 2–3 months of work, but annual planning starts in 6 weeks. That's a real tension: your COO wants a churn plan *as input* to planning, not as a follow-up to it. So the first question worth settling is: **what does she actually need in 6 weeks vs. what can be a follow-up?**
 
-2. **What data do you already have access to?** CRM (Salesforce, HubSpot?), product usage analytics (Mixpanel, Amplitude, Pendo?), support ticket history, NPS/CSAT scores? The cohort analysis piece depends heavily on what's already instrumented.
+A few more things would help me understand the shape of this:
 
-3. **How many churned accounts are we talking about?** Ballpark — 20? 200? This matters a lot for whether interviews are feasible vs. surveys doing more of the work.
+1. **What do you already suspect?** You said you gave her "plausible reasons" — what were they? That shapes which hypotheses need rigorous testing vs. just validating.
 
-4. **What does your CS team look like?** Specifically — do you have analysts who can pull data, or is that a cross-functional ask? And do you have bandwidth to run interviews yourself, or does someone else need to?
+2. **What data do you already have?** Is there CRM data, product usage/telemetry, NPS/CSAT scores, exit surveys? Or is this mostly institutional knowledge right now?
 
-5. **What format does the churn plan need to be?** A slide deck to the COO? A written memo? And is the audience just internal leadership, or does this feed into board materials?
+3. **Who's doing the research?** Is this you personally, you plus a team, or are you engaging a researcher or analyst?
+
+4. **How reachable are churned accounts?** 40 accounts — do you have relationships with contacts at most of them, or have many gone cold?
+
+The reason I ask before scoping: a survey-heavy program with cohort analysis and segmentation is a solid 3-month effort. But if the COO needs a *defensible directional answer* in 6 weeks, there's a faster path — targeted interviews with 8–12 churned customers plus a quick pass at whatever usage data exists can get you there. The fuller program is still worth doing, but you'd be sequencing it differently.
+
+Let me start capturing what you've told me while we talk.What were those plausible reasons you gave the COO?
 
 ## Turn 2
 
 **User:**
-Good questions. Let me run through them:
+The timeline tension is real and I haven't fully resolved it in my head. The COO needs *something* in 6 weeks, but I've been telling myself the research is the plan — which your question is making me realize is circular.
 
-On gut instincts: the three things I hear most from my CSMs are pricing pressure (a competitor came into our space about 18 months ago at a lower price point), onboarding friction for accounts that didn't get a dedicated implementation resource, and a feeling that some accounts never really got value from the core workflow features. But those are vibes, not data.
+On the plausible reasons: I told her three things. One, pricing — we're not the cheapest and some accounts mentioned it in renewal conversations. Two, a specific competitor that's been aggressive in our mid-market segment over the last year. Three, our onboarding — anecdotally, accounts that struggled in the first 60 days seem to have higher churn, but I haven't actually verified that pattern.
 
-On data: I actually have a reasonable stack — product usage (feature adoption, DAU, session depth), support ticket history with sentiment tags, quarterly NPS (though response rate is only about 15%), and CRM notes from renewals and cancellations. The CRM notes are inconsistent quality — some CSMs are thorough, some write one line.
+The honest answer is I'm not sure which of those is actually driving the 11% or whether it's something else entirely. That's what worries me.
 
-Churned accounts: roughly 40 over the last two quarters. No one has done a structured analysis of any of them.
+On data: I have product usage data — feature adoption, DAUs, session depth. Support ticket volume with sentiment tags. NPS survey responses (quarterly, roughly 15% response rate). And CRM notes from our CSMs covering renewals and cancellations, though the quality is inconsistent. Some CSMs write detailed notes, some are one-liners.
 
-Team/bandwidth: 4 CSMs plus me. I have an analytics partner I can pull in for the data side, but she's shared with the whole revenue team. I can run interviews myself — probably my best use of time honestly — but I can't do 40 of them.
-
-Format: the COO wants a "churn plan" as input to annual planning. My assumption is a slide deck, probably 10-15 slides. It may roll up into board materials eventually so it needs to be defensible.
+Team-wise: it's me and 4 CSMs, plus I have an analytics partner I can pull in for the heavier quantitative work. I can't dedicate a CSM full-time to this, but I can involve them.
 
 **Assistant:**
-This is a well-formed problem with three real hypotheses to test — that's actually a strong starting position. Two more things before I can help scope the research properly:
+This is really clarifying. A few things are coming into focus that I want to share before asking more:
 
-1. **Do you have any read on which accounts churned?** Anything that stands out about the 40 — were they concentrated in a particular size band (SMB vs. mid-market?), vertical, acquisition cohort, or contract length? Even a rough "it feels like a lot of our smaller accounts" would be useful.
+**The research-as-plan circularity is the key insight.** What your COO needs in 6 weeks isn't a research plan — she needs findings she can act on. And here's the thing: you already have most of what you need to get there. Product usage data, support sentiment, NPS, CRM notes across 40 accounts — that's a rich dataset. You don't need to build a research program from scratch; you need a structured 6-week sprint to mine what you have and fill the gaps with targeted interviews.
 
-2. **What's your relationship situation with churned customers?** Can you reach them for interviews, or did some leave on bad terms? And how recent were the churn events — are there accounts from 6 months ago where the contact has moved on?
+**Your three hypotheses are testable with existing data:**
+- *Onboarding* → directly testable with your usage data right now. 60-day feature adoption curves, DAU trajectories for churned vs. retained cohorts. Your analytics partner could have a preliminary answer in a week.
+- *Competitor displacement* → the CRM cancel notes will flag this. If a CSM wrote "went to [Competitor]" in 15 of 40 accounts, that's a signal. If it appears in 3, it's noise.
+- *Pricing* → also in the CRM notes, and you can cross-reference with renewal conversation records and deal size.
 
-The reason I'm asking: these two things together determine whether we lead with qualitative (interviews) or quantitative (data) work — and whether we try to test all three hypotheses simultaneously or have to sequence them.
+Two questions before I go further:
+
+1. **How are those 40 churned accounts distributed?** Mostly mid-market (where the competitor is active), spread across segments, or skewed another way? This matters a lot for whether competitive displacement is a primary driver or a segment-specific story.
+
+2. **Have any of the 40 been spoken to since churning?** Even informal "why'd you leave?" conversations? Knowing what's already been learned vs. genuinely cold contacts changes the interview strategy.
+
+I'm also keeping notes as we go:
 
 ## Turn 3
 
 **User:**
-On which accounts: my gut says it skews toward the smaller end of our mid-market range — the 50-200 employee accounts. We also had a few in logistics and field services that felt clustered, but I haven't verified that. I genuinely don't know if that's signal or just where we have more accounts to lose. That's part of what I want to figure out.
+That framing lands. I think I've been conflating "doing rigorous research" with "having a defensible answer" — and those aren't the same thing if I'm sitting on data I haven't actually analyzed.
 
-On relationships: mixed. Some churned cleanly — contract ended, they told us why, no hard feelings. Probably 15-20 accounts in that bucket where I think we could get a conversation. Another chunk went quiet — renewals where the champion had moved on or the deal just kind of died. And a few where it was contentious, I wouldn't bother reaching out. My rough estimate is maybe half the 40 are reachable in some meaningful way.
+On the 40 accounts: they're mostly mid-market, which is our core segment, so that's not terribly diagnostic on its own. But when I think about it, there's probably a cluster in the 50-200 employee range that churned in Q3 — that's roughly where I've heard the competitor mentioned most. I don't have a clean segmentation in front of me, but my analytics partner could slice it quickly.
 
-The timing varies too — some are 3-4 months out, some closer to 12. The older ones I'm less confident about being able to get real candor from.
+On post-churn conversations: a few. Two of my CSMs reached out informally to accounts they had close relationships with — I'd estimate 4 or 5 conversations total, nothing structured. The consistent thing I heard second-hand was something like "the product's great but we didn't have bandwidth to run it properly." Which could mean onboarding, could mean we sold to the wrong persona, could mean something else entirely.
+
+What I'm warming up to is the idea of doing the data pass first before I design the interview program. If the usage cohort analysis shows a clear onboarding signal, I'm asking different questions in interviews than if the cancel notes are all competitive displacement. That's actually a better research design anyway, not just a time-saver.
+
+But I want to make sure I'm not under-investing in the qualitative piece. The data can tell me *what* happened — I need conversations to tell me *why*.
 
 **Assistant:**
-Good — that's enough to scope this well. Let me get the documents current and then lay out the research program.The problem is well-defined. Here's the research program I'd scope for you — four workstreams running mostly in parallel:
+You've landed on genuinely good research design — sequencing quantitative before qualitative means your interviews are hypothesis-driven rather than exploratory, which makes them sharper and the findings more defensible. That's not cutting corners, that's the right method.
 
----
+One thing worth flagging: those informal post-churn conversations surfaced something that *isn't* in your three hypotheses. "Product's great, didn't have bandwidth to run it properly" is a distinct signal — it could mean **wrong ICP or persona** (you sold to accounts that were never set up to operationalize the product, regardless of onboarding quality). That's worth adding as a fourth hypothesis, because it points at a different intervention than the other three. Onboarding failure is a CS problem. Selling to the wrong profile is a sales + ICP problem. The annual plan implications are very different.
 
-**Workstream 1: Cohort & Usage Analysis** *(analytics partner lead, weeks 1–3)*
-Pull usage data for all 40 churned accounts + a matched retained cohort. Test: did churned accounts have lower core feature adoption? Did accounts without dedicated implementation activate more slowly? Does churn concentrate in 50–200 employee or specific verticals? This directly tests the onboarding friction and value realization hypotheses with hard data.
+On under-investing in qualitative: the protection isn't more interviews — it's better questions. Eight to twelve conversations is plenty if the interview guide is hypothesis-driven from what the data shows. What kills qualitative research is asking "why did you leave?" and getting polite post-hoc rationalization. What makes it work is asking "walk me through the last 60 days of your contract" and listening for when things changed.
 
-**Workstream 2: CRM Note Tagging** *(CSMs lead, week 1)*
-Have each CSM go through their churned accounts and tag notes against a structured schema: primary stated reason, competitive mention Y/N, onboarding issue Y/N, champion departure Y/N, value complaint Y/N. 40 accounts, shouldn't take more than an hour per CSM. This transforms inconsistent notes into a countable dataset and surfaces the competitive signal.
+Here's the shape of what I think this looks like:
 
-**Workstream 3: Exit Interviews** *(you, weeks 2–4)*
-Target 10–12 accounts from your reachable 15–20, prioritizing the 3–6 month churns. 30-minute structured conversations — not a sales recovery call, explicitly framed as research. Probe directly on all three hypotheses. This is your highest-signal source and worth protecting your calendar for.
+**Weeks 1–2: Data sprint**
+- Analytics partner runs cohort analysis: 60-day activation rates and feature depth for churned vs. retained accounts
+- Systematic coding of CRM cancel notes for all 40 accounts: stated reason, deal size, segment — even inconsistent notes give you something when you look at them in aggregate
+- NPS score trajectory in the 6 months before churn, by cohort
+- Support sentiment in final 90 days of tenure
 
-**Workstream 4: Exit Survey** *(light lift, weeks 2–3)*
-For the accounts that won't do interviews — send a 6-question survey to the remaining reachable accounts. Quantitative but thin. Useful for validating interview themes, not for primary conclusions.
+The output is: hypothesis status going into interviews (strong signal / weak signal / unknown), and a prioritized interview list (thin CRM notes, accounts fitting the strongest hypotheses)
 
----
+**Weeks 2–3: Interview design + outreach**
+- Write interview guide based on what the data shows
+- Reach out to 15–18 accounts, target 8–12 completions
+- Prioritize: accounts with thin CRM notes, the Q3 50–200 employee cluster where the competitor is mentioned, accounts where usage data shows the "never really activated" pattern
 
-**The 6-week timeline shakes out roughly:**
-- **Week 1**: Analytics partner starts data pull; CSMs do CRM tagging; you send interview outreach
-- **Weeks 2–3**: Interviews begin; survey fielded; cohort analysis first pass
-- **Week 4**: Interviews complete; support ticket sentiment analysis (your analytics partner can run this off ticket history)
-- **Week 5**: Synthesis — do the data workstreams and interviews tell the same story? Where do they conflict?
-- **Week 6**: Deck
+**Weeks 3–5: Interviews**
+- 30–40 minutes each, at least one CSM involved where they have the relationship
+- Synthesize after the first 4–5 before continuing
 
----
+**Week 5–6: Synthesis and churn plan**
+- Hypothesis confirmed / refuted / uncertain with supporting evidence
+- Recommendations tied to each confirmed hypothesis
+- What's still unknown and what it would take to find out
 
-Before I write this up formally — a few things worth flagging as genuine open questions:
-
-- **Matched cohort**: Do you have enough retained accounts in the same size/vertical bands to build a meaningful comparison group for the usage analysis?
-- **Interview access**: Have you stayed in contact with those 15–20 reachable accounts, or does outreach need to go through the CSMs who owned the relationship?
-
-Are you happy with this overall shape, or does something feel off-sized?
+Does this feel like the right shape? I want to make sure we get the problem and success criteria properly scoped before we get into the details — specifically, what "defensible" means to your COO and what the churn plan actually needs to contain.
 
 ## Turn 4
 
 **User:**
-This is close to what I had in my head, but cleaner. The workstream structure helps — I'd been thinking about it as one big sequential project rather than things that can run in parallel.
+That fourth hypothesis is the one that makes me a little uncomfortable — not because it's wrong, but because if it's true, the conversation with my COO looks very different. "We have an onboarding problem" is mine to own and fix. "We've been selling to accounts that can't operationalize the product" is a Sales and ICP conversation that involves people who aren't in my org. I need to be prepared to walk into that with solid evidence, not just a pattern in cancel notes.
 
-On your two open questions: the matched cohort is a fair flag. We have a few hundred active accounts so I think we can find matches, but it'll be cleaner in some segments than others. Worth a quick conversation with my analytics partner before she starts pulling data, just to confirm the comparison group is valid.
+The plan shape feels right to me. I was skeptical when you started pushing toward "use what you have," but this isn't a shortcuts version — it's sequenced correctly and it's actually more defensible because the interviews are grounded in data.
 
-On interview access — it varies by CSM. Some of those relationships stayed warm, some I'd need to re-approach myself because the CSM relationship ended on the way out. I'll handle that coordination.
+On what the COO needs: honestly, I haven't been precise about this. My mental model is she wants to walk into annual planning knowing where to invest — do we double down on CS headcount, do we fix the onboarding motion, do we tighten the ICP, do we build a competitive response. "Churn plan" in her language probably means "here's what's causing it and here's what we're changing." I don't think she needs statistical significance — she needs a clear story with evidence she could defend to the board if pressed.
 
-One thing I'm wondering about: the CRM tagging exercise in week 1. My CSMs are going to want to know what we're doing with those tags. If this surfaces that one CSM's book of business had significantly more onboarding issues flagged, that becomes a performance conversation I'm not sure I'm ready to have in the middle of a research sprint. Is that a risk I should just accept, or is there a way to structure it that doesn't put CSMs in a defensive posture?
+What she doesn't want is another list of plausible reasons with no prioritization. That's what I gave her last week and it clearly wasn't enough.
 
-Also — I notice you haven't asked what the research is actually supposed to *decide*. My COO will. I have a vague answer and I'm aware that's a gap.
+One thing I'm uncertain about: how do I frame findings that are genuinely mixed or inconclusive? If the data points at onboarding but interviews suggest ICP, do I present both? I've seen that kind of ambiguous finding get used to justify inaction.
 
 **Assistant:**
-Two really sharp observations — let me take them in order.
+The mixed findings question is the right one to nail down before you're in front of your COO — because the framing choice you make now will determine whether the findings produce decisions or hedging.
 
-**On CRM tagging and CSM defensiveness:**
+**The dangerous version of mixed findings:** "It could be onboarding, or it could be ICP." That's what gets used to justify inaction, and it's what you already gave her last week in a different form.
 
-The cleanest solution is to not ask CSMs to tag their own accounts. The notes are already written — you or your analytics partner can do the tagging pass directly using a rubric you define. This completely removes the self-interest problem and has a side benefit: the tagging will be more consistent because one person is applying the schema, not four people with different interpretations of what "onboarding issue" means.
+**The useful version:** Segmented findings. "For this cluster — mid-market, 50-200 employees, Q3 cohort — the evidence points to ICP. For this cluster — smaller accounts that churned earlier — the evidence points to onboarding." That's not ambiguity, that's precision. Different causes, different segments, different interventions. Your COO doesn't need one root cause — she needs to know where to invest. Segmented findings give her that.
 
-If you do want CSM involvement (because they have context the notes don't capture), consider cross-tagging: each CSM reviews accounts they *didn't* own. Still surfaces account-level patterns without the defensiveness dynamic.
+When data and interviews point in different directions, that's usually not a conflict — it's complementary. Data tells you *what* happened (activation dropped at day 45). Interviews tell you *why* (we never had an internal champion after the person we sold to left). Neither is wrong. The frame you want: "Here's what we observed in the data. Here's what the interviews explain about it."
 
-Either way — communicate the purpose explicitly before anyone touches the data: *"We're diagnosing accounts, not evaluating CSMs. I'm not drawing performance conclusions from this exercise."* Say it once, clearly, and the anxiety largely disappears. The time to have a performance conversation about onboarding quality is after you have a full picture, not mid-sprint.
+On the ICP hypothesis and the cross-functional conversation: you're right to hold this to a higher evidence bar. Here's what "solid evidence" looks like for that finding specifically — and it's distinct from onboarding failure even if both show up as low activation:
 
----
+- **Usage pattern:** Accounts that *never* activated meaningfully — flat engagement from week one, not a drop after initial adoption. That's a different shape than "started strong, fell off."
+- **Interview language:** Multiple independent accounts using language about *fit* rather than *execution* — "it was solving a problem we didn't really have," "the person who was supposed to use it turned out not to be the right role"
+- **Sales cycle signal:** CSM handoff notes or CRM records showing warning signs at the point of sale — small champion, unclear use case, competitive displacement of a free tool
 
-**On "what does this research decide" — you're right that it's a gap, and your COO will absolutely ask.**
+If all three line up across several accounts, you're not walking into a Sales conversation with a pattern in cancel notes — you're walking in with a coherent story across three independent data sources.
 
-Here's the honest frame: your research can surface *what* is causing churn, but the decisions it feeds are likely in a few buckets, and they're different enough that it's worth naming them now. At planning, the findings will be used to justify something — probably some combination of:
+One thing worth building into your synthesis now: for each hypothesis, document the evidence threshold that would make you confident vs. uncertain. Then when you have findings, you're not making a judgment call under pressure — you already decided what "solid" means.
 
-- **Headcount**: Add implementation specialists, or adjust CSM:account ratios for smaller accounts
-- **Playbooks**: Redesign onboarding, add an early-value milestone, rebuild QBR cadence
-- **ICP / segmentation**: Stop selling to segments that churn, or price/resource them differently
-- **Product escalation**: Bring specific capability gaps to the product roadmap
-- **Competitive response**: Pricing, packaging, or positioning changes (probably above your paygrade, but you'd be the one raising it)
-
-The question is: which of these is *actually on the table* at your company's planning cycle? Because that should drive what your research needs to prove — not just directionally, but to what confidence level.
-
-For example: if headcount investment is feasible and the hypothesis is onboarding friction, you need the data to show clearly that "no dedicated implementation" correlates with churn. If ICP tightening is politically viable, you need the segmentation to be airtight. If none of those decisions are actually in scope for your team, the bar is lower — you're raising a flag, not writing a prescription.
-
-**So: what decisions are realistically yours or your COO's to make at planning?** That's what shapes how much rigor each piece needs.
+I want to make sure we get the full scope captured properly. Let me update the documents and then I'd like to work through one more thing with you: who else has a stake in the findings, because that affects how the research gets packaged and what "defensible" means in practice.Who else will see these findings — your CSMs, Sales leadership, the broader exec team? And is the COO the decision-maker on all four potential interventions, or do some of them require buy-in from someone else?
 
 ## Turn 5
 
 **User:**
-That's the question I've been avoiding, honestly.
+That three-signal test for ICP is exactly what I needed — I was thinking about it as "do we see a pattern" but you've given me something much more specific to look for.
 
-What's realistically mine: playbooks, CSM coverage models, how we resource onboarding. If the data says "accounts without a dedicated implementation resource churn at 2x the rate," I can build a case to the COO to either add an implementation specialist headcount or change which accounts get that resource. That's a conversation I could win if the data supports it.
+On stakeholders: the COO is the primary audience and she owns the CS org, so she can authorize anything that's mine to fix — onboarding redesign, QBR process changes, CSM coverage model. That's clean.
 
-ICP tightening is a joint call — I could raise it but sales and the CEO would have to own it. Same with product gaps — I can escalate with evidence but I don't run the roadmap.
+The harder scenario is if ICP comes back as a primary finding. The CRO owns Sales, and she and my COO are peers. They have a decent working relationship but it's not without friction. If I walk in saying "Sales is closing accounts that shouldn't be in our ICP," that's a conversation between two C-suite people, not something I can just put in a slide deck and let land on its own. I'd want my COO aligned on the findings before they go anywhere near the CRO.
 
-So if I'm honest, the decisions that are actually mine to drive are probably: onboarding process changes, CSM playbook updates, and potentially a headcount ask for implementation support. The bigger structural stuff (stop selling to X segment, reprice for Y) — I can surface it, but I'm not the one deciding.
+My CSMs will definitely see the findings — I'd involve them in synthesis anyway, they know these accounts. And if there's a comp or coverage model conversation that comes out of this, that's sensitive. I'd want to frame findings to them before they're presented upward, not after.
 
-What that tells me, I think, is that the onboarding friction hypothesis is the one where I need the tightest data, because that's where I'm actually asking for something. The competitive pricing hypothesis is worth understanding but even if I confirm it, the response is above me.
+The broader exec team — CEO, CFO — would likely see this in the context of annual planning, but probably as a summary, not the full research. If churn is going to be a line item in the plan, the CFO will have questions about the revenue impact. I should probably think about how to connect the findings to a rough dollar story.
 
-Does that mean I should weight the research design toward the onboarding/value realization thread more heavily than I had been?
+Does that affect how we think about packaging the output?
 
 **Assistant:**
-Yes — and the logic you just walked through is exactly right. Let me make it concrete.Yes — weight toward onboarding/value realization, but don't drop competitive entirely. Here's the precise reframe:
+Yes — significantly. What you've described isn't one deliverable, it's a sequenced set of outputs aimed at different audiences for different purposes. Getting the sequencing wrong is as damaging as getting the findings wrong.
 
-The research design stays the same structurally, but **the analytical depth per hypothesis changes**:
+Here's how I'd think about the packaging:
 
-- **Onboarding friction** gets the most rigorous treatment: a proper cohort split (had implementation resource vs. didn't), churn rate differential with a real number, corroborated in interviews. This is the evidentiary core of your headcount ask. If the data says 2x churn rate, you can win that conversation. If it says 1.1x, you probably can't — and it's better to know that now than at the planning meeting.
+**The source document** — full findings, all hypotheses, evidence, segmentation. This is what you and the COO see first, in a private briefing before anything circulates. This conversation is where you walk through the ICP finding if it emerges, let her react, and figure out together how it gets taken to the CRO. You don't want her surprised by it in an exec meeting.
 
-- **Value realization gap** gets solid but not exhaustive treatment: which core workflow features did churned accounts *not* use, and when did adoption drop off? This feeds playbook changes and is politically uncontroversial — you don't need to fight for it, just demonstrate it.
+**The churn plan for annual planning** — action-oriented, not research-oriented. Organized by intervention ("here's what we're changing, why, and what we expect it to do"), not by hypothesis. The ICP finding, if it surfaces, gets framed as "sales qualification opportunity" or "ICP refinement" — a joint problem to solve, not an attribution of fault. Dollar-connected: if churn stays at 11% vs. returns to 7%, here's the ARR implication. That's the CFO frame and it actually strengthens the case for every intervention by putting a number on the cost of inaction.
 
-- **Competitive pricing** gets a light pass: tag it in CRM notes and ask directly in interviews. "We see competitive mentions in X of our last 40 churns, here's what they said" is all you need to escalate credibly. The decision to respond isn't yours, so calibrate the evidence to the conversation you're actually having.
+**CSM-facing summary** — before it goes upward, as you said. Focus on what changes and why, framed around how it improves their ability to help customers succeed. If coverage model or comp is on the table, that conversation happens separately with each person, not via a document.
 
-One thing worth flagging: onboarding friction and value realization might turn out to be the same causal chain. Accounts that got dropped into self-serve onboarding → didn't adopt core features → didn't get value → churned. If the data tells that story, your headcount ask gets stronger, not weaker — you're not just arguing "implementation resources reduce churn," you're arguing "implementation resources are the activation mechanism for feature adoption, which is the actual retention driver."
+**CEO/CFO view** — summary of the plan and the dollar story. They don't need the research; they need to know the problem is diagnosed and being addressed with a credible plan.
 
-Two quick things to resolve before your analytics partner starts pulling data — both are just conversations, not research projects:
-1. **Is the matched cohort valid?** Do you have enough retained accounts in the 50–200 employee bands to make the comparison meaningful?
-2. **What's your COO's actual bar for a headcount ask?** Directional trend vs. statistically meaningful differential — you probably know from experience how she evaluates these.
+The sequencing: **you → COO → CSMs → CRO (COO-led) → annual planning doc → exec team**. The CRO conversation is COO-to-CRO with you as context-provider, not you presenting to the room.
 
-Ready to move into designing the actual research program in detail — interview guide, survey structure, the cohort analysis spec? Or is there anything about the problem framing you want to push back on first?
+One more thing on the dollar story: you'll want to connect the 40 churned accounts to ARR, then model what it means if churn stays elevated vs. improves. You probably know those numbers better than you realize — average contract value times churn rate math is simple, and it makes the conversation with the CFO much more grounded. Worth building that in parallel with the research, not as an afterthought.
+
+Let me capture the stakeholder picture properly:I think we have enough clarity on the problem and stakeholders to move into actually designing the research. Before I do, one question: is there anything about the problem framing as I've described it that doesn't feel right — either the four hypotheses, the 6-week constraint, or the way I've characterized what the COO needs? I want to make sure we're building the research design on solid ground before committing to it.
 
 ## Turn 6
 
 **User:**
-The causal chain framing is useful — I hadn't explicitly connected those three things as a single mechanism, but that's probably what the data will show. And you're right that it strengthens the ask if it does.
+The framing feels largely right, but there's something I should have flagged earlier that adds nuance: our net revenue retention is still above 100% because the accounts that stay expand. So we're losing logos but not net ARR — yet. The COO's concern is the trendline, not an immediate revenue crisis. That might affect how the dollar story gets framed — it's less "here's the ARR we lost" and more "here's the ARR at risk if this trajectory continues, plus the compounding drag on the business."
 
-On your two quick things: I'm fairly confident on the matched cohort. We have a couple hundred active accounts in that size band so finding a comparison group should be workable — I'll confirm with my analytics partner but I don't anticipate a problem. On the COO's bar — she's quantitative, she'll want a number not a trend line. "2x churn rate in accounts without implementation support" lands; "we think onboarding might be an issue" doesn't. So the cohort analysis needs to actually produce a rate differential, not just a correlation.
+On the four hypotheses: I'm comfortable with those, but one thing I don't have a bucket for yet is product gaps. A handful of churned accounts mentioned features they needed that we either didn't have or didn't have in a mature enough state. I don't know if that's a primary driver or just a convenient explanation, but it probably deserves to be on the hypothesis list even if it turns out to be noise.
 
-Let's move into the details. I want to get the interview guide right especially — I've done exit interviews before but I've never run a structured research program, and I'm worried about accidentally turning them into recovery calls or leading witnesses. What does a well-structured 30-minute exit interview look like for this specific set of hypotheses?
+The 6-week constraint is real and I'm genuinely more at peace with the sequenced approach than I expected to be at the start of this conversation.
+
+The one thing I'd still push on: I want to make sure the interview component doesn't get de-prioritized if the data sprint takes longer than expected. The "didn't have bandwidth to run it properly" signal from informal conversations feels important and it's exactly the kind of thing that won't show up cleanly in usage data.
+
+But overall — yes, build on this. I think we're ready.
 
 **Assistant:**
-Good — let me write the interview guide. The two failure modes you named (recovery call, leading the witness) have specific causes, and both are preventable by design.
+Good additions — both of them change the design in specific ways.
 
-**What turns an exit interview into a recovery call:** You start with "we really value the relationship" and end with "is there anything we could do." The subject hears *sales call* and either gets defensive or performs politeness instead of honesty. Fix: open by explicitly ruling it out, and never close with an offer.
+The NRR framing matters for the dollar story and also for the COO's urgency calibration. The right frame is: "We're not in a revenue crisis today because expansion masks logo loss — but churn at 11% is compounding drag that erodes the expansion base over time, and the trendline suggests it gets worse before it gets better." That's a more sophisticated argument than ARR lost to date, and it's actually more alarming if you model it out two or three years.
 
-**What leads a witness:** Naming your hypotheses as questions. "Did you feel like onboarding was a problem?" gives them your answer to confirm. They'll confirm it even if it wasn't the main issue, because it's easier than contradicting you. Fix: ask for the story first, probe on specifics only after they've told you what mattered.
+Product gaps as a fifth hypothesis is right to include, with one caveat: it's the easiest thing for a churned customer to say and the hardest to verify. "We needed feature X" often means "we didn't find the value we expected," with a specific feature attached post-hoc. The interview needs to probe: was this feature in the sales conversation? Did they raise it before churning? Is a competitor offering it? If yes to all three, it's a real product gap. If not, it may be a convenient explanation for something else.
 
-Here's the guide:
+And the interview guardrail you're asking for — I'll hard-code it into the plan. **Outreach starts by end of week 2, regardless of where the data sprint is.** Not "when the data sprint is done." If the sprint isn't complete, you draft the interview guide from current hypotheses and refine it as data comes in. Interviews are not downstream of data — they run in parallel once outreach is live.
 
----
+Let me write this up properly now.Now let me write the research design:Here's what we've built. The research plan has four phases across six weeks:
 
-**Opening (2 min)**
+**Weeks 1–2: Data sprint** — your analytics partner runs cohort analysis (activation curves, usage pattern classification), you and your CSMs code the 40 cancel notes systematically, and you build the dollar story as a forward compounding-drag model. Output: a hypothesis signal matrix and a prioritized interview list.
 
-*"Thanks for making time. I want to be upfront: this is a research call, not a sales call — I'm genuinely not trying to win you back. I'm trying to understand what happened so we can get better. The conversation stays with me. If it would be useful to you, I'm happy to share a summary of what I learn across all these conversations — sometimes that's valuable for people evaluating vendors. Any questions before we start?"*
+**End of week 2: Interview outreach starts** — non-negotiable, regardless of sprint status. Target 15–18 accounts for 8–12 completions, prioritized by thin notes, never-activated usage, and the Q3 mid-market cluster.
 
-Why this works: you've ruled out the sales dynamic, created a reciprocity incentive, and given them a reason to be honest.
+**Weeks 3–5: Interviews** — 30–40 min each, timeline-walkthrough structure rather than "why did you leave." The "dedicated person" probe distinguishes ICP from onboarding. Synthesize after the first 4–5.
 
----
+**Weeks 5–6: Synthesis and churn plan** — findings document for the COO briefing (hypothesis by hypothesis, with evidence thresholds defined in advance), action-oriented churn plan for annual planning, and CSM-facing summary before anything goes upward.
 
-**Context-setting (3 min)**
+The one thing I'd encourage you to do before the sprint starts: spend an hour with your analytics partner aligning on what "never activated" vs. "activated then dropped" looks like in your data. That classification is doing a lot of work — it's the primary signal for the ICP hypothesis — and you want agreement on the definition before you're looking at 40 accounts and trying to categorize them.
 
-*"Before we get into the decision itself — can you remind me where things stood for your team when the renewal came up? What were you trying to accomplish with [product], and how was it going?"*
-
-You want them grounded in the experience, not performing a post-hoc rationalization. Let them tell you the story from their frame.
-
----
-
-**The decision (10 min)**
-
-*"Walk me through how the renewal decision actually played out — who was involved, what were the main conversations?"*
-
-Listen for: who drove it (champion? budget holder?), when it was effectively decided vs. when it was official, what alternatives they considered. Don't interrupt.
-
-After they finish: *"What were the two or three factors that mattered most?"* 
-
-Now probe on whatever they mentioned — not on your hypotheses yet. If they named price, ask about price. If they named feature gaps, ask about feature gaps. Follow their lead for 5 minutes.
-
----
-
-**Experience probes (10 min)**
-
-Only after they've told you what mattered unprompted, go back and fill in the gaps your hypotheses need. Use open questions, not leading ones:
-
-- **Onboarding / value**: *"Take me back to the first 90 days — what did your team actually accomplish during that period?"* → If they mention friction, ask what specifically. If they don't mention onboarding at all, that's also data. Follow up: *"When did you feel like your team was getting real value from the product? Did that moment come?"*
-- **Value realization**: *"Which parts of the product did your team use regularly? Were there things you bought expecting to use but didn't?"*
-- **Competitive**: *"Did you end up going with an alternative, or did you just step away from this category?"* If they chose a competitor: *"What made that feel like the better fit?"* Don't ask about price directly — let them bring it up.
-
----
-
-**The time machine question (3 min)**
-
-*"If you could go back and change one thing about how we worked together — something on our side, not yours — what would it be?"*
-
-This is your highest-signal question. It surfaces operational failures that people are too polite to volunteer. They've been giving you the diplomatic version for 25 minutes; this question often gets you the real one.
-
----
-
-**Close (2 min)**
-
-*"This has been genuinely useful. Is there anything you expected me to ask that I didn't?"*
-
-Then thank them and stop. No offer, no pitch, no "we're working on exactly that."
-
----
-
-**Your field notes (do this right after each call)**
-
-Before you move on: write down the one or two things that felt like the real reason, separate from what they said explicitly. Then code against your three hypotheses: primary factor, secondary factor, not mentioned. This is how you turn 12 conversations into patterns rather than 12 separate stories.
-
----
-
-The last thing: the framing email before the call matters almost as much as the call itself. Want me to draft that outreach too?
+Anything you'd change, or are you ready to take this into execution?
 
 ## Turn 7
 
 **User:**
-This is exactly what I needed. The time machine question especially — I can already think of two or three conversations where I would have stopped before getting there, and I'm pretty sure that's where the real answer lives.
+This is ready to take into execution. The pre-sprint conversation with my analytics partner about activation classification is a good call — that's exactly the kind of thing that turns into a two-week back-and-forth if I don't define it upfront.
 
-One thing on the field notes: when you say "code against your three hypotheses," how do I make sure I'm doing that consistently across 12 conversations? I'm a little worried that after the first three calls I'll start hearing the story I expect and fitting things into it. Is there a lightweight way to keep myself calibrated — like reviewing the notes batch by batch with a second person, or some other check?
-
-And yes, please draft the outreach email. That framing of "research, not recovery" is the right instinct but I tend to over-explain in writing, and I'm guessing the email should be pretty short.
+One thing I want before I close out: the interview guide structure. You've given me the right framing — "walk me through the last 60 days" rather than "why did you leave" — and the dedicated-person probe for ICP vs. onboarding. But I'm going to be running some of these interviews myself and coaching my CSMs on others, and qualitative interviewing is not my strongest skill. Can you sketch out the core questions? Not a full script, but the five or six things I need to make sure I actually ask and in roughly what order. The hypotheses I'm probing are: onboarding failure, wrong ICP/persona, competitive displacement, pricing pressure, and product gaps.
 
 **Assistant:**
-**On coding consistently — the bias problem is real, and worth taking seriously.**
-
-The root cause is that after a few calls you stop hearing what's said and start hearing whether it fits. Two lightweight fixes:
-
-**Pre-commit to disconfirmation.** Before call 1, write down: *"What would I need to hear across these interviews to conclude each hypothesis is WRONG?"* Something like: *"Onboarding friction is NOT the driver if fewer than 3 of 12 people mention it unprompted, and the people who churned fastest had dedicated implementation."* Writing this down matters — if you can't describe what falsification looks like, you'll unconsciously find confirmation. Do this once, before you start.
-
-**Simple coding sheet, filled out within an hour of each call.** Not a narrative — forced choices. Something like:
-
-| | Primary factor | Secondary factor | Mentioned but minor | Not present |
-|---|---|---|---|---|
-| Pricing / competitive | | | | |
-| Onboarding friction | | | | |
-| Value realization | | | | |
-| Champion departure | | | | |
-| Budget / unrelated | | | | |
-
-Plus: *"The real answer in one sentence"* and *"What surprised me."* The surprise field is especially useful — if you're never surprised, that's a sign you're pattern-matching to expectations.
-
-**Mid-sprint blind check.** After interviews 5–6, share your notes (names removed) with one of your CSMs and ask them to fill out the same coding sheet independently. Where your codes diverge is exactly where your bias may be operating. This takes your CSM maybe 45 minutes total and gives you a calibration point before you've locked in a narrative. Pick someone who wasn't close to those accounts.
-
-That's the whole system: pre-commitment, structured coding within an hour, one blind check at the halfway point. Nothing fancy.
+Here are the six questions, in order, with a note on what each is actually doing:
 
 ---
 
-**Outreach email:**
+**1. "Walk me through the last few months of your time with [product]. Start wherever feels right."**
+
+Open-ended, narrative, non-threatening. You're not asking *why* they left — you're asking them to tell a story. What they choose to start with is itself a signal. Let them talk. Don't redirect too quickly.
 
 ---
 
-Subject: Quick ask — 20 minutes to share what you saw
+**2. "At what point did you actually decide not to renew? What was going on at that time?"**
 
-Hi [Name],
-
-I'm doing a structured research project on why some of our customers have decided not to renew, and I'd love 20 minutes of your honest perspective.
-
-This isn't a sales conversation — I'm genuinely not trying to win you back. I'm trying to understand what we got wrong so we can fix it. Your name won't appear in anything I publish internally.
-
-If you're open to it, I'm happy to share a summary of what I hear across these conversations when I'm done — sometimes that's useful context if you're evaluating vendors in this space.
-
-Would you have 20 minutes in the next two weeks? [Calendly link]
-
-Thanks either way —
-[Name]
+The mental decision to leave usually happens weeks or months before the formal churn date. This surfaces the real trigger — an event, a conversation, a moment — rather than the accumulated grievances they'll recite if you ask "why did you leave?"
 
 ---
 
-Short version of why this works: it's direct about the purpose in the first sentence, explicitly rules out the sales dynamic in the second, and the reciprocity offer (sharing findings) gives them a reason beyond politeness to say yes. The Calendly link reduces friction — if they're willing, make it easy.
+**3. "What were you able to accomplish with [product]? Where did things work, and where did they fall short?"**
 
-One thing to adjust: if you have any warmth in the relationship, add one sentence at the top that's personal — *"I've been thinking about the conversations we had during your renewal"* or *"I remember you were using [specific feature] — I'd love to understand how that landed."* Generic research emails feel like surveys. A sentence of specific memory makes it feel like a conversation they're being invited into.
+This probes onboarding and ICP simultaneously without leading. You're listening for: *Did they ever reach value?* If the answer is mostly "we never really got it going," that's onboarding or ICP. If the answer is "it worked for X but not Y," that's a product or fit signal. Follow up if needed: *"Were there things you planned to use it for that you never got to?"*
 
-Ready to move into the cohort analysis spec for your analytics partner, or do you want to work through the synthesis framework first — how you'll turn the four workstreams into a coherent story for the deck?
+---
+
+**4. "Who on your team was mainly responsible for running [product] day-to-day — and did that work out the way you expected?"**
+
+This is the ICP probe, more elegant than asking about bandwidth. You're finding out: was there a real owner? Was it the right person/role? If there was no clear owner, or the owner turned over, that's a qualification signal. 
+
+If operationalization themes surface here, follow up: *"If you'd had a dedicated person whose job was to run this, do you think you would have stayed?"* Yes = ICP/resourcing problem. No = something else.
+
+---
+
+**5. "What did you move to after [product], or what are you doing differently now?"**
+
+Non-leading — doesn't assume they went to a competitor. If they name one: *"What made that a better fit for where you are?"* That's where competitive displacement surfaces naturally. If they say "we're doing it manually" or "we're not doing it at all," that's a different signal about the priority of the problem.
+
+---
+
+**6. "If you were advising us — what's the one thing that would have made you renew?"**
+
+Save this for last. It often surfaces the real reason when earlier answers have been diplomatic. It's also where product gaps come out most clearly. If a specific feature is named: *"Was that something you raised with us before your renewal decision?"* and *"Is there a tool you've moved to that does this?"* — that's your validation check against post-hoc rationalization.
+
+---
+
+**Two coaching notes for CSMs:**
+
+The hardest skill in qualitative interviewing is not filling silences. After the person stops talking, count silently to five before responding. People often add the most important thing after a pause.
+
+If they start defending you or being overly polite, say: *"I really want the honest version — we're doing this specifically because we want to understand what we got wrong."* Permission to be critical usually unlocks a more useful conversation.
+
+---
+
+I'll add this to the research plan document so it's in one place:That's everything you need to run the interviews yourself and coach your CSMs. The questions are sequenced so the most sensitive probes (ICP, competitive) emerge naturally from the narrative rather than feeling like interrogation.
+
+The thing most likely to go wrong in the first few interviews is rushing to question three before they've finished with question one. If in doubt, follow the energy — if they're telling you something useful, stay there longer. The guide is a skeleton, not a script.
+
+Good luck with the data sprint. The activation classification conversation with your analytics partner is your first milestone — everything else flows from that.
 
 ## Turn 8
 
 **User:**
-The pre-commitment to falsification is the piece I would have skipped and regretted. I would have designed the research, run the interviews, and found what I was looking for. Writing down what "wrong" looks like before I start is going to feel uncomfortable, which probably means I need to do it.
+Question four is the one I'm going to use in every interview. It's genuinely elegant — you're not asking "did you have enough resources" which sounds defensive, you're just asking who owned it and whether that worked. That's a question a curious colleague would ask, not an exit survey.
 
-The outreach email is right. Short, honest, no hedging. I'll add the personal line — for most of these accounts I can pull something specific from the CRM notes before I send.
+The coaching note about not filling silences is also something I need to actually practice. I have a tendency to interpret pauses as confusion and jump in to clarify. I'll brief my CSMs on it too.
 
-On where to go next: I want the synthesis framework. The cohort analysis spec I can work through with my analytics partner directly — she'll push back and improve it on the technical side, and I'll share the hypotheses with her. But the synthesis piece — how I take four workstreams of messy data and turn them into a coherent narrative for a planning deck — that's where I'm most likely to lose the thread. I've seen a lot of "here's what we found" slide decks that just list findings and never actually make a case. I don't want to do that.
+I came into this thinking I needed to design a 3-month research program from scratch and I'm leaving with a 6-week sequenced plan, a hypothesis framework with defined evidence thresholds, a packaging strategy I can actually navigate politically, and an interview guide I can run without being a trained researcher. That's more than I expected.
 
-**Assistant:**
-The difference between a deck that makes a case and one that lists findings is this: **a case has a spine — one sentence the whole thing is built around.** Findings decks have no spine; they have sections.
-
-Your job in week 5 isn't analysis — analysis happens in weeks 1–4. Week 5 is about finding the sentence.
-
----
-
-**Step 1: Build the evidence table first (days 1–2 of week 5)**
-
-Don't touch the deck yet. For each hypothesis, fill out this table from your four workstreams:
-
-| | Cohort data (WS1) | CRM tags (WS2) | Interview themes (WS3) | Survey (WS4) | Verdict | Confidence |
-|---|---|---|---|---|---|---|
-| Onboarding friction | | | | | confirmed / partial / disconfirmed | high / med / low |
-| Value realization | | | | | | |
-| Competitive pricing | | | | | | |
-
-Confidence is **high** if two independent sources agree. **Medium** if one is clear and others are ambiguous. **Low** if sources conflict or data is thin. Be honest — low-confidence findings get a different treatment in the deck (flagged as "likely" or "warrants monitoring"), not the same treatment as high-confidence ones.
-
-One important rule: **quantitative data outranks self-report when they conflict.** If interviews say "pricing" but cohort data shows churned accounts had feature adoption rates half of retained accounts, believe the data. There's a well-documented dynamic where "price" is the socially acceptable exit narrative — it's not embarrassing to say you found something cheaper. "We never figured out your product" is harder to admit. CRM usage data can't rationalize. People can.
-
----
-
-**Step 2: Find the sentence (day 2–3)**
-
-Look at your completed evidence table and ask: is there a story that connects the confirmed findings? Three possible structures, in order of how strong a case they make:
-
-**Single mechanism** — all roads lead to one cause. *"Mid-market accounts without dedicated implementation never reach core feature adoption, don't perceive ROI at renewal, and churn at 2x the rate of accounts that got implementation support."* This is the best possible outcome — one sentence, two supporting numbers, clean ask. If your data tells this story, you've won.
-
-**Segmented story** — different causes explain churn in different groups. *"For accounts under 100 employees, competitive displacement is the primary driver. For 100–200 employee accounts, it's the onboarding-to-value chain."* Still a strong case, just more complex. The plan has two tracks.
-
-**Multiple independent causes** — genuinely distinct drivers with no connecting thread. This is the hardest to turn into a focused plan. If you're here, resist the temptation to present three equal findings — **force a hierarchy.** Which cause explains the most churn by volume? Lead with that.
-
----
-
-**Step 3: Build the deck spine**
-
-Once you have the sentence, the deck almost writes itself. It's a six-part argument:
-
-1. **The situation** — Churn went from 7% to 11%. Here's what that means in ARR. We didn't have a rigorous explanation.
-2. **The method** — We ran a 6-week research program: cohort analysis, exit interviews, CRM analysis, survey. Here's how we tested for noise.
-3. **The finding** — [Your sentence.] Here's the number.
-4. **The mechanism** — Here's *why* it happens. (The causal chain slide — this is often the most important one, and most decks skip it.) *"Accounts without dedicated implementation complete onboarding at 40% the rate of supported accounts, reach core feature activation 90 days later, and show half the engagement at the 6-month mark."*
-5. **The plan** — Here's what we're changing. Here's what we're asking for. Each ask maps explicitly to a finding.
-6. **What we don't know** — What we looked for and didn't find, or where confidence is medium rather than high. This slide makes everything else more credible. A COO who hasn't seen a "what we don't know" slide in a planning deck will notice it.
-
----
-
-**Step 4: The "so what" discipline**
-
-Every slide title should be a conclusion, not a description. 
-
-- ❌ *"Interview Themes"*
-- ✅ *"Churned accounts consistently describe an onboarding experience without a clear value moment"*
-
-- ❌ *"Cohort Analysis Results"*  
-- ✅ *"Accounts without dedicated implementation churn at 2.1x the rate of supported accounts"*
-
-If you can't write a conclusion title for a slide, the slide isn't ready to be in the deck — either the finding isn't clear enough, or it doesn't belong.
-
----
-
-**The scenario you want to avoid** is synthesizing too early, before you have the evidence table. The temptation is to start building the deck in week 4 when interviews are still running and data is still coming in. Don't. The deck should take 2–3 days, not 2 weeks. If it takes longer, you're still doing analysis in deck form, which is a sign the synthesis step got skipped.
-
----
-
-I've been keeping the research program documented as we go. Want me to pull together a clean summary of the full program — workstreams, timeline, interview guide, synthesis framework — as a single artifact you could actually hand to your analytics partner and CSMs as a brief?
-
-## Turn 9
-
-**User:**
-Yes, please do that. A clean brief I can hand to my analytics partner and use to kick off the conversation with my CSMs would save me significant time — right now it's all in my head and in this conversation.
-
-Two things I want to make sure are in it: the falsification criteria (what each hypothesis looks like if it's wrong), because I know that's the piece I'll skip under time pressure, and the "what we don't know" slide in the deck structure. I would not have included that. The COO will trust the findings more if I'm explicit about the limits of the analysis — that's the kind of thing that makes or breaks credibility with her.
-
-One honest reaction to the synthesis framework: I'm hoping the data tells the single-mechanism story, because that's the one I can actually act on with a focused ask. But I'm aware I might be hoping for it a little too hard. The pre-commitment to falsification is going to be important for keeping me honest about which story the data actually tells.
-
-If you can pull together that summary artifact, I think I have what I need to actually run this program.
+First thing Monday: get time on the calendar with my analytics partner to define activation. Thanks for pushing back on the scope early — the sequenced approach is genuinely better research design, not just a shortcut.
 
 **Assistant:**
-The brief is written. It's self-contained — someone picking it up without this conversation has everything they need to execute.
+Good plan. The analytics partner conversation is the right first move — it's a 30-minute investment that de-risks the entire data sprint.
 
-What's in it, in order:
-- The three hypotheses with explicit falsification criteria for each
-- WS1 spec (what to pull, what analysis to run, the scoping conversation first)
-- WS2 tagging schema (ready to use, with the note about not self-tagging)
-- WS3 full interview guide including the outreach email, the time machine question, the coding sheet, and the anti-bias protocol
-- WS4 survey questions, ready to send
-- The 6-week timeline
-- The full synthesis framework: evidence table, the three story structures, the deck spine with the "what we don't know" slide, and the slide title discipline
+Everything is captured in the protocol: problem statement with all five hypotheses and the NRR framing, stakeholder map with delivery sequencing and audience framing, the full research plan with phase-by-phase detail and evidence thresholds, and the interview guide. If you come back mid-sprint to refine the interview guide once the cohort analysis is in hand, we can pick up right there.
 
-The last section — "How to Use This Brief" — is addressed separately to your analytics partner, your CSMs, and you personally. The falsification note at the end is flagged explicitly as the piece most likely to get skipped.
-
-One thing I added that you didn't ask for but will matter: the weighting rule for when sources conflict. If your interviews say "pricing" but your cohort data shows low feature adoption, the brief tells you to believe the data. That's the kind of judgment call that's hard to make in the moment without having written it down in advance.
-
-You have a program. Good luck with it.
+Let me clear the notes file of items we've now resolved:Good luck with it. Come back after the data sprint if you want help refining the interview guide based on what the cohort analysis shows — or after interviews if you want to think through how to package a mixed or unexpected finding before the COO briefing.

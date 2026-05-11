@@ -1,30 +1,33 @@
 # Requirements
 
-## Core requirement
+## Must have (for board meeting narrative to hold)
+- A credible 3-phase AI roadmap with rough timeline and budget range ($300–500K year one)
+- A customer-facing answer to "what's your AI story?" that is honest and demo-able
+- Phase 1 scoped specifically enough to bring to a budget meeting
+- OCR improvement identified as a near-term quick win (2–3 weeks, before board meeting)
 
-The proposal must be grounded in real user pain and executable within the team's current capabilities — no new ML hires required for Phase 1.
+## Must have (for Phase 1 product)
+- ML-based categorization suggestions integrated into the expense submission flow
+- Visible AI surface area: "Suggested by AI" labels with confidence indicators on every suggestion
+- User feedback mechanism (accept/reject on suggestions) feeding back into model improvement
+- Categorization model trained on per-customer or customer-clustered historical data
+- Measurable accuracy improvement over current rules-based suggestions (baseline: effectively 0% acceptance)
 
-## Proposal requirements
+## Must have (for Phase 2 product)
+- Finance manager dashboard showing AI-handled categorization counts and accuracy rate
+- Something demo-able for the CEO: a visible, named AI feature with numbers attached
 
-**R1.** The engineering proposal must define a Phase 1 POC that can be running within 8 weeks, with measurable accuracy improvement as the exit criterion. (Enables a "we're already testing this" narrative at the board meeting ~10 weeks out.)
+## Should have (Phase 1)
+- Finance manager accuracy dashboard (could slide to Phase 2 if Phase 1 timeline is tight)
+- Named AI product identity ("Spend Intelligence" or equivalent) — changes perception significantly
 
-**R2.** The budget ask must account for API costs relative to current OCR vendor costs — cannot present a cost-neutral framing without validating it.
-
-**R3.** The technical approach must be executable by existing backend engineers (API-based, not model training). No ML engineering hires required for Phase 1.
-
-**R4.** Success criteria must be quantitative: target error rate reduction for OCR, target acceptance rate for categorization suggestions.
-
-## Narrative requirements
-
-**R5.** The board narrative must be grounded in customer pain (not competitive response). No mention of the competitor announcement.
-
-**R6.** The board narrative must connect to business outcomes: retention signal, differentiation, roadmap arc that compounds over time.
-
-**R7.** The customer-facing answer ("what's your AI roadmap?") must be specific enough to satisfy a skeptical finance leader in a QBR — not just "we're working on it."
+## Out of scope (for now)
+- Natural language assistant / chatbot interface — this is Phase 3, contingent on Phase 1 data quality
+- Anomaly detection / policy enforcement intelligence — Phase 2 stretch or Phase 3
+- Training a proprietary LLM — overkill for this problem; use fine-tuned classifiers or managed ML services
 
 ## Constraints
-
-- Board meeting is ~10 weeks out
-- Team: 22 engineers, no ML experience shipped; one enthusiastic backend engineer
-- Decision-makers for budget: CEO + engineering lead
-- Sales needs talking points but is not driving the conversation
+- 22-person engineering team, no existing ML background
+- No budget allocated yet — budget number is an output of this process
+- 6 weeks to board meeting
+- Must be executable: roadmap needs to hold up to engineering scrutiny, not just board-room narrative

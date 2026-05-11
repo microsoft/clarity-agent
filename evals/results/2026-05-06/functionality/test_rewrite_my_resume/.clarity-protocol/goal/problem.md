@@ -1,17 +1,21 @@
 # Problem Statement
 
-Tyler Brooks is a career transitioner — 6 years USMC (2018–2024), now finishing a B.S. Computer Science at Austin Community College (expected 2026) — who has sent ~80 job applications over 10 weeks and received only 3 recruiter phone screens, no technical interviews, no offers. He believes his resume may be the primary bottleneck and is seeking feedback.
+Tyler Brooks is a career-transitioning Marine veteran (6 years, infantry NCO) trying to figure out the right role and strategy for entering the tech industry. He came in thinking his problem was a weak resume for software engineering jobs; the deeper problem is that he may be targeting the wrong role entirely.
 
-His current resume has critical structural gaps: the 6-year Marine Corps service block contains no description or accomplishments whatsoever, there is no projects section, the objective line is generic and outdated, and the technical skills list is thin (no frameworks, databases, or tools beyond basics).
+What he describes enjoying — coordination across stakeholders with competing interests, earning trust in a process he didn't design, driving complex programs to completion, leading without formal authority — maps directly to Product Management, not software engineering. He was pursuing SWE because it seemed like the obvious next step given his CS credits and self-study, not because it's where his energy is.
+
+His background: MOS 0369 Infantry Unit Leader, 2018–2024. Final two years as Training NCO at School of Infantry — designed curriculum for 300+ Marines/year, managed 4 instructors, built 3 new training modules. Before that, two deployments to Kandahar advising Afghan National Army units; learned conversational Pashto for the role.
+
+Current technical skills: Python, JavaScript, HTML/CSS, Flask (basic), Git, Linux CLI. In progress: B.S. Computer Science at Austin Community College (expected 2026).
 
 ## Why This Matters
 
-Tyler is actively job searching right now. Each week without a callback is a week of lost opportunity and compounding discouragement. Resume quality is the gating factor — a recruiter spends ~7 seconds on first pass; a near-empty resume fails that test regardless of the candidate's actual capability.
+This is a consequential career decision made with incomplete information. Applying for the wrong role for another 10 weeks compounds the cost. If PM is the better fit, the targeting, resume framing, and interview preparation all change.
 
 ## Success Criteria
 
-- Resume surfaces the full value of Tyler's Marine Corps background (leadership, operational accomplishments, transferable skills)
-- Projects section demonstrates hands-on coding ability
-- Technical skills section reflects real breadth
-- Resume passes ATS scans for target job descriptions
-- Interview callback rate meaningfully improves
+- Tyler has a clear view of which role(s) to target and why
+- He understands the realistic path to PM (APM programs, startup PM, defense tech PM)
+- Resume and outreach are framed appropriately for the target role(s)
+- He knows what preparation the PM interview process requires
+

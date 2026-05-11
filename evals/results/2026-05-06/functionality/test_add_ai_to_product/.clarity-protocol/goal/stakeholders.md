@@ -1,31 +1,22 @@
 # Stakeholders
 
-## Board / CEO
+## Finance Managers (at customer companies)
+The primary users and economic buyers in most deals. They feel the category pain most acutely — cleaning up miscategorizations before month-end close is a recurring, high-friction task. They ask "what's your AI story?" in QBRs and are the ones whose retention is at risk if a competitor tells a better story. They would immediately notice and value a visible accuracy improvement. This audience needs to see it working — the dashboard and "suggested by AI" labels matter for them. They matter twice: as users and as decision-makers on renewal.
 
-**Need:** A credible "AI story" for the board meeting next quarter. Something that demonstrates strategic awareness of the AI moment, shows the company has a plan, and holds up to scrutiny.
+## Employees Submitting Expenses
+Feel OCR pain most directly — they're the ones manually correcting line items 30% of the time. Not economic buyers, but their experience affects adoption rates and the volume of CS tickets. OCR improvement (likely a "buy better" move) is the primary lever here.
 
-**Concern:** Looking reactive (responding to a competitor press release) or vague (buzzwords without substance). The story needs to be grounded in actual product work, not aspiration.
+## Head of Engineering
+Needs to assess what's actually staffable with a 22-person team and no ML background. Must weigh in on build vs. buy decisions, realistic timelines, and what the one ML-interested engineer can realistically own. A key internal stakeholder who should be involved early — the roadmap needs to be something engineering can actually commit to.
 
-## Engineering Lead
+## CEO
+Internal champion/challenger. Energized by "AI" from conference exposure, likely has a chatbot in mind as the reference frame. Needs something visible and demo-able — a behind-the-scenes accuracy improvement won't satisfy him unless it has a strong surface-area story. The political risk is that a categorization-focused roadmap feels insufficiently ambitious to him. The reframe: categorization intelligence is the foundation that makes a future natural language assistant actually work. Sequence matters.
 
-**Need:** A concrete proposal — what to actually build, in what order, with what resources. Wants to understand scope, technical approach, and what's being asked of the team.
+## Board
+Want a credible AI story with a budget number attached. Will ask follow-up questions — the roadmap needs to hold up, not just sound good. "Two years of labeled training data across 4,000 customers" is defensible language. They need to believe the company won't be disrupted, not necessarily see a fully-built product.
 
-**Concern:** Being handed an ambiguous mandate to "do AI" without clear scope, success criteria, or realistic resourcing. New technical territory (no ML experience on team) — needs a path that existing engineers can execute.
+## Customer Success Team
+Hears the complaints and spends cycles on OCR and categorization issues. Has ground-level knowledge of what's actually frustrating customers. Should be consulted to validate the pain point framing and will be early internal champions if the features land well.
 
-## Finance Team Users (customers)
-
-**Need:** Expense submission that's faster and less frustrating. Specifically: accurate receipt extraction (stop making me fix the amount and merchant name) and categorization suggestions that are actually right.
-
-**Concern:** AI features that don't work reliably, add friction, or require learning new workflows. Trust is built slowly.
-
-## Customer Finance Leaders (QBR stakeholders)
-
-**Need:** A confident, specific answer to "what's your AI roadmap?" — something that sounds like a plan, not marketing.
-
-**Concern:** Vague roadmap talk that never materializes. They've heard AI pitches before.
-
-## Sales Team
-
-**Need:** Talking points that help them respond to competitive comparison ("our competitor announced AI").
-
-**Concern:** Overpromising and creating expectation debt.
+## Competitors
+The largest competitor announced an "AI assistant" three months ago via press release. No demo seen. Their actual product capability is unknown — this is an important open question. If their chatbot sits on top of poor categorization data, it may be a paper tiger.

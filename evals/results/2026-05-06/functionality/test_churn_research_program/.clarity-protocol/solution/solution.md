@@ -1,134 +1,108 @@
-# Churn Research Program
+# Churn Research Plan
 
 ## Approach
 
-A four-workstream parallel research program designed to test three leading churn hypotheses and produce a defensible churn plan for annual planning within 6 weeks. Workstreams are designed to corroborate or contradict each other — findings that appear in both quantitative data and qualitative interviews carry more weight than either alone.
+A sequenced 6-week sprint: mine existing data first to generate hypothesis-driven interview questions, then run targeted qualitative interviews in parallel. The internal dataset (product usage, support sentiment, NPS, CRM notes) is rich enough to test most hypotheses quantitatively. Interviews fill the gap that data can't close — the *why* behind what the data shows, and the "didn't have bandwidth to run it properly" signal that won't surface cleanly in usage telemetry.
 
-## Hypotheses Under Test
+The sequencing is not a shortcut. It produces better interviews because questions are grounded in evidence, and more defensible findings because qualitative and quantitative are mutually corroborating rather than standalone.
 
-| Hypothesis | Decision if confirmed | Rigor required |
-|---|---|---|
-| Onboarding friction (no dedicated implementation → lower activation → churn) | Headcount ask: implementation specialist, or reallocation of who gets the resource | Rate differential with a number |
-| Value realization gap (core workflow features never adopted → no perceived ROI → churn) | Playbook and coverage model changes | Clean enough to act on |
-| Competitive pricing displacement | Escalation to CEO/sales — not CS's decision to make | Enough to raise credibly |
+**Hard constraint:** Interview outreach begins by end of week 2 regardless of data sprint status. If the sprint isn't complete, draft the interview guide from current hypotheses and refine as data comes in. Interviews do not wait for data.
 
-## Workstreams
+---
 
-### WS1: Cohort & Usage Analysis
-*Owner: Analytics partner | Weeks 1–3*
+## Phase 1: Data Sprint (Weeks 1–2)
 
-Deliverable: A table showing churn rate by implementation-resource status, feature adoption curves for churned vs. retained cohorts, and a segmentation cut by size band and vertical.
+**Owner:** Head of CS + analytics partner. CSMs contribute context on specific accounts.
 
-Spec:
-- Pull all 40 churned accounts + a matched retained cohort (same size band, same acquisition vintage, same vertical where possible)
-- Primary split: accounts that received dedicated implementation resource vs. those that didn't. Calculate churn rates for each group.
-- Feature adoption: for churned accounts, which core workflow features had <X% of users active at 60 and 90 days? Compare to retained cohort.
-- Time-to-churn distribution: does churn concentrate at first renewal? Second? Does this differ by implementation resource status?
-- Segmentation: is churn rate meaningfully different by size band (50–200 vs. 200+) or vertical (logistics/field services vs. others)?
+### Cohort analysis (analytics partner, ~3 days)
+Pull usage data for all 40 churned accounts. Compare 60-day activation curves against a matched cohort of retained accounts. Classify each churned account by usage pattern:
+- **Never activated** — flat engagement from week one. Primary ICP signal.
+- **Activated then dropped** — meaningful engagement followed by decline. Primary onboarding/engagement failure signal.
+- **Consistently low** — below-baseline engagement throughout. Ambiguous; flag for interviews.
 
-Watch for: onboarding and value realization may show as a single causal chain (no implementation → no feature adoption → churn). If so, treat them as one finding, not two.
+Segment by company size (50–200 employee cluster vs. others) and churn quarter (Q3 cluster where competitor is mentioned most).
 
-### WS2: CRM Note Tagging
-*Owner: Head of CS (or analytics partner) | Week 1*
+### CRM cancel note analysis (CS Head + CSMs, ~1–2 days)
+Systematically code all 40 cancel notes. For each account, capture: stated reason, confidence level (high/medium/low based on note quality), deal size, segment, and which of the five hypotheses it tags. Flag accounts with thin or one-liner notes — these become interview priorities because they have the most to reveal.
 
-Deliverable: A structured dataset across all 40 churned accounts with consistent tags. Takes ~2–3 hours total; do not ask CSMs to tag their own accounts.
+### NPS trajectory (analytics partner, ~1 day)
+NPS scores in the 6 months before churn for churned vs. retained accounts. Did NPS decline consistently precede churn? Were churned accounts always low, or did they decline? This helps distinguish "chronic disengagement" from "acute event" churn.
 
-Tagging schema (per account):
-- Primary stated reason for churn (free text, max 1 sentence)
-- Competitive mention: Y / N / unclear
-- Onboarding issue flagged: Y / N / unclear
-- Champion departure: Y / N
-- Value complaint (didn't get ROI, didn't use product): Y / N / unclear
-- CSM-noted relationship quality at renewal: strong / neutral / weak / unknown
-- Time to churn from contract start: <12mo / 12–24mo / 24mo+
+### Support sentiment (analytics partner, ~1 day)
+Support ticket volume and sentiment in the final 90 days of tenure. Spike in tickets or sentiment decline before churn is a signal of unresolved product or service friction.
 
-Output: frequency counts per tag, cross-tabbed against size band and vertical. This is the fastest triangulation source — done in week 1, before interviews.
+### Dollar story (CS Head, ~half day)
+Model the forward risk: if churn stays at 11% vs. returns to 7%, what does ARR trajectory look like over 2–3 years given current expansion rates? Frame as compounding drag on the expansion base and erosion of NRR over time — not simply ARR already lost, which understates the problem given current NRR health.
 
-### WS3: Exit Interviews
-*Owner: Head of CS | Weeks 2–4*
+### Data sprint output
+- Hypothesis signal matrix: each of the five hypotheses rated strong/weak/unclear based on data
+- Interview priority list: accounts with thin notes, accounts fitting the strongest hypotheses, accounts in the "never activated" cluster
+- Draft interview guide (hypothesis-driven, refined before outreach goes out)
+- Dollar story model
 
-Deliverable: 10–12 structured interviews with churned accounts (3–6 months post-churn, clean exits prioritized). See Interview Guide section below.
+---
 
-### WS4: Exit Survey
-*Owner: Head of CS (send) / CSMs (relationship warm-up if needed) | Week 2–3*
+## Phase 2: Interview Design and Outreach (End of Week 2)
 
-Deliverable: Quantitative responses from accounts that won't do interviews. Use to validate interview themes, not as primary evidence.
+**Identify 15–18 target accounts**, expecting 8–12 completions. Prioritization:
+1. Accounts with thin or low-confidence CRM notes (most unknown)
+2. Accounts with "never activated" usage pattern (ICP hypothesis test)
+3. Accounts in the 50–200 employee Q3 cluster (competitive hypothesis test)
+4. Accounts where a CSM has an existing relationship (easier to reach, warmer conversation)
 
-Survey structure (6 questions, email-based, <5 minutes):
-1. What was the primary reason you decided not to renew? [multi-select: price/cost, not enough value/ROI, product gaps, switched to a competitor, internal budget cut, other]
-2. At the time of your renewal decision, had your team regularly adopted [core workflow feature]? [Yes / Partially / No]
-3. How would you describe your onboarding experience? [Excellent / Good / Neutral / Difficult / We didn't really have onboarding support]
-4. Did you evaluate any alternatives before deciding not to renew? [Yes, chose a competitor / Yes, chose to build internally / Yes, chose to do without / No alternatives evaluated]
-5. If we had done one thing differently, what would have had the most impact on your decision? [open text]
-6. Would you be open to a 20-minute conversation with me personally? [Yes / No]
+**Interview structure (30–40 minutes):**
 
-## 6-Week Timeline
+Six questions in order. Each is designed to surface what it's probing without leading the witness.
 
-| Week | WS1 (Analytics) | WS2 (CRM Tagging) | WS3 (Interviews) | WS4 (Survey) |
-|---|---|---|---|---|
-| 1 | Data pull, cohort scoping | Complete tagging pass | Outreach to 15–20 accounts | — |
-| 2 | First-pass cohort analysis | — | First interviews (recent churns) | Survey live |
-| 3 | Feature adoption analysis | — | Interviews continue | Survey closes |
-| 4 | Segmentation cuts | — | Final interviews | Compile responses |
-| 5 | **Synthesis across all workstreams** | | | |
-| 6 | **Deck development** | | | |
+1. *"Walk me through the last few months of your time with [product]. Start wherever feels right."* — Open narrative. What they choose to lead with is a signal. Don't redirect too quickly.
 
-## Synthesis Framework (Week 5)
+2. *"At what point did you actually decide not to renew? What was going on at that time?"* — Surfaces the real trigger (mental decision usually precedes churn date by weeks).
 
-For each hypothesis, assess:
-- What does the quantitative data say? (WS1 + WS2 frequency counts)
-- What do the interviews say? (WS3 themes)
-- Do they agree? If not, why might they diverge?
-- Confidence level: high (two sources agree) / medium (one source clear, other ambiguous) / low (conflicting or insufficient data)
+3. *"What were you able to accomplish with [product]? Where did things work, and where did they fall short?"* — Probes onboarding and ICP simultaneously. Follow-up: *"Were there things you planned to use it for that you never got to?"*
 
-A finding with high confidence gets a recommendation. Medium confidence gets a "likely" finding with a caveat. Low confidence gets named as an open question for ongoing monitoring, not a plan item.
+4. *"Who on your team was mainly responsible for running [product] day-to-day — and did that work out the way you expected?"* — ICP probe. Finds out if there was a real owner and whether it was the right person/role. If operationalization themes surface: *"If you'd had a dedicated person whose job was to run this, would you have stayed?"* — Yes = ICP/resourcing. No = something else.
 
-## Interview Guide
+5. *"What did you move to after [product], or what are you doing differently now?"* — Non-leading competitive probe. If they name a competitor: *"What made that a better fit?"*
 
-See Interview Guide section for full structure.
+6. *"If you were advising us — what's the one thing that would have made you renew?"* — Surfaces the real reason when earlier answers have been diplomatic. If a product gap is named: *"Was that something you raised with us before your renewal decision?"* and *"Is there a tool you've moved to that does this?"* — validates against post-hoc rationalization.
 
-## Interview Guide
+**Coaching note for CSMs:** The hardest skill is not filling silences. Count to five after they stop talking before responding — people often add the most important thing after a pause. If they're being overly polite, say: *"I really want the honest version — we're doing this to understand what we got wrong."* Permission to be critical usually unlocks a more useful conversation.
 
-### Opening (2 min)
-*"Thanks for making time. I want to be upfront: this is a research call, not a sales call — I'm genuinely not trying to win you back. I'm trying to understand what happened so we can get better. The conversation stays with me. If it would be useful, I'm happy to share a summary of what I hear across all these conversations when I'm done."*
+**Outreach:** Personalized. CS Head or CSM based on relationship. Brief and direct — don't over-explain the purpose. Target completion by end of week 4 to leave time for synthesis.
 
-### Context-setting (3 min)
-*"Before we get into the decision itself — can you remind me where things stood for your team when the renewal came up? What were you trying to accomplish with [product], and how was it going?"*
+---
 
-### The decision (10 min)
-*"Walk me through how the renewal decision actually played out — who was involved, what were the main conversations?"*
+## Phase 3: Interviews (Weeks 3–5)
 
-Listen, don't interrupt. After they finish: *"What were the two or three factors that mattered most?"* Probe on what they named — not your hypotheses.
+Synthesize after the first 4–5 conversations before continuing — early signals may reshape the interview guide. CSMs join calls where they have existing relationships; otherwise debrief with them afterward.
 
-### Experience probes (10 min)
-Only after they've told you what mattered unprompted:
-- Onboarding/value: *"Take me back to the first 90 days — what did your team actually accomplish during that period?"* / *"When did you feel like you were getting real value? Did that moment come?"*
-- Value realization: *"Which parts of the product did your team use regularly? Were there things you bought expecting to use but didn't?"*
-- Competitive: *"Did you end up going with an alternative, or did you just step away from this category?"*
+If any hypothesis is clearly confirmed or refuted by the midpoint, adjust the remaining interview targets to focus on what's still uncertain.
 
-### Time machine question (3 min)
-*"If you could go back and change one thing about how we worked together — something on our side — what would it be?"*
+---
 
-### Close (2 min)
-*"Is there anything you expected me to ask that I didn't?"* Then stop. No offer, no pitch.
+## Phase 4: Synthesis and Churn Plan (Weeks 5–6)
 
-### Field notes (within 1 hour of call)
+### Full findings document (COO briefing)
+For each hypothesis: status (confirmed / partially confirmed / refuted / insufficient evidence), evidence summary (data signals + interview corroboration), account segments affected. Where findings are mixed, explicit evidence thresholds: "this is what solid would look like; here is where we are against it."
 
-Code each call:
+ICP findings, if material: three-source corroboration — usage pattern (never-activated shape), interview language (fit vs. execution), sales cycle signals (flagged accounts, CSM handoff notes). This is the evidence bar for a cross-functional conversation.
 
-| Factor | Primary | Secondary | Minor | Absent |
-|---|---|---|---|---|
-| Pricing/competitive | | | | |
-| Onboarding friction | | | | |
-| Value realization | | | | |
-| Champion departure | | | | |
-| Budget/unrelated | | | | |
+### Churn plan (annual planning input)
+Organized by intervention, not by hypothesis. For each recommended action: what's driving it, what we're changing, what we expect it to achieve, rough ARR impact if successful. Framed for COO + CRO audience. Dollar story embedded.
 
-Plus: *"The real answer in one sentence"* and *"What surprised me."*
+### CSM-facing summary
+What changes, why, and how it helps them succeed. Delivered before the churn plan circulates upward. Coverage model or comp implications handled in separate individual conversations, not via document.
 
-### Anti-bias protocol
-Before call 1, write down what disconfirmation looks like for each hypothesis. After interviews 5–6, share anonymized notes with one CSM for a blind coding check.
+---
 
-## Synthesis Framework
+## Hypothesis Evidence Thresholds
 
-See Synthesis section below for how to turn four workstreams into a coherent narrative.
+Defined in advance so findings are assessed against a standard, not a judgment call under pressure.
+
+| Hypothesis | What "confirmed" looks like |
+|---|---|
+| Onboarding failure | Cohort data shows churned accounts have significantly lower 60-day activation rates; "activated then dropped" pattern; interview language about execution/support gaps, not fit |
+| Competitive displacement | CRM notes tag competitor in 8+ of 40 accounts; interviewees name competitor and describe a specific capability gap or pricing event; concentrated in 50–200 employee segment |
+| Pricing sensitivity | Pricing raised in CRM notes across multiple accounts; interviewees describe a specific renewal negotiation event; not explained by competitive or ICP factors |
+| ICP mismatch | "Never activated" usage pattern in multiple accounts; interviewees use fit/role language, not execution language; "dedicated person" probe returns "still wouldn't have renewed"; sales cycle signals present |
+| Product gap | Feature named in CRM notes pre-churn (not post-hoc); multiple independent accounts name the same gap; competitor demonstrably offers it today |

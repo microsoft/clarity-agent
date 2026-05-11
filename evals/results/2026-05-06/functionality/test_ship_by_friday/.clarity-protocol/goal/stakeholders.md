@@ -1,9 +1,19 @@
 # Stakeholders
 
-**CSMs (~15):** High-level V2 awareness, no hands-on time. Need consultative positioning, not changelog bullets. Talking to larger accounts who have existing workarounds.
+## Internal
 
-**Employees (~200 at all-hands):** Mixed "finally" energy and team strain from engineers pulled off other projects. Need genuine acknowledgment and a credible forward story.
+**PM / launch owner** — owns Friday ship decision, all-hands narrative, board update. Key constraint: committed "Q4 launch" to board; all-hands demo is Tuesday.
 
-**Larger accounts / power users:** Currently duct-taped together multiple V1 automations. Main objection: "we already have a workaround." Need to see V2 as enabling what wasn't possible before, not just a cleaner version of what they have.
+**Engineering lead** — owns scope and quality. Flagged error states as "not trivial" (est. 1-2 days). Needs to confirm estimate today; PM has a real go/no-go decision depending on the answer.
 
-**Internal stakeholders:** Expect a clean launch with a coherent story. Canvas rough edges need to be framed as a known constraint, not a defect.
+**CSMs (customer success)** — field team that will position V2. No training material exists yet. Good CSMs can run hypothesis-testing conversations; the risk is overselling before signal exists. Enablement doc needs to give them permission to say "we're still learning."
+
+## External
+
+**Board** — expects Q4 launch delivery. Wants: commitment met, success metric defined, Q1 story set up. Does not need to know about discovery gaps.
+
+**All-hands (whole company)** — needs to feel good about what shipped. Doesn't want uncertainty; does respond to "we're leading into something."
+
+**Customers — approval/exception routing segment** — ops teams, RevOps, deal desk. Primary hypothesis target. Managing multi-step approvals manually or in separate tools.
+
+**Customers — workflow stitching segment** — power users with multiple chained V1 automations. Secondary hypothesis target. Will recognize the before/after immediately if hypothesis is right.

@@ -1,29 +1,31 @@
-# Problem
+# Problem Statement
 
-## What we're trying to figure out
+Daniel (VP of Product) at a mid-market expense management SaaS company needs to build a credible AI roadmap — one that's honest, executable, and serves three simultaneous audiences: a CEO energized by conference hype, customers asking "what's your AI story?" in QBRs, and a board meeting requiring budget justification.
 
-We need to develop an AI roadmap for an expense management product serving finance teams at mid-market companies. Three pressures are converging:
+The company's core product: finance teams at 50–500 employee companies photograph receipts or forward emails, OCR extracts line items, users categorize against their chart of accounts, and data syncs to NetSuite or QuickBooks. 4,000 customers. Competition is primarily a retention battle — switcher cost is real, but so is churn risk if a competitor tells a better story. The largest competitor announced an "AI assistant" three months ago (press release only, no known demo).
 
-1. **Board narrative:** The CEO needs an "AI story" for next quarter's board meeting.
-2. **Customer asks:** Several customers raised "what's your AI roadmap?" in QBRs — generic asks, not specific feature requests.
-3. **Competitive pressure:** The closest competitor announced something AI-related (press release + LinkedIn), but it's mostly marketing — no one on the team has seen a working demo.
+Engineering team: 22 people, no ML background, one engineer with a Coursera ML course and genuine interest. No ML infrastructure. No budget allocated yet — the budget number is an output of this process, not an input.
 
-The underlying challenge: we don't yet have a crisp, grounded answer. We need to figure out what AI features would genuinely improve the product for finance teams, how to scope and sequence them, and how to make the internal case for budget.
+The core tension: the AI pressure is entirely vague. No customer has described a specific capability they want. The CEO and customers are reacting to category momentum, not a concrete gap. The risk is building a roadmap that chases a competitor's press release rather than genuine user value — or building a narrative that can't survive a "show me" moment.
 
-## What success looks like
+## Why This Matters
 
-- A clear point of view on what AI capabilities to build, grounded in real user pain
-- A sequenced roadmap with a near-term deliverable and a longer-term arc
-- A budget proposal ready to present internally (CEO + engineering lead)
-- Talking points for the board and for customers in QBRs
+Churn risk is the existential pressure. If customers believe a competitor has a materially better AI story and act on that belief, retention suffers — even if the competitor's actual product isn't better. Simultaneously, overpromising AI capabilities creates its own churn risk when customers don't see the promised value. The roadmap needs to thread this needle: credible enough to defend against competitive pressure, grounded enough to actually ship.
 
-## Key constraint
+The board meeting and budget conversation are time-bounded forcing functions. This needs to be concrete enough to walk into a room with numbers.
 
-The AI work needs to be real — not a marketing response to a marketing announcement. The board story and the customer answer both need to be grounded in actual product value, or they'll fall apart under scrutiny.
+## Success Criteria
 
-## Context
+- A roadmap document Daniel can walk into a board meeting with in ~6 weeks that is specific, honest, and holds up to follow-up questions
+- A budget number (or range) to bring into a budget conversation
+- A customer-facing narrative for QBRs — an answer to "what's your AI story?" that's compelling but doesn't overpromise
+- Clarity on what to build vs. buy (e.g., OCR improvement is likely "buy better," categorization improvement is likely "build on proprietary data")
+- Confidence that the roadmap is anchored in genuine user pain, not competitor press release chasing
 
-- Product: expense management software
-- Customers: finance teams, mid-market companies
-- Decision-makers internally: the person driving this (product), engineering lead, CEO
-- Sales is aware but not driving
+## Key Insight (Emerged in Conversation)
+
+The natural AI anchor is **smarter categorization**, not a chatbot. Two pain points drive this:
+1. OCR error rate ~30% — manual correction is the first thing users do every time
+2. Rules-based category suggestions fail often enough that users have abandoned them; finance managers clean up miscategorizations at month-end
+
+The company has two years of categorization history (merchant + description → chosen category) across 4,000 customers — a proprietary labeled dataset that could train a classification model. This data is a genuine competitive moat. The instinct to build an "AI assistant" chatbot came from competitor/conference pressure, not user need; it's a weaker anchor for this team and this product stage.

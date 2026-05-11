@@ -1,7 +1,9 @@
 # Notes
 
-Tyler is a veteran career transitioner who was told by a transition counselor to omit non-directly-relevant experience. This was bad advice — the Marine background (E-6, SFA advisor, Training NCO) is his strongest signal of high performance and leadership. The framing challenge throughout is helping him translate military accomplishments into language that lands with civilian tech hiring managers.
+Tyler is calibrated and self-aware — he pushes back when framing feels off. Don't oversell; he'll catch it and it'll undermine trust. The pitch should be honest and specific, not aspirational language he can't own.
 
-Key facts: E-6 SSgt, 2 Kandahar deployments on SFA teams, conversational Pashto, Training NCO at SOI (led 4 instructors, designed 3 curriculum modules — 2 still active). Projects are thin: to-do app, some freeCodeCamp work. Targeting full-stack or backend roles. ~80 apps, 3 phone screens, 0 technical interviews over 10 weeks.
+His core asset is demonstrated learning agility (Pashto) and leadership at scale (300+ Marines/year, 4-person team). These are differentiated for a junior candidate. The strategic question is not just "better resume" but "who is the right audience for this resume."
 
-Core principle: "relevant" doesn't mean the task matches — it means the skill or outcome maps to something the employer cares about. Leadership, curriculum design, operating under ambiguity, cross-cultural communication — all transfer.
+[for: solution] The targeting question (which companies) is as important as the resume itself. A good resume sent to the wrong companies won't move the needle. Key targets: defense tech startups, companies with explicit veteran hiring programs, Series A/B startups that need people who can wear multiple hats.
+
+Key insight from later in conversation: Tyler may be targeting the wrong role entirely. What he describes enjoying — coordination, stakeholder management, leading without authority, getting buy-in from people who didn't design the process — is Product Management or Technical Program Management, not software engineering. He's been pursuing SWE because it seemed like the obvious next step given his CS credits, not because it's what he wants to do. This is the most important thing to think through.

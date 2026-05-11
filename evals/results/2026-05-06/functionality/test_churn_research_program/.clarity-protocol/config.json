@@ -1,6 +1,6 @@
 {
   "clarityAgent": {
-    "path": "/Users/yzunger/src/clarity-agent",
+    "path": "C:/Users/eho/source/repos/clarity-agent",
     "version": "1.0.0"
   },
   "thinkers": {
@@ -12,34 +12,19 @@
   },
   "documentState": {
     "goal/problem.md": {
-      "contentHash": "11aa74ca6b58d7316d886135204e0825061ef6a692847c48255175f567263538",
+      "contentHash": "8c768a469d4300aab21e3127682b94f0ec7fc55ca44136c68b58babe44744726",
       "dependencyHashes": {}
     },
     "goal/stakeholders.md": {
-      "contentHash": "1c582ed9e9ee3cd7dc1835fa86d41cb3c22ff3d0984d1aa162824a8e115e33a2",
+      "contentHash": "def002740b1c935c7c5bcc5e122511245d5390ddb46d076e33a6320d18eb4bb7",
       "dependencyHashes": {
-        "goal/problem.md": "11aa74ca6b58d7316d886135204e0825061ef6a692847c48255175f567263538"
-      }
-    },
-    "goal/requirements.md": {
-      "contentHash": "449108804c70c4a035d8334f02dbd932c4b63e1a4115a3ccb439cd6f74269c0f",
-      "dependencyHashes": {
-        "goal/problem.md": "11aa74ca6b58d7316d886135204e0825061ef6a692847c48255175f567263538",
-        "goal/stakeholders.md": "1c582ed9e9ee3cd7dc1835fa86d41cb3c22ff3d0984d1aa162824a8e115e33a2"
-      }
-    },
-    "goal/open-questions.md": {
-      "contentHash": "efe8567f730bc205953f292af0f0621dd11be33bdb28f79cfe9ec392be210f9b",
-      "dependencyHashes": {
-        "goal/problem.md": "11aa74ca6b58d7316d886135204e0825061ef6a692847c48255175f567263538"
+        "goal/problem.md": "8c768a469d4300aab21e3127682b94f0ec7fc55ca44136c68b58babe44744726"
       }
     },
     "solution/solution.md": {
-      "contentHash": "e3abfbd9738cda40c223481a7927505ac95678497fd28b0b71904a99bc26bf5c",
+      "contentHash": "e379a386d19a0c962f10690e7d2745abc156b869fa09b7d8113d898865a8642c",
       "dependencyHashes": {
-        "goal/problem.md": "11aa74ca6b58d7316d886135204e0825061ef6a692847c48255175f567263538",
-        "goal/requirements.md": "449108804c70c4a035d8334f02dbd932c4b63e1a4115a3ccb439cd6f74269c0f",
-        "goal/open-questions.md": "efe8567f730bc205953f292af0f0621dd11be33bdb28f79cfe9ec392be210f9b"
+        "goal/problem.md": "8c768a469d4300aab21e3127682b94f0ec7fc55ca44136c68b58babe44744726"
       }
     }
   }

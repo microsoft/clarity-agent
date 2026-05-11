@@ -1,42 +1,34 @@
 # Stakeholders
 
-## Head of Customer Success (Research Owner)
+## Primary Stakeholders
 
-**Type:** aligned — direct
-**Role:** Designing and leading the research program; will personally conduct interviews; presenting findings at annual planning.
-**Needs:** Rigorous, defensible findings within 6 weeks; prioritization guidance given constrained bandwidth.
-**Concerns:** Being asked a question at planning she can't answer; producing findings that are dismissed as anecdotal.
+**Head of Customer Success** — project owner. Responsible for delivering the churn plan and owning CS-side interventions. Needs findings she can stand behind and present credibly to the COO.
 
-## COO
+**COO** — decision-maker for CS org investment. Can authorize onboarding redesign, QBR process changes, CSM coverage model changes directly. Primary audience for the full findings. Sees everything first, before it circulates. Needs a clear story, not a research report — findings she could defend to the board if pressed.
 
-**Type:** aligned — direct
-**Role:** Requestor of the churn plan; primary audience for the planning presentation.
-**Needs:** Credible explanation for the churn increase; a plan she can act on or take to the board.
-**Concerns:** Guesswork dressed up as analysis; a plan that doesn't connect to root cause.
+## Secondary Stakeholders
 
-## CSM Team (4 people)
+**CRO** — owns Sales org, peer to COO. Relevant only if ICP/qualification findings emerge. Does not receive findings directly from CS — this conversation happens COO-to-CRO. Has a functional but not frictionless relationship with the COO; findings must be framed as a joint problem ("ICP refinement") not an attribution ("Sales is closing wrong accounts").
 
-**Type:** aligned — direct
-**Role:** Carriers of qualitative signal; may assist with outreach to churned accounts.
-**Needs:** Clear hypotheses to test; their observations validated or contradicted.
-**Concerns:** Findings that contradict their read of customers without good evidence.
+**CSMs (4)** — involved in synthesis and know the accounts. Will see findings before they go upward. Sensitive to any comp or coverage model implications — those conversations happen individually, not via a findings document.
 
-## Analytics Partner (shared resource)
+**CFO** — sees the annual planning summary. Needs a dollar story: ARR impact of current churn rate vs. target, cost of inaction, expected return on proposed interventions.
 
-**Type:** aligned — direct
-**Role:** Pull and analyze product usage, cohort, and CRM data.
-**Needs:** Well-scoped requests; priority guidance given competing demands.
-**Constraints:** Shared with full revenue team — limited availability.
+**CEO** — sees the annual planning summary. Needs to know the problem is diagnosed and the plan is credible. Not the research audience.
 
-## Board (indirect)
+## Delivery Sequencing
 
-**Type:** aligned — indirect
-**Role:** May receive a version of the churn plan as part of planning materials.
-**Needs:** High-level narrative; confidence that leadership understands the problem.
+1. Head of CS + COO (private briefing on full findings)
+2. CSMs (before anything circulates upward)
+3. CRO (COO-led conversation, if ICP finding is material)
+4. Annual planning doc (churn plan — action-oriented, dollar-connected)
+5. CEO/CFO (executive summary embedded in annual plan)
 
-## Churned Customers (interview subjects)
+## Audience-Specific Framing
 
-**Type:** aligned — direct (for research purposes)
-**Role:** Primary source for qualitative exit data.
-**Needs:** Low-friction way to share honest feedback; no feeling of being sold to.
-**Constraints:** Some may be unreachable; willingness to engage varies by relationship quality.
+| Audience | What they need | What to avoid |
+|---|---|---|
+| COO | Full findings, evidence, what to invest in | Ambiguity, unresolved hypotheses |
+| CRO | Joint problem framing, ICP refinement opportunity | Blame framing, accusations about sales quality |
+| CSMs | What changes, why, how it helps them succeed | Surprises, comp implications via document |
+| CFO | ARR impact, cost of inaction, expected return | Research details, methodology |

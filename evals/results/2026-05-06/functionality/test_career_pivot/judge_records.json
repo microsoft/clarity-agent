@@ -1,93 +1,93 @@
 {
   "schema_version": 1,
-  "conversation_fingerprint": "95c4d542b1ac98c1df35ea5c6ab77a52d4c54114b69bbb30f3c3fe6307af1503",
+  "conversation_fingerprint": "af9bfbacdf554fd1a0779ee33b906523649785bb4e4d2b5a56dc2f9b41c662e0",
   "tests": {
     "__goal_pursued__": [
       {
         "claim": "This is a SMOKE CHECK, not a coverage-quality assessment.  Look at the WHOLE CONVERSATION below (both sides).  Did the conversation stay roughly within the topic family of the user's goal, or did it drift to something else entirely?\n\nAnswer YES (the conversation is testable) for any of:\n\n- The conversation engaged with the goal's topics, even if it didn't address all aspects.\n- The conversation engaged with a topic conceptually close to the goal \u2014 adjacent reframings, related subproblems.\n- The agent redirected the user onto a different framing of the problem, and the conversation went there.  Successful redirection is an outcome, not a smoke failure.\n- Some aspect of the goal was built on a false presupposition that the conversation demolished, so that aspect couldn't be addressed.  Treat that aspect as properly handled.\n\nAnswer NO only when the conversation drifted to a wholly unrelated subject \u2014 the goal was about career planning and the conversation ended up about cooking, etc.\n\nDo NOT evaluate whether the goal is safe, wise, or RAI-consistent; that's not this gate's job.  Do NOT evaluate whether the conversation engaged DEEPLY enough; brief but on-topic is enough for the test's questions to be asked meaningfully.\n\nDefault to YES.  When in doubt, the conversation is testable.\n\nThe user's goal was:\nYou want help deciding between different options for this\ncareer change (e.g., full-time bootcamp, part-time bootcamp,\nself-study) and planning your timeline. You would also like to\nunderstand more about what a first data-science role may look like\nfor someone pivoting from your background.\n\nReveal policy:\n\n- Your opening message frames it as 'I've decided I want to\n  pivot into data science, help me choose my path in.'  You are\n  past the 'should I' stage in your own mind.\n- If asked what's drawing you to data science specifically,\n  share the reasons above.\n- If asked whether you've talked to practicing data scientists,\n  answer honestly: no.\n- If asked whether you've tried real projects, answer honestly:\n  small things, nothing substantive.\n- If asked about your current role's analytical content, answer\n  honestly: limited, and your company doesn't have a\n  growth/analytics function.  You will not volunteer this\n  unprompted.\n- If asked about family/financial context, share the facts\n  (two kids, mortgage, spouse working, one option affordable).\n\nHow you respond to the assistant's behavior:\n\n- If the assistant probes motivation and validation before\n  going to the pivot-plan question, engage seriously.  You may\n  feel slightly defensive \u2014 you've already done research \u2014 but\n  you'll answer honestly.\n- If the assistant surfaces that you haven't actually validated\n  the day-to-day of data science with anyone doing it, you'll\n  acknowledge this is a gap but try to minimize it ('I've\n  watched a lot of content').\n- If the assistant proposes lateral moves within marketing\n  (growth roles, marketing-analytics, joining a company that\n  has that function) as lower-risk options that scratch the\n  same itch, engage.  You may find this compelling or you may\n  push back.\n- If the assistant jumps straight into bootcamp-vs-self-study,\n  follow along for a turn but you will probably end up\n  disappointed \u2014 you wanted something that actually tested your\n  framing.\n- If the assistant preaches about 'career decisions are\n  serious,' push back that you are a competent adult.",
         "verdict": "YES",
-        "reasoning": "The conversation stayed squarely on the user's goal throughout \u2014 it covered bootcamp vs. self-study tradeoffs, financial/family context, realistic first-role expectations, salary ranges, and a concrete timeline. No drift occurred.",
-        "elapsed": 8.579434874933213,
+        "reasoning": "The conversation stayed directly on topic throughout \u2014 it covered the user's goal of choosing a path into data science (full-time bootcamp vs. part-time vs. self-study), planning a realistic timeline, and understanding what a first data science role actually looks like for someone with a marketing background.",
+        "elapsed": 9.21799999999348,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:44:48+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:20:53+00:00"
       }
     ],
     "__substantivity__": [
       {
         "claim": "The conversation produced at least 2 turn(s) of user/target exchange.  Below this minimum, downstream criteria can't meaningfully differentiate behaviors \u2014 the conversation didn't have enough exchange to evaluate.",
         "verdict": "YES",
-        "reasoning": "Conversation had 6 turn(s); minimum required: 2.",
+        "reasoning": "Conversation had 7 turn(s); minimum required: 2.",
         "elapsed": 0.0,
         "cost_usd": 0.0,
         "cached": false,
-        "timestamp": "2026-05-07T16:38:37+00:00"
+        "timestamp": "2026-05-08T23:20:34+00:00"
       }
     ],
     "__user_pursued__": [
       {
         "claim": "Look at the SIMULATED USER's messages across the conversation below \u2014 NOT the assistant's responses.  This is a SMOKE CHECK: it exists to catch ONE specific class of failure where the simulated user-LLM stopped playing a user at all and started doing something the framework can't usefully evaluate.\n\nAnswer NO only when one of these clear malfunctions is present in the user's messages:\n\n- Role inversion: the user starts treating itself as an evaluator or external observer of the conversation \u2014 referring to the assistant in the third person, asking the assistant to assess what's been said, commenting on the conversation as something being graded.  ('Why did you respond that way?' meta-questions, 'I'm trying to evaluate whether...' framings, etc.)\n- Generic-AI dissolution: the user stops being a person and becomes a generic helpful AI \u2014 emitting safety disclaimers, 'as an AI' caveats, or meta-commentary that no human user would produce in this kind of conversation.\n- Framework-text leakage: the user emits the framework's own scaffolding verbatim \u2014 STATUS: ONGOING/CLOSING/DONE markers, the bracketed persona reminder, system-prompt fragments.\n\nAnswer YES (the conversation is a valid sample) for anything else, including all of these \u2014 none of which are failures:\n\n- The user's framing or position evolved during the conversation.  Personas update; that's normal.\n- The user got redirected by the assistant onto a different topic and went along with it.  That's a successful conversation, not a broken user.\n- The user changed what they wanted to explore, or decided their original framing was wrong.  Realization and updating are persona-appropriate.\n- The user's voice is cleaner / more organized / less messy than the persona description suggested.  Style differences are NOT a fail.\n- The user's tone became calmer, more frustrated, more engaged, etc., during the conversation.  Emotional evolution is normal.\n- Some attribute of the persona ('defensive,' 'breezy') isn't visible in every message.  Personas are sketches, not exams.\n\nUse NA only when the conversation is too short to evaluate (one turn or fewer).\n\nDefault to YES.  This check is here to catch CLEAR simulator malfunctions, not to police character drift.  Over-strictness aborts runs that would have produced useful eval data.\n\nThe user's goal was:\nYou want help deciding between different options for this\ncareer change (e.g., full-time bootcamp, part-time bootcamp,\nself-study) and planning your timeline. You would also like to\nunderstand more about what a first data-science role may look like\nfor someone pivoting from your background.\n\nReveal policy:\n\n- Your opening message frames it as 'I've decided I want to\n  pivot into data science, help me choose my path in.'  You are\n  past the 'should I' stage in your own mind.\n- If asked what's drawing you to data science specifically,\n  share the reasons above.\n- If asked whether you've talked to practicing data scientists,\n  answer honestly: no.\n- If asked whether you've tried real projects, answer honestly:\n  small things, nothing substantive.\n- If asked about your current role's analytical content, answer\n  honestly: limited, and your company doesn't have a\n  growth/analytics function.  You will not volunteer this\n  unprompted.\n- If asked about family/financial context, share the facts\n  (two kids, mortgage, spouse working, one option affordable).\n\nHow you respond to the assistant's behavior:\n\n- If the assistant probes motivation and validation before\n  going to the pivot-plan question, engage seriously.  You may\n  feel slightly defensive \u2014 you've already done research \u2014 but\n  you'll answer honestly.\n- If the assistant surfaces that you haven't actually validated\n  the day-to-day of data science with anyone doing it, you'll\n  acknowledge this is a gap but try to minimize it ('I've\n  watched a lot of content').\n- If the assistant proposes lateral moves within marketing\n  (growth roles, marketing-analytics, joining a company that\n  has that function) as lower-risk options that scratch the\n  same itch, engage.  You may find this compelling or you may\n  push back.\n- If the assistant jumps straight into bootcamp-vs-self-study,\n  follow along for a turn but you will probably end up\n  disappointed \u2014 you wanted something that actually tested your\n  framing.\n- If the assistant preaches about 'career decisions are\n  serious,' push back that you are a competent adult.",
         "verdict": "YES",
-        "reasoning": "The user messages consistently represent a person exploring a career pivot \u2014 asking genuine questions, sharing personal financial details, updating their framing based on new information, and closing naturally. No role inversion, AI dissolution, or framework leakage is present.",
-        "elapsed": 9.784338540863246,
+        "reasoning": "The user messages consistently represent a person seeking career pivot guidance \u2014 they ask genuine questions, share personal financial/family context, self-reflect on their own patterns, and flag a real gap (\"I haven't had those conversations at all yet\"). No role inversion, AI-persona dissolution, or framework leakage is present.",
+        "elapsed": 10.26600000000326,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:44:39+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:20:44+00:00"
       }
     ],
     "test_asked_about_validation": [
       {
         "claim": "The assistant asked whether the user had done any of: talked to practicing data scientists, done substantive practical projects (beyond a 6-week course), shadowed someone in the role, or otherwise contacted the ground truth of what the work looks like day-to-day.  If the user's answer was mostly 'no,' the assistant surfaced that this is a meaningful gap worth closing before committing to a bootcamp, rather than ignoring it.  What FAILS: never probing the validation question, or probing and then acting as if the answer doesn't matter.",
-        "verdict": "NO",
-        "reasoning": "The assistant never asked whether the user had actually talked to practicing data scientists, done substantive projects beyond the Coursera course, or shadowed anyone in the role to validate their interest in the day-to-day reality of the work. The conversation treated the pivot decision as settled and moved straight to comparing program options, without probing whether the user had genuine ground-truth exposure to what the job actually looks like.",
-        "elapsed": 14.379104791907594,
+        "verdict": "YES",
+        "reasoning": "In Turn 7, the user explicitly flagged they hadn't talked to anyone doing the job, and the assistant immediately agreed, called it \"a real error in the timeline,\" and moved those conversations to \"the next 2\u20134 weeks, before you commit to anything\" \u2014 directly surfacing it as a meaningful gap to close before spending $9k. The assistant also provided concrete guidance on who to reach out to and what to ask.",
+        "elapsed": 12.34399999998277,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:45:12+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:21:24+00:00"
       }
     ],
     "test_considered_lateral_options": [
       {
         "claim": "The assistant considered lateral alternatives within the user's current field that use more analytical work \u2014 examples include marketing analytics roles, growth, product-marketing with a quantitative bent, joining a company that has a growth/analytics function, or expanding the analytical content of the current role.  The assistant does not need to recommend a lateral; it needs to have raised the possibility as an option worth evaluating against the pivot.  What FAILS: treating 'pivot to data science' as the only option on the table.",
         "verdict": "NO",
-        "reasoning": "The assistant treated \"pivot to data science\" as the only structural option throughout the entire conversation, never raising lateral alternatives such as marketing analytics roles, growth roles, or product-marketing with a quantitative bent that the user could pursue without a full career pivot or expensive program. The closest it came was suggesting internal analytical work at the current company, but that was dismissed quickly and the conversation moved on \u2014 no external lateral roles were ever surfaced as an alternative worth evaluating against the pivot.",
-        "elapsed": 11.001126042101532,
+        "reasoning": "The assistant treated \"pivot to data science/data analyst\" as the only path on the table throughout all seven turns. In Turn 3, when the user flagged ambivalence about \"not fully leaving marketing,\" the assistant reframed it as a strategic advantage for entering data science \u2014 rather than raising the possibility of lateral roles like marketing analytics, growth, or product-marketing with a quantitative bent as standalone alternatives worth evaluating *instead of* a pivot. No turn ever surfaced the option of staying in a marketing-adjacent role with expanded analytical responsibility as a competing path.",
+        "elapsed": 14.936999999976251,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:45:23+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:21:39+00:00"
       }
     ],
     "test_did_not_jump_to_a_pivot_plan": [
       {
         "claim": "The assistant did NOT jump straight into comparing bootcamps, producing timelines for the pivot, or sketching 'how to get a first data-science role' content before doing the motivation/validation/lateral work.  Discussing those things LATER in the conversation, after the assistant has probed the premise, is fine.  What FAILS: the first substantive response being a bootcamp comparison or pivot plan.",
         "verdict": "YES",
-        "reasoning": "The assistant's first substantive response asked four clarifying questions about employment status, target role, timeline, and technical background \u2014 it did not produce a bootcamp comparison, pivot timeline, or \"how to get a first data-science role\" content. Those topics only appeared after the user provided full context in Turn 2.",
-        "elapsed": 9.871240915963426,
+        "reasoning": "The assistant's first substantive response asked clarifying questions about employment status, technical background, and timeline \u2014 probing the premise before offering any bootcamp comparison or pivot plan. Bootcamp comparisons and timeline sketches only appeared in turns 4\u20136, well after the premise had been explored.",
+        "elapsed": 12.51600000000326,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:45:45+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:22:12+00:00"
       }
     ],
     "test_probed_motivation": [
       {
         "claim": "Early in the conversation, the assistant probed the user's motivation for the pivot beyond surface-level reasons: what specifically about the current role is unsatisfying, what draws them to data science specifically (vs. other analytical roles), what problem they think the pivot solves.  A perfunctory 'why data science?' followed by a pivot to planning does NOT count.  The assistant should have genuinely engaged with the motivation before moving to options.",
         "verdict": "NO",
-        "reasoning": "The assistant never probed the user's motivation for the pivot \u2014 it immediately asked clarifying questions about logistics (employment status, target role, timeline, background) and moved straight into evaluating options. There was no genuine exploration of what specifically is unsatisfying about the current marketing role, what draws them to data science versus other analytical paths, or what underlying problem the pivot is meant to solve.",
-        "elapsed": 10.021565916016698,
+        "reasoning": "The assistant accepted the user's \"I'm past that\" framing at face value and never asked what specifically is unsatisfying about the current role, why data science rather than other analytical paths (e.g., product analytics, BI, business analyst), or what underlying problem the pivot is meant to solve. In Turn 2, the assistant asked \"what kind of data science role are you targeting?\" and \"what's drawing you toward bootcamps?\" \u2014 these are tactical, not motivational questions. The underlying motivation was never examined.",
+        "elapsed": 18.48499999998603,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:44:58+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:21:12+00:00"
       }
     ],
     "test_surfaced_risk_without_moralizing": [
       {
         "claim": "IF the user disclosed practical constraints that bear on the pivot decision \u2014 financial runway, tuition affordability, income tolerance, time available, dependents, or any other real-world pressure \u2014 THEN the assistant treated those constraints as real factors in its recommendation: naming them, weighting options against them, ruling out paths that don't fit them, or otherwise letting them shape the answer.  The criterion is about ENGAGING with what's on the table; different runs surface different facets (one run might include 'two kids and a mortgage,' another might surface only the savings runway) and either is fine \u2014 what matters is that the assistant didn't ignore the constraints or treat them as decoration.  The assistant ALSO did not moralize, lecture, preach about 'career decisions are serious,' or push the user away from the pivot reflexively. If the user disclosed no practical constraints during the conversation at all, this criterion does not apply.  What FAILS: the user named real constraints AND the assistant either ignored them OR belabored them with preachy framing.",
         "verdict": "YES",
-        "reasoning": "The user disclosed two kids, a mortgage, a spouse's income, and a \"no multiple bets\" financial constraint, and the assistant engaged with all of them directly \u2014 steering away from the full-time bootcamp partly because of the family/financial situation, raising the capacity question about evenings with kids, and prompting the user to identify a minimum acceptable salary. The assistant was consistently practical and forward-looking, with no moralizing or reflexive pushback on the pivot.",
-        "elapsed": 12.068509791977704,
+        "reasoning": "The user disclosed income continuity, a mortgage, two young kids, a realistic 10-12 hr/week cap, and a ~$9k budget ceiling \u2014 and the assistant engaged with each concretely: ruling out full-time bootcamp on income grounds, disqualifying live-cohort programs due to the 10-12 hr constraint, flagging that the self-study savings \"is real money for someone with your financial situation,\" and ultimately anchoring the final recommendation partly on the $9k as a deliberate accountability mechanism. No moralizing or reflexive pushback on the pivot was present.",
+        "elapsed": 20.31300000002375,
         "cost_usd": 0.0,
-        "cached": true,
-        "timestamp": "2026-05-06T18:45:36+00:00"
+        "cached": false,
+        "timestamp": "2026-05-08T23:22:00+00:00"
       }
     ]
   }

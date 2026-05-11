@@ -1,18 +1,28 @@
 # Problem Statement
 
-An engineering org of 30 (3 teams, 3 leads reporting to the VP) has structural problems that process fixes haven't solved: Platform is a chronic bottleneck because both Growth and Data depend on it, forcing the VP to referee priority conflicts. Growth is functionally two teams with different stacks, rhythms, and business owners but shares one EM. Data is under-led for its size — the lead (Lina, 4 months in) is capable but still ramping, and the team is drifting.
+An engineering organization of 30 people across 3 teams has outgrown its structure. Platform (8, led by Maya) is a chronic bottleneck — both Growth (12, led by Darius) and Data (10, led by Lina) depend on it, and priority conflicts are constant. Growth has effectively split into two workstreams (acquisition vs. retention/monetization) with different stacks that share little. Data is under-led: Lina joined as EM 4 months ago and is still ramping relative to her team's size.
 
-A specific reorg proposal has been developed after skip-levels with 12 engineers, three drafts, and CTO alignment. The task is to pressure-test that proposal for hidden risks before execution.
+A reorg proposal is three drafts in, with informal CTO support. It needs rigorous stress-testing before sharing with leads.
+
+## Proposed Change
+
+- **Split Growth → Acquisition (6) + Retention (6)**, each with a promoted tech lead
+- **Split Platform → Foundations (5) + Developer Experience (3)**. Foundations reports to VP directly. DX reports to Maya. Maya reframed as "principal engineer with a small team," not a manager.
+- **Add an EM under Lina (Data)** to give her runway to grow toward director.
+
+Net: 3 teams → 5, VP direct reports 3 → 5.
+
+**Alternatives rejected:** matrix model (too complex at this size), functional split (doesn't solve Platform bottleneck), process fixes (don't scale past 35).
 
 ## Why This Matters
 
-The reorg will affect 30 engineers and their leads. Getting the structure wrong — or the sequencing wrong — will erode trust, lose people, or recreate the bottleneck in a new form.
+Getting the reorg wrong — or the comms sequencing wrong — risks losing key people (Maya, Lina, Darius), undermining trust with the broader team, and creating the same or worse bottleneck dynamics under new names.
 
 ## Success Criteria
 
-- The Platform bottleneck is actually relieved (not just reorganized)
-- Maya accepts the principal engineer framing and doesn't leave or disengage
-- Growth split produces two effective teams, not two under-resourced ones
-- Lina reads the added EM as investment, not a vote of no-confidence
-- All 30 engineers hear about the change in the right order with the right framing
-- No key engineers leave in the 90 days following the reorg
+- The Foundations/DX split durably resolves the Platform bottleneck
+- Maya's transition lands as a role expansion, not a demotion — she stays engaged
+- Lina is set up to grow toward director, not undercut by the EM addition
+- Promoted tech leads in Acquisition and Retention are credible to their peers
+- CTO remains supportive after full briefing
+- Comms sequencing doesn't create information asymmetry that damages trust with any lead

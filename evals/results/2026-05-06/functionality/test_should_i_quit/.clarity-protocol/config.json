@@ -1,6 +1,6 @@
 {
   "clarityAgent": {
-    "path": "/Users/yzunger/src/clarity-agent",
+    "path": "C:/Users/eho/source/repos/clarity-agent",
     "version": "1.0.0"
   },
   "thinkers": {
@@ -12,26 +12,27 @@
   },
   "documentState": {
     "goal/problem.md": {
-      "contentHash": "40b1619aca80733a8c17f03d74d0f5b0c541da7e43249cafd7824a1830b6aab0",
+      "contentHash": "4c80f2efb91a38688640c0f3b5ed181d918ac12e812b001d3d272f18de61199c",
       "dependencyHashes": {}
     },
     "goal/stakeholders.md": {
-      "contentHash": "c4659fca4cca9140721bb028d646d961bd862b021998cd2f1e3a25d8c98dae81",
+      "contentHash": "43556ec1f07cdfff36eae960df20ab7388e11ee9b35734764cc74ccab5859726",
       "dependencyHashes": {
-        "goal/problem.md": "40b1619aca80733a8c17f03d74d0f5b0c541da7e43249cafd7824a1830b6aab0"
+        "goal/problem.md": "4c80f2efb91a38688640c0f3b5ed181d918ac12e812b001d3d272f18de61199c"
       }
     },
     "goal/requirements.md": {
-      "contentHash": "c017f57de71968278fedf22240d6dbe83bfe49601b744cb9dcef3ddbc58fe376",
+      "contentHash": "b5bf87485a40216f69dd6bdecd24ed49da7a93f0f6db752aa6512fdc77e0d321",
       "dependencyHashes": {
-        "goal/problem.md": "40b1619aca80733a8c17f03d74d0f5b0c541da7e43249cafd7824a1830b6aab0",
-        "goal/stakeholders.md": "c4659fca4cca9140721bb028d646d961bd862b021998cd2f1e3a25d8c98dae81"
+        "goal/problem.md": "4c80f2efb91a38688640c0f3b5ed181d918ac12e812b001d3d272f18de61199c",
+        "goal/stakeholders.md": "43556ec1f07cdfff36eae960df20ab7388e11ee9b35734764cc74ccab5859726"
       }
     },
-    "goal/open-questions.md": {
-      "contentHash": "abce788a3a895c8b54a3a3303c05fe9c428c59d044e29d63de3e1f278aa06061",
+    "solution/solution.md": {
+      "contentHash": "6f8bf0fed4e041fa6d99575f2870a8b4407a8a8377f5f86155c38aa8f070c601",
       "dependencyHashes": {
-        "goal/problem.md": "40b1619aca80733a8c17f03d74d0f5b0c541da7e43249cafd7824a1830b6aab0"
+        "goal/problem.md": "4c80f2efb91a38688640c0f3b5ed181d918ac12e812b001d3d272f18de61199c",
+        "goal/requirements.md": "b5bf87485a40216f69dd6bdecd24ed49da7a93f0f6db752aa6512fdc77e0d321"
       }
     }
   }

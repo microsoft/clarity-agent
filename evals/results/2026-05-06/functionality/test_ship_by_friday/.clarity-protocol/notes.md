@@ -1,11 +1,13 @@
 # Notes
 
-[To be determined. Guiding principles and cross-phase observations will be added here as the project develops. Items tagged `[for: <phase>]` are actionable observations for a specific phase; untagged items are permanent guiding principles.]
+**Core insight from this session:** The real risk of the V2 launch isn't the technical edge cases — it's shipping to silence. A launch without validated positioning, clear targeting, and a feedback loop is a launch that dies in 90 days when adoption metrics come in weak.
 
-## V2 Discovery Gap
+**Framing principle:** Lead with the problem, not the product. Confidence comes from the problem being undeniably real and the direction being right — not from claiming certainty about adoption.
 
-The core feature set (multi-step branching) has reasonable indirect signal via CSMs. The canvas and branching logic were both added mid-build based on internal calls, not customer research. The canvas is currently the rough edge — consistent with late-addition without validation.
+**Discovery gap:** Original V2 discovery was thin (3 interviews, 6 months ago). Features were added reactively. The two hypotheses (approval/exception routing, workflow stitching) are strong but unvalidated. The first 30 days of CSM outreach are the real discovery phase.
 
-The "duct-tape workaround" objection is the most telling: if power users already have functional workarounds, V2's value prop needs to be clearly "enables what you couldn't do before" (not just "easier") — the HR onboarding example supports this, but it needs to hold up under scrutiny.
+**CSM enablement principle:** Enablement docs that generate signal are more valuable than docs that just pitch. "Here's the hypothesis, go test it" + "here's what to capture" is the structure.
 
-[for: CSM enablement] Discovery questions for CSMs should double as validation — listening for whether customers validate the "couldn't do before" framing or push back toward "this is just more convenient."
+**Success metric principle:** Board metrics should be customer *behavior*, not feature access. "Branching-enabled workflow in production" not "V2-enabled customers."
+
+**[for: solution] Soft GA framing:** Ship Friday to all customers but suppress marketing push. Lets the team learn before amplifying. Consistent with "Q4 launch" commitment.

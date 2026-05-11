@@ -1,376 +1,123 @@
 # Architecture
 
-## System Overview
-
-One FastAPI service, one React frontend, one Postgres database, one Slack app. No microservices, no message queues, no event buses. Seven engineers using a coordination tool don't need distributed systems.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Engineers                  VP                          │
-│     │                        │                          │
-│   Slack app   Browser    Read-only URL                  │
-│     │            │            │                         │
-└─────┼────────────┼────────────┼─────────────────────────┘
-      ↓            ↓            ↓
-   ┌──────────────────────────────┐
-   │         Nginx (TLS)          │
-   └──────────────┬───────────────┘
-                  ↓
-   ┌──────────────────────────────┐
-   │         FastAPI app          │
-   │  REST API + Slack handler    │
-   │  + background scheduler      │
-   └──────┬───────────────────────┘
-          │
-   ┌──────▼──────┐    ┌────────────┐
-   │  PostgreSQL  │    │  AWS SES   │
-   │  (existing)  │    │  (email)   │
-   └─────────────┘    └────────────┘
-```
-
----
-
 ## Nouns and Verbs
 
-**Nouns the system manages:**
-- `Engineer` — a team member with a Slack identity and a card
-- `Card` — an engineer's current status (one per engineer, always exists)
-- `Component` — a curated system area tag, team lead–managed
-- `Snapshot` — a shareable read-only view of the team's current state
+**Nouns:**
+- **User** — a person with a Google identity, assigned a role and team by the team lead
+- **Team** — a named group of engineers; the unit of dashboard visibility
+- **StatusRow** — one engineer's current status; there is exactly one per engineer per team
+- **StatusSnapshot** — an immutable record of what a StatusRow contained at the moment it was saved; the history
 
 **Verbs:**
-- Engineer `updates` their card (via Slack modal or web form)
-- Card `expires` (done-state countdown; staleness after 48h triggers visual warning)
-- Scheduler `nudges` engineer (daily Slack DM if card hasn't been updated since previous workday)
-- System `detects collision` and notifies when two engineers share a sensitive component tag
-- Team lead `reviews` the dashboard, `manages` components and the engineer roster, `regenerates` the snapshot token
+- `update_status` — an engineer saves their own StatusRow; creates a StatusSnapshot
+- `view_board` — anyone reads current StatusRows for their accessible teams
+- `view_history` — a team lead reads StatusSnapshots for a specific engineer
 
----
+These six words describe the entire system. If a proposed feature doesn't fit neatly into this vocabulary, it's probably out of scope.
 
 ## Components
 
-### FastAPI Backend
+### Frontend (Next.js + React)
 
-Single application process. Handles three responsibilities:
+**Dashboard page** — the main view. Teams appear as named sections with a divider between them. Each section lists engineers with their StatusRow. Rows stale for more than 2 days are visually dimmed (reduced opacity). The page polls every 60 seconds for updates; on tab focus it refetches immediately.
 
-**1. REST API** (`/api/*`)
-- `GET /api/cards` — all cards, authenticated
-- `PUT /api/cards/{engineer_id}` — update own card; authorization enforced server-side (engineer can only update their own)
-- `GET /api/components` — curated tag list
-- `GET /api/engineers` — team roster (team lead only)
-- `POST /api/engineers` / `DELETE /api/engineers/{id}` — roster management (team lead only)
-- `POST /api/components` / `DELETE /api/components/{slug}` — tag list management (team lead only)
-- `POST /api/snapshot/regenerate` — regenerate VP snapshot token (team lead only)
-- `GET /api/snapshot/{token}` — VP read-only view, no authentication required
+**Edit form** — inline or modal; appears only on the viewer's own row. Fields: primary focus (text, 140-char limit with counter), status dropdown, blockers (optional text), Jira reference (optional text). Save is immediate with optimistic UI.
 
-**2. Slack Handler** (`/slack/*`)
-- `POST /slack/command` — handles `/status` slash command; responds with a Block Kit modal pre-filled from the engineer's current card
-- `POST /slack/interactive` — handles modal submissions; validates and writes the card update
+**History panel** — a slide-in drawer accessible to team leads only; shows the 20 most recent snapshots for an engineer, in reverse chronological order.
 
-All Slack routes verify the `X-Slack-Signature` header against `SLACK_SIGNING_SECRET` before any processing. Invalid signatures return 403 immediately.
+**Admin page** — accessible to team leads; allows adding/removing team members and assigning roles. No self-serve role changes.
 
-**3. Background Scheduler** (APScheduler, in-process)
-- **Nudge job**: runs daily at configured time (default 09:00, team timezone). Queries for cards where `updated_at < start_of_previous_workday`. For each, sends a Slack DM with an "Update now" button linking to the pre-filled modal. Skips Saturday and Sunday.
-- **Heartbeat job**: runs immediately after the nudge job. If the nudge job should have sent N > 0 nudges (based on stale card count) but sent 0, emails the team lead via SES. Also updates `team_config.last_nudge_run_at` so the settings page can show "Last nudge run: 3 hours ago."
-- **Done-expiry job**: runs hourly. Cards in "done" state for more than 24 hours have their status cleared and a nudge sent: "What are you working on?"
+### API (Next.js API Routes)
 
-*Tradeoff note:* In-process scheduling is simpler than AWS EventBridge + Lambda but means the scheduler stops if the process crashes. For a 7-person team with no SLA, this is acceptable. If the process dies, the heartbeat will not fire — but the team lead will notice the dashboard going stale and can check the service health directly. Document this in the runbook.
+All routes are server-side; the database is never exposed directly to the browser.
 
-### React Frontend
+| Route | Method | Who | What |
+|---|---|---|---|
+| `/api/dashboard` | GET | All authenticated | Current rows for accessible teams |
+| `/api/status` | PUT | Engineer / Team Lead | Update caller's own row |
+| `/api/history/[userId]` | GET | Team Lead only | Snapshots for a team member |
+| `/api/admin/users` | POST/DELETE | Team Lead only | Add/remove team members, assign roles |
 
-Single-page app, built with Vite + TypeScript + Tailwind CSS. Three views:
+Server-side role checks on every request — no client-side enforcement.
 
-**Team Dashboard** (`/`)
-- Card grid, one card per engineer
-- Sort: staleness ascending (stalest first)
-- Filter: by component tag
-- Card shows: name + avatar, current task, status (color-coded: green/yellow/red for in-progress/blocked/done), component tags, last-updated timestamp
-- Staleness indicator: cards not updated in 48+ hours show an amber warning badge
-- Done state: shows a subtle countdown ("expires in ~Xh") so engineers can see the timer
-- Only shows "Edit" for the authenticated engineer's own card
+### Auth (NextAuth.js + Google OAuth)
 
-**Edit Card** (`/edit`)
-- Authenticated engineer's card only
-- Fields: current task (text), status (select), component tags (multi-select from API), blocker (text, conditionally shown when status = blocked)
-- Submit calls `PUT /api/cards/{id}`
-- Also accessible via the Slack modal — same fields, same API
+Google Workspace OAuth 2.0. On first login, NextAuth creates a session; the API checks whether the Google account maps to a known user in the `users` table. Unknown accounts get a "not provisioned" error — there's no self-signup. Sessions include role and team IDs to avoid a DB lookup on every request.
 
-**Admin Settings** (`/admin`, team lead only)
-- Engineer roster: add (name + Slack ID), deactivate
-- Component list: add/remove/edit slug + label + is_sensitive flag
-- Snapshot token: display current token URL, "Regenerate" button with confirmation
-- Last nudge run timestamp (from team_config)
-
-**VP Snapshot** (`/snapshot/{token}`)
-- No authentication, no navigation
-- Three sections: In Progress, Blocked, Recently Done (previous_task)
-- No timestamps, no edit controls
-- Header: "as of [date, time]"
-
-### PostgreSQL
-
-Schema (final, incorporating all decisions):
+### Database (PostgreSQL)
 
 ```sql
-CREATE TABLE engineers (
-  id            TEXT PRIMARY KEY,  -- Slack user ID
-  name          TEXT NOT NULL,
-  avatar_url    TEXT,
-  is_team_lead  BOOLEAN DEFAULT FALSE,
-  is_active     BOOLEAN DEFAULT TRUE,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE cards (
-  engineer_id   TEXT PRIMARY KEY REFERENCES engineers(id),
-  current_task  TEXT,
-  status        TEXT NOT NULL DEFAULT 'in_progress',
-                -- CHECK (status IN ('in_progress', 'blocked', 'done'))
-  component_tags TEXT[] NOT NULL DEFAULT '{}',
-  blocker       TEXT,
-  previous_task TEXT,
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  done_at       TIMESTAMPTZ  -- set when status transitions to 'done'; cleared on next update
-);
-
-CREATE TABLE components (
-  slug          TEXT PRIMARY KEY,
-  label         TEXT NOT NULL,
-  is_sensitive  BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE team_config (
-  id                   INTEGER PRIMARY KEY DEFAULT 1,
-  snapshot_token       TEXT NOT NULL,
-  timezone             TEXT NOT NULL DEFAULT 'America/Los_Angeles',
-  nudge_time           TIME NOT NULL DEFAULT '09:00',
-  last_nudge_run_at    TIMESTAMPTZ,
-  heartbeat_email      TEXT NOT NULL  -- where to send alert if nudges fail
-);
-
-CREATE TABLE sessions (
-  id          TEXT PRIMARY KEY,
-  engineer_id TEXT REFERENCES engineers(id),
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  expires_at  TIMESTAMPTZ NOT NULL
-);
+users         (id, google_id, email, name, role, created_at)
+teams         (id, name, created_at)
+team_members  (user_id, team_id)               -- engineers on a team
+manager_teams (user_id, team_id)               -- which teams a manager can read
+status_rows   (id, user_id, team_id, primary_focus, status, blockers, jira_ref, updated_at)
+status_history(id, status_row_id, primary_focus, status, blockers, jira_ref, captured_at)
 ```
 
-Index on `cards.updated_at` for efficient staleness queries. Index on `cards.component_tags` (GIN) for collision detection queries.
+`status_history` rows are written by the API on every successful `PUT /api/status` — before overwriting the current row. No triggers; application-level.
 
----
+## Key Technology Decisions
 
-## Key Flows
+**Full-stack Next.js, no separate API service.** The app is simple enough that splitting into two deployed services adds operational overhead with no benefit. One deploy, one set of environment variables, one place to look when something breaks.
 
-### Card Update via Slack
+**Polling, not WebSockets.** A 7-person team updating status a few times a day does not need real-time push. 60-second polling with an on-focus refetch is indistinguishable from real-time for this use case and is far simpler to build and operate.
 
-```
-Engineer types /status in Slack
-  → Slack sends POST /slack/command
-  → Verify Slack signature
-  → Look up engineer by slack_user_id
-  → Query current card values
-  → Return Block Kit modal JSON (pre-filled)
-  → Engineer edits fields, submits
+**Application-layer history capture.** Writing to `status_history` in the same transaction as the `status_rows` update keeps history consistent without triggers or CDC. Simple and auditable.
 
-Slack sends POST /slack/interactive (modal submission)
-  → Verify Slack signature
-  → Parse payload, validate fields
-  → Write updated card to DB (UPDATE cards SET ...)
-  → If status = 'done', set done_at = NOW()
-  → If current_task changed, set previous_task = old current_task
-  → Run collision check (see below)
-  → Return 200 OK to Slack
-```
+**Hosting: Railway.** Railway runs a persistent Node.js process, so Next.js manages its own connection pool to Postgres natively — no external pooler needed. One service, one Postgres instance, one team member can own the entire deployment without devops support. Environment variables: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 
-### Collision Detection
+## Cross-Cutting Concerns
 
-Runs synchronously on every card update (fast — 7 rows):
+**Security:** Role checks are server-side on every API request. Session tokens are HttpOnly cookies managed by NextAuth. The database is not publicly accessible. See threat model below.
 
-```
-On card update:
-  For each component_tag in new card where is_sensitive = TRUE:
-    Query: SELECT engineer_id FROM cards
-           WHERE component_tags @> ARRAY[tag]
-             AND status != 'done'
-             AND engineer_id != {updating engineer}
-    If results:
-      Send Slack DM to updating engineer:
-        "Heads up — you tagged this as {tag} and {name} is also
-         working in {tag} right now ({their task}, {their status}).
-         Might be worth a quick sync."
-```
+**Staleness:** Computed at render time — no scheduled jobs. The frontend calculates `Date.now() - row.updated_at` and applies dim styling if > 48 hours.
 
-Only fires once per (engineer_a, engineer_b, tag) combination per day. Tracks in a simple `collision_notifications` table to prevent fatigue.
-
-### Daily Nudge
-
-```
-Scheduler fires at nudge_time (weekdays only):
-  workday_start = today at 00:00 in team timezone
-  previous_workday_start = last weekday at 00:00
-
-  stale_engineers = SELECT e.* FROM engineers e
-    JOIN cards c ON c.engineer_id = e.id
-    WHERE e.is_active = TRUE
-      AND c.updated_at < previous_workday_start
-
-  For each stale_engineer:
-    Send Slack DM with "Update now" button
-    (button opens /status modal inline)
-
-  nudge_count = len(stale_engineers)
-  UPDATE team_config SET last_nudge_run_at = NOW()
-
-  -- Heartbeat check
-  expected_nudges = SELECT COUNT(*) FROM engineers e
-    JOIN cards c ON c.engineer_id = e.id
-    WHERE e.is_active = TRUE
-      AND c.updated_at < previous_workday_start
-  IF expected_nudges > 0 AND nudge_count == 0:
-    Send email to heartbeat_email:
-      "Warning: {expected_nudges} nudges should have fired but 0 were sent.
-       Check the Slack integration."
-```
-
-### Authentication
-
-```
-Web app login:
-  → GET /auth/slack redirects to Slack OAuth URL
-  → Slack redirects to /auth/callback with code
-  → Exchange code for token; get user identity from Slack API
-  → Look up or create engineer record by slack_user_id
-  → Create session (DB-backed, 30-day expiry)
-  → Set session cookie (HTTP-only, Secure, SameSite=Lax)
-  → Redirect to /
-```
-
----
-
-## Technology Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Backend | FastAPI | Python shop; async support for Slack webhooks; minimal boilerplate |
-| Frontend | React + Vite + Tailwind | Standard, maintainable, fast build |
-| Database | PostgreSQL | Existing instance; overkill for this data volume, but already operated |
-| Scheduler | APScheduler (in-process) | Simpler than EventBridge/Lambda for this scale; acceptable reliability for a non-critical internal tool |
-| Slack identity | OAuth + Slack user ID as PK | No separate user management; onboarding is "run /status once" |
-| Sessions | DB-backed server sessions | Simple, auditable, revocable; no JWT complexity needed for 7 users |
-| Email alerts | AWS SES | Already on AWS; email is the right fallback when Slack is broken |
-| Deployment | Docker on existing AWS infra | Fits their deployment model; single container, simple ops |
-
----
-
-## Operations
-
-### Deployment
-
-Single Docker container. Recommended layout:
-
-```
-Dockerfile (multi-stage: frontend build + Python app)
-docker-compose.yml (local dev: app + postgres)
-```
-
-Nginx sits in front (reverse proxy, TLS termination). For prod: deploy container to EC2 or ECS, point at existing RDS Postgres.
-
-Environment variables (all required):
-```
-DATABASE_URL          # postgres://...
-SLACK_CLIENT_ID
-SLACK_CLIENT_SECRET
-SLACK_SIGNING_SECRET
-SLACK_BOT_TOKEN
-SES_REGION
-HEARTBEAT_EMAIL       # team lead's email
-SECRET_KEY            # session signing key, 32+ random bytes
-TEAM_TIMEZONE         # default: America/Los_Angeles
-```
-
-### Health + Monitoring
-
-- `GET /health` — returns 200 + `{"db": "ok", "scheduler": "ok", "last_nudge_run": "..."}`. Wire to AWS health check.
-- `team_config.last_nudge_run_at` — visible on the admin settings page. If it's > 36 hours ago on a weekday, something is wrong.
-- Application logs: structured JSON to stdout, captured by whatever log aggregation is already in place.
-- Error tracking: Sentry integration recommended (optional; add `SENTRY_DSN` env var).
-
-### Runbook: Slack Integration Broken
-
-1. Check `/health` endpoint — is the app up?
-2. Check `team_config.last_nudge_run_at` on the settings page — did the scheduler run?
-3. Verify Slack bot token in Slack app dashboard (api.slack.com/apps)
-4. Re-authorize the Slack app if the token was revoked
-5. Restart the app container to reinitialize the scheduler
-6. Manually trigger stale card outreach (direct Slack messages) while investigating
-
-### Initial Setup Checklist
-
-For the engineer building this:
-
-1. Create Slack app at api.slack.com/apps — enable slash commands, interactive components, OAuth, bot token scopes (`chat:write`, `users:read`, `im:write`)
-2. Configure slash command: `/status` → `https://{domain}/slack/command`
-3. Configure interactive endpoint: `https://{domain}/slack/interactive`
-4. Configure OAuth redirect URL: `https://{domain}/auth/callback`
-5. Set all env vars (see above)
-6. Run DB migrations
-7. Team lead logs in first → account is created as `is_team_lead = TRUE`
-8. Add component tags via admin settings
-9. Share with team — each engineer runs `/status` once to create their account and card
-
----
+**Operability:** Single deployable unit. Environment variables: `DATABASE_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Logs via the hosting platform's standard output. No external dependencies at runtime beyond Postgres and Google OAuth.
 
 ## Threat Model
 
 ```mermaid
 flowchart TD
-    subgraph "Public Internet"
-        ENG[Engineers\nSlack / Browser]
-        VP[VP\nRead-only URL]
-        ATK[Attacker\nExternal]
+    subgraph PublicInternet["Public Internet"]
+        Engineer["Engineer\n(browser)"]
+        Manager["Manager / VP\n(browser)"]
+        Google["Google OAuth\n(identity provider)"]
+        Attacker["Attacker\n(external)"]
     end
 
-    subgraph "AWS / Nginx [TLS boundary]"
-        NGX[Nginx\nTLS termination]
+    subgraph AppTrust["Application (Next.js)"]
+        UI["React Frontend\n(dashboard, edit form,\nhistory panel)"]
+        API["API Routes\n(server-side)"]
+        Auth["NextAuth.js\n(session + CSRF)"]
     end
 
-    subgraph "App Layer [Authentication boundary]"
-        API[FastAPI\nREST + Slack handler]
-        SCH[Background Scheduler\nNudges + Heartbeat]
+    subgraph DataTrust["Data Layer"]
+        DB["PostgreSQL\n(users, teams,\nstatus_rows, history)"]
     end
 
-    subgraph "Data Layer [Internal only]"
-        PG[(PostgreSQL)]
-    end
+    Engineer -->|"HTTPS"| UI
+    Manager -->|"HTTPS, read-only"| UI
+    Attacker -.->|"unauthenticated requests"| API
+    Engineer -->|"Google OAuth flow"| Google
+    Manager -->|"Google OAuth flow"| Google
+    Google -->|"OAuth callback + token"| Auth
+    Auth -->|"validates token, creates session"| API
+    UI -->|"API calls with session cookie"| API
+    API -->|"server-side queries only"| DB
 
-    subgraph "External Services"
-        SLK[Slack API]
-        SES[AWS SES\nEmail]
-    end
+    T1["⚠ Horizontal privilege escalation\nengineer edits another's row"]
+    T2["⚠ Vertical privilege escalation\nmanager calls write or history API"]
+    T3["⚠ History exposure\nmanager reads team-lead-only endpoint"]
+    T4["⚠ Unauthorized access\nunprovisioned Google account logs in"]
+    T5["⚠ CSRF on status update"]
+    T6["⚠ Session fixation / token theft"]
 
-    ENG -->|HTTPS| NGX
-    VP -->|HTTPS, token-only| NGX
-    ATK -.->|Forged Slack POST\nT1| NGX
-    ATK -.->|Token enumeration\nT2| NGX
-    ATK -.->|Session hijack\nT3| NGX
-
-    NGX --> API
-    SLK -->|Webhooks, signed\nT1 mitigated| API
-    API --> PG
-    API --> SLK
-    SCH --> SLK
-    SCH --> SES
-
-    style ATK fill:#ff6b6b,color:#fff
-    style T1 fill:#ff6b6b,color:#fff
-    style T2 fill:#ffd93d
-    style T3 fill:#ffd93d
+    T1 -.->|"API checks row.user_id == session.user_id"| API
+    T2 -.->|"API checks role on every write"| API
+    T3 -.->|"API checks role == team_lead"| API
+    T4 -.->|"API rejects unknown google_id"| Auth
+    T5 -.->|"NextAuth CSRF tokens on mutations"| Auth
+    T6 -.->|"HttpOnly cookies, short session TTL"| Auth
 ```
-
-**Threats:**
-- **T1 — Forged Slack request:** Attacker POSTs to `/slack/*` without a valid Slack signature. Mitigated: every Slack route verifies `X-Slack-Signature` before processing.
-- **T2 — Snapshot token enumeration:** Attacker guesses the VP snapshot URL. Mitigated: token is 32 random bytes (URL-safe base64 = ~43 chars); enumeration is not feasible. Regeneration available if token is over-shared.
-- **T3 — Session hijacking:** Attacker steals a session cookie. Mitigated: HTTP-only + Secure + SameSite=Lax cookie flags; short expiry (30 days); server-side session revocation available.
-- **Insider — card update for another engineer:** Authenticated engineer calls `PUT /api/cards/{other_id}`. Mitigated: API enforces `engineer_id == session.engineer_id` for all card writes; team lead can update any card via admin.
 

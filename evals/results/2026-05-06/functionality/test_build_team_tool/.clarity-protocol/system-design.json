@@ -1,55 +1,98 @@
 {
   "components": [
-    {"id": "nginx", "label": "Nginx", "type": "infrastructure", "trust_boundary": "edge"},
-    {"id": "fastapi", "label": "FastAPI App", "type": "service", "trust_boundary": "app"},
-    {"id": "scheduler", "label": "Background Scheduler", "type": "service", "trust_boundary": "app"},
-    {"id": "postgres", "label": "PostgreSQL", "type": "database", "trust_boundary": "data"},
-    {"id": "slack_api", "label": "Slack API", "type": "external"},
-    {"id": "aws_ses", "label": "AWS SES", "type": "external"},
-    {"id": "engineer", "label": "Engineer", "type": "human"},
-    {"id": "team_lead", "label": "Team Lead", "type": "human"},
-    {"id": "vp", "label": "VP", "type": "human"},
-    {"id": "attacker", "label": "Attacker", "type": "adversarial"}
+    {
+      "id": "browser",
+      "name": "Browser (Engineer / Manager)",
+      "type": "client",
+      "trust_boundary": "public_internet"
+    },
+    {
+      "id": "google_oauth",
+      "name": "Google OAuth",
+      "type": "external_service",
+      "trust_boundary": "public_internet"
+    },
+    {
+      "id": "nextjs_ui",
+      "name": "Next.js Frontend (React)",
+      "type": "frontend",
+      "trust_boundary": "application"
+    },
+    {
+      "id": "nextjs_api",
+      "name": "Next.js API Routes",
+      "type": "api",
+      "trust_boundary": "application"
+    },
+    {
+      "id": "nextauth",
+      "name": "NextAuth.js",
+      "type": "auth",
+      "trust_boundary": "application"
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "type": "database",
+      "trust_boundary": "data"
+    }
   ],
   "flows": [
-    {"from": "engineer", "to": "nginx", "label": "HTTPS (browser + Slack)"},
-    {"from": "vp", "to": "nginx", "label": "HTTPS (snapshot token)"},
-    {"from": "slack_api", "to": "nginx", "label": "Webhook (signed)"},
-    {"from": "nginx", "to": "fastapi", "label": "Proxy"},
-    {"from": "fastapi", "to": "postgres", "label": "SQL queries"},
-    {"from": "fastapi", "to": "slack_api", "label": "DMs, modals"},
-    {"from": "scheduler", "to": "slack_api", "label": "Nudge DMs"},
-    {"from": "scheduler", "to": "aws_ses", "label": "Heartbeat alert email"},
-    {"from": "scheduler", "to": "postgres", "label": "Stale card queries"}
+    { "from": "browser", "to": "nextjs_ui", "label": "HTTPS page load", "protocol": "HTTPS" },
+    { "from": "browser", "to": "nextjs_api", "label": "API calls with session cookie", "protocol": "HTTPS" },
+    { "from": "browser", "to": "google_oauth", "label": "OAuth redirect", "protocol": "HTTPS" },
+    { "from": "google_oauth", "to": "nextauth", "label": "OAuth callback + token", "protocol": "HTTPS" },
+    { "from": "nextauth", "to": "nextjs_api", "label": "Validated session", "protocol": "internal" },
+    { "from": "nextjs_api", "to": "postgres", "label": "Server-side queries only", "protocol": "TCP/TLS" }
   ],
   "threats": [
     {
       "id": "T1",
-      "title": "Forged Slack request",
-      "affected_components": ["fastapi"],
+      "name": "Horizontal privilege escalation",
+      "description": "Engineer edits another engineer's status row",
+      "affected_components": ["nextjs_api"],
       "severity": "high",
-      "mitigation": "Verify X-Slack-Signature on all /slack/* routes before processing"
+      "mitigation": "API checks row.user_id == session.user_id on every PUT"
     },
     {
       "id": "T2",
-      "title": "Snapshot token enumeration",
-      "affected_components": ["fastapi", "vp"],
-      "severity": "medium",
-      "mitigation": "Token is 32 random bytes; regeneration available if over-shared"
+      "name": "Vertical privilege escalation",
+      "description": "Manager gains write access by calling write API",
+      "affected_components": ["nextjs_api"],
+      "severity": "high",
+      "mitigation": "API checks role on every write request"
     },
     {
       "id": "T3",
-      "title": "Session hijacking",
-      "affected_components": ["fastapi", "engineer"],
+      "name": "History data exposure",
+      "description": "Manager reads history endpoint intended for team leads only",
+      "affected_components": ["nextjs_api"],
       "severity": "medium",
-      "mitigation": "HTTP-only + Secure + SameSite=Lax cookies; server-side session revocation"
+      "mitigation": "API checks role == team_lead before returning history"
     },
     {
       "id": "T4",
-      "title": "Insider card update for another engineer",
-      "affected_components": ["fastapi"],
-      "severity": "low",
-      "mitigation": "API enforces engineer_id == session.engineer_id for card writes"
+      "name": "Unauthorized access",
+      "description": "Unprovisioned Google account gains dashboard access",
+      "affected_components": ["nextauth", "nextjs_api"],
+      "severity": "high",
+      "mitigation": "API rejects sessions where google_id has no matching user row"
+    },
+    {
+      "id": "T5",
+      "name": "CSRF on status update",
+      "description": "Cross-site request forgery triggers unwanted status update",
+      "affected_components": ["nextauth"],
+      "severity": "medium",
+      "mitigation": "NextAuth CSRF tokens required on all mutations"
+    },
+    {
+      "id": "T6",
+      "name": "Session fixation / token theft",
+      "description": "Stolen session cookie used to impersonate engineer",
+      "affected_components": ["nextauth"],
+      "severity": "medium",
+      "mitigation": "HttpOnly cookies, short session TTL, HTTPS only"
     }
   ]
 }

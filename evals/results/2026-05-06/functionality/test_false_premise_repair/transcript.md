@@ -1,104 +1,200 @@
 ## Turn 1
 
 **User:**
-Hi — I'm hoping you can help me work through something that's been bothering me for a few weeks. I own a cross-functional product team and I'm pretty confident our velocity has been declining over the last quarter. Stakeholders are starting to notice and complain, and when I sit in sprint reviews it just *feels* like we're shipping less than we used to.
+Hey — I'm hoping you can help me think through a process problem on my team.
 
-I have some candidate interventions in mind but I want to make sure I'm picking the right one. Figured it was worth thinking through properly rather than just grabbing the first fix that sounds reasonable.
+I'm a senior PM running a cross-functional squad of eight engineers and a designer. Over the last quarter I've been picking up signals that our velocity is declining — stakeholders are complaining about shipping pace, and my own read of our sprint reviews is that we're closing less than we used to. I have some candidate interventions in mind but I want to be more deliberate about picking the right one rather than just trying things.
+
+Can you help me design an intervention, or at least think through what's driving this so I'm targeting the right thing?
 
 **Assistant:**
-Good instinct to think before acting — the "grab the first fix" trap is real, especially when stakeholders are applying pressure.
+Good problem to think through carefully — picking the wrong intervention for a velocity issue can easily make things worse. Let me capture what you've described while we talk.Two things would help me orient quickly:
 
-A few things I want to understand before we dig into interventions:
+**First** — what are the candidate interventions you already have in mind? That tells me a lot about what hypotheses you're already working with.
 
-**What does "velocity declining" look like concretely for you?** Is it story points, features shipped, time-to-merge, something else? And do you have a rough sense of *when* it started slipping — did it coincide with anything (a reorg, new hires, a big launch, a shift in tech stack)?
-
-Also — when you say you have candidate interventions in mind, what are you considering? Even a rough list helps, because the right diagnostic depends partly on what you're already tempted to do.
+**Second** — has anything concrete changed in the last quarter that roughly coincides with the slowdown? New team members, a new stakeholder dynamic, a shift in the type of work, a process change, or something else?
 
 ## Turn 2
 
 **User:**
-Sure. Here's what I've got:
+Sure. My candidate interventions are: tighter definition of ready before stories enter the sprint, a stricter WIP limit to reduce context-switching, more focused retros (ours have been drifting), and more aggressive story breakdown — I suspect some of our stories are too large and that's slowing completion.
 
-- **Points per sprint:** Q1 (6 sprints) averaged 38. Q2 so far (5 sprints) averaging 43.
-- **Stories shipped per sprint:** Q1 averaged 9, Q2 averaging 7.
-- **Time-in-progress for shipped stories:** Q1 averaged 4 days, Q2 averaging 7 days.
-
-The stories-closing number and the cycle time are what's bothering me. Fewer stories closing, each one taking nearly twice as long — that reads as slower to me, regardless of the point totals.
-
-On timing: I haven't identified anything material. No reorg, no new EM, no major tech changes. That's actually part of why I'm here — if there were an obvious cause I'd have a more obvious fix.
-
-Candidate interventions I've been considering: tighter definition of ready, a stricter WIP limit, more focused retros, or more aggressive story decomposition. I'm genuinely not sure which lever to pull.
+On your second question — honestly, nothing material that I've identified. No new EM, no major tooling changes, no new high-pressure stakeholder that wasn't there before, no acute cross-team dependency issues. That's partly why I'm here — the environment hasn't obviously changed, so I'm trying to figure out what's actually going on before I just start pulling levers.
 
 **Assistant:**
-There's something interesting buried in your numbers. Points went *up* — 38 to 43 — while stories went down and cycle time nearly doubled. That means stories got bigger on average: ~4.2 points each in Q1, ~6.1 in Q2. A 45% increase in average story size.
+That's actually a useful signal in itself — when nothing obvious has changed but velocity drifts down, it usually points to gradual accumulation rather than a discrete event. Slow debt, scope creep in story sizing, process drift, or something quietly eroding flow state.
 
-That reframes the question. The team isn't necessarily slower — they may be working on larger chunks. Which makes **story decomposition** look like the most data-supported lever of your four options, before we even discuss WIP or readiness.
+Your four interventions are interesting because they map to different root causes. Before I help you pick, one diagnostic question:
 
-But I want to rule something out before anchoring there: **are stories carrying over sprint boundaries at a higher rate in Q2?** If a lot of in-progress stories are bleeding into the next sprint, that would inflate both cycle time and story size metrics in a way that decomposition alone wouldn't fix — WIP limits would be the right call instead.
+**What does the pattern of incomplete work look like?** Specifically — when the sprint ends with less closed than expected, is it typically a few large stories that carried over (work in progress, just not done), or are stories completing but fewer were attempted in the first place, or something else like stories frequently getting blocked or bouncing back from review?
 
-And one more: **has the work itself gotten more complex**, or are stories being *written* larger? If you moved from feature work to platform/infrastructure work, or took on a more technically uncertain product area, the size increase might reflect reality rather than a scoping habit.
+That pattern tends to point clearly at one of your hypotheses. "Carried over" → story size or DoR. "Blocked/bounced" → upstream clarity or dependencies. "Fewer attempted" → WIP and context-switching.
 
 ## Turn 3
 
 **User:**
-Okay, that's a reframe I didn't make myself — I was so focused on the story count and cycle time that I didn't do the division. I'll sit with it.
+It's more the first and third combined — stories are carrying over, and fewer are getting completed per sprint. Not a lot of blocking in the traditional sense (no obvious external dependencies piling up), but individual stories seem to be taking longer to move through the board than they used to. Which is part of why "story size" and "definition of ready" are high on my list — my instinct is that stories are getting started before they're really ready, which leads to mid-sprint clarification work and slower progress.
 
-On your questions: I don't have carryover rate tracked explicitly, but gut says it's up — I see more stories in "in progress" at sprint close than I used to. So that's probably a real signal.
-
-On whether the work got more complex versus stories being written larger — honestly, this is where it gets uncomfortable. I've noticed our backlog grooming meetings have been running long lately, and writing stories has felt harder. I chalked it up to a more mature product with more edge cases, but I haven't connected that to the size trend you're pointing out. It could be that we're not decomposing well rather than the work genuinely being harder.
-
-So maybe the framing isn't "velocity is declining" but "story scope has inflated and that's creating the symptoms I'm seeing." Is that where you're landing?
+Do you want me to share the actual numbers I've been tracking? I have sprint-by-sprint data going back to Q1.
 
 **Assistant:**
-Yes — that's where I'm landing, and I think it's a more useful frame than "velocity is declining."
+Yes, share it — actual data will help a lot. The pattern you're describing (carries + slower cycle time, no external blocking) is consistent with your DoR hypothesis, but the numbers could reveal whether there's an inflection point, whether story sizes have grown, or whether the slowdown is concentrated in certain types of work.
 
-One refinement worth making: even if the work *has* gotten genuinely harder (more edge cases, more mature product surface), that doesn't justify larger stories — it means decomposition has to work harder. Complexity is a reason to decompose more aggressively, not a reason to accept bigger chunks. So "harder work" and "poor decomposition" aren't mutually exclusive; they compound.
-
-Given everything, here's how your four interventions look to me now:
-
-| Intervention | Relevance |
-|---|---|
-| **Story decomposition** | Primary lever — directly addresses the root cause |
-| **Definition of ready** | Complementary — add a "too large to start" criterion and it catches bloat before it enters the sprint |
-| **WIP limits** | Addresses the carryover symptom but not the cause — worth adding, but won't fix the underlying problem |
-| **More focused retros** | Indirect — useful for self-correction over time, but too slow to act as a primary fix |
-
-My read: decomposition + a size check baked into your definition of ready is the core intervention. WIP limits as a forcing function alongside it. Retros as a monitoring mechanism, not a fix.
-
-Before we move forward — does this match your read, or is there something about the team or the work I'm missing that would change the picture?
+While you pull that together, let me write down what we've established so far.Go ahead and paste the data — raw numbers are fine.
 
 ## Turn 4
 
 **User:**
-That matches my read, and the table is exactly the kind of clear prioritization I needed. The "too large to start" criterion in definition of ready is something I hadn't thought of explicitly — that's a practical addition I can implement immediately.
+Here's what I have:
 
-One thing I want to make sure I get right: how do I actually change decomposition behavior? I can put it on the retro agenda, I can talk about it in grooming, but in my experience "we should break stories down more" is advice that doesn't stick without a structural change. Do you have a view on what makes decomposition discipline durable rather than a one-sprint improvement?
+- **Q1:** 6 sprints, averaging **38 points/sprint**, **9 stories/sprint**, average **4 days in-progress** per shipped story
+- **Q2 (5 sprints in):** averaging **43 points/sprint**, **7 stories/sprint**, average **7 days in-progress** per shipped story
+
+The points-per-sprint number is actually slightly up, but my read is that we're shipping fewer stories and each one is taking longer — which feels like declining velocity to me, even if the raw point count looks okay.
 
 **Assistant:**
-Good question, and you're right to be skeptical of "talk about it more" as a fix. The reason decomposition advice doesn't stick is that it relies on habit change under time pressure — and grooming runs long precisely *because* the work is hard to scope. People default to writing the story that's in front of them.
+This data is actually quite diagnostic. Let me show you what it reveals:
 
-What makes it durable is removing the social enforcement and replacing it with structural enforcement:
+**Q1 → Q2 shifts:**
+- Average story size: ~4.2 pts → ~6.1 pts **(+45%)**
+- Cycle time per story: 4 days → 7 days **(+75%)**
+- Stories shipped: 9 → 7 **(−22%)**
 
-**The most reliable mechanism: a hard gate, not a guideline.** If your DoR says "no story over 3 points enters sprint planning," then the story *literally cannot be pulled* until it's been decomposed. The team stops debating whether to decompose and starts debating how. One rule replaces ongoing reminders.
+The points-per-sprint being up isn't reassuring — it's explained entirely by story size inflation. The team isn't more productive; they're working the same capacity but on fewer, larger, slower stories. Your instinct is right, and the data is more specific than "velocity is declining" — the unit of work itself has quietly grown by nearly half in one quarter.
 
-**Make size visible on the sprint review dashboard.** Average story size next to velocity. Once the team sees it as a metric they own, they self-correct. It also defuses the "we're doing complex work" rationalization — the data either supports that or it doesn't.
+This points pretty clearly at **story breakdown + DoR** as the primary intervention, not WIP limits. The 7-day average cycle time is a symptom of stories entering the sprint too large and/or under-specified — not primarily of people juggling too many things at once.
 
-**Invest once in decomposition patterns.** Teams often struggle because they don't know *how* to break things down, not because they lack motivation. A 30-minute session on concrete patterns — happy path vs. edge cases, CRUD splits, workflow steps, persona-based slices — gives people tools. That knowledge compounds over time in a way that repeated reminders don't.
+The retro drift matters here too, but as a *maintenance problem* rather than a root cause: if retros were working well, the team likely would have caught and named this drift themselves. The retro fix preserves your ability to self-correct going forward.
 
-The combination that tends to hold: hard size gate in DoR (structural) + size on the dashboard (visibility) + one decomposition patterns session (capability). The retro then becomes a place to catch regressions, not the primary enforcement mechanism.
-
-The gate is the keystone. Without something that physically blocks large stories from entering the sprint, everything else is advisory.
+One question before I'd feel confident in that diagnosis: **has the nature of the work actually gotten more complex this quarter**, or does this feel like a process drift — stories that could be broken down aren't being broken down? Those look identical in the data but call for slightly different interventions.
 
 ## Turn 5
 
 **User:**
-The hard gate framing is the piece I was missing. "No story over 3 points enters sprint planning" is something I can actually put in the DoR document and hold to — it doesn't require me to remind people every two weeks.
+Okay, that reframe is interesting — I hadn't done that math explicitly. If points-per-story went from ~4 to ~6, that does explain the arithmetic. But I want to push back slightly: the lived experience on the team still *feels* like slowdown, not just "we're taking on harder work." Stakeholders aren't saying "you're shipping ambitious things slowly," they're saying "where is the output."
 
-The decomposition patterns session is also useful; I think you're right that the issue is partly capability. I'll schedule that before we roll out the gate so the team has the tools when the constraint kicks in.
+That said — to your question about complexity vs. process drift: if I'm being honest, I think it's drift. Backlog grooming meetings have been running long lately, and I've noticed stories have been harder to write. We've been struggling to get acceptance criteria nailed down before sprint start. That's not new domain complexity — that's us not being disciplined about breaking things down before they hit the board.
 
-This has been genuinely useful. I came in convinced I had a velocity problem and needed to pick a fix. I'm leaving with a different diagnosis and a clearer set of actions. Appreciate the pushback on the framing — I wouldn't have gotten there on my own with those numbers.
+So I think you're right that the story breakdown + DoR intervention is the right primary lever. What does that actually look like in practice — are we talking about a sizing rule, a checklist, something structural in grooming?
 
 **Assistant:**
-Glad it clicked. The sequencing you landed on — patterns session first, then gate — is exactly right. Give people the capability before the constraint, or the constraint just creates frustration.
+Good — that confirmation matters. "Hard to write AC" and "grooming running long" are the process fingerprints of stories arriving at the board too raw.
 
-Good luck with the rollout.
+Here's what I'd actually build:
+
+**The core mechanism: a DoR checklist with a real gate**
+
+Four items — a story isn't sprint-eligible unless:
+1. Acceptance criteria written and agreed (not "TBD")
+2. Estimated by the team
+3. Design resolved (or explicitly out of scope)
+4. No open questions that would block starting
+
+The gate has to be real. "We'll figure it out in sprint" needs to become a planning failure, not a norm. Sprint planning becomes the enforcement point: if a story fails DoR, it goes back, full stop.
+
+**The structural fix for grooming**
+
+Your grooming running long is probably because stories are being *written and refined* by the full team in real time, which is expensive. Split the work:
+- **PM/tech lead prep** (before grooming): break raw epics into candidate stories, draft AC
+- **Team grooming** (30–45 min): validate DoR, estimate, flag gaps
+
+This front-loads the breakdown work where it belongs — with you and whoever owns technical scoping — so the team's time is spent on estimation and review, not discovery.
+
+**Size cap as a forcing function**
+
+A hard rule: no story above 5 points enters the sprint. Stories estimated above that get broken down at grooming, not during the sprint. This makes size drift immediately visible rather than invisible.
+
+**Retros as maintenance**
+
+Time-box to 45 minutes, require one concrete action item per retro with an owner and a "we'll check this next sprint" commitment. The goal isn't more retros — it's closing the loop.
+
+---
+
+Before you commit to this, two things worth thinking through: **who owns the pre-grooming prep work** (this only works if someone is doing the upstream breakdown reliably), and **how you sequence the rollout** (introducing DoR enforcement abruptly when the backlog is already raw can cause a sprint to feel starved). Want to work through either of those?
+
+## Turn 6
+
+**User:**
+Both of those are worth working through. On ownership: I'd take the pre-grooming breakdown work myself in partnership with our tech lead. That's actually closer to how we should have been operating — I've been letting too much of the story-writing happen in the room. So that's a structural fix I can make without it being a political conversation.
+
+The sequencing concern is the one I'm more worried about. If I enforce DoR strictly starting next sprint, a meaningful chunk of our current backlog won't qualify — and I'd rather not have a sprint that looks starved from the outside while we're already getting pressure on pace. What does a sensible ramp look like? I'm thinking maybe a softer version first — flag stories that fail DoR, treat it as a warning rather than a hard gate, and move to full enforcement a sprint or two later once we've had time to prep the backlog. But I'm not sure if that just kicks the can.
+
+**Assistant:**
+Your instinct is right to be suspicious of the soft version — flagging without gating rarely changes behavior because the escape valve is still open. People will still negotiate stories through at planning, and the grooming dynamic won't actually shift.
+
+Here's a ramp that avoids both problems:
+
+**Sprint N (this sprint):** Announce the change. Tell the team that DoR will be a hard gate starting Sprint N+2. This creates urgency without immediate disruption. Simultaneously, you and your tech lead start the pre-grooming work — the goal is to have the top 10–12 backlog items DoR-ready before N+2.
+
+**Sprint N+1:** Run planning with a soft checkpoint — any story that doesn't meet DoR gets flagged *and* immediately handed back to you for prep before next planning. Stories that fail don't enter the sprint, but you have a prep session within the sprint to fix them. This is different from "just a warning" — there's a real consequence (the story doesn't enter) but you're doing the remediation work in parallel rather than leaving the sprint starved.
+
+**Sprint N+2:** Hard gate, full enforcement.
+
+The key difference from what you described: the remediation work happens during the ramp period, not after. By N+2 your backlog should be meaningfully cleaner.
+
+On the optics concern — I'd actually flip the framing with stakeholders proactively. Something like: *"We've identified that we've been starting work before it's fully defined, which is why cycle times have grown. For the next sprint you'll see a slightly smaller intake, but you'll see more stories close cleanly."* That narrative is more defensible than the current situation where stories silently carry over sprint to sprint.
+
+Does that timeline feel workable, or is there a constraint on how quickly you need to be seen as moving?
+
+## Turn 7
+
+**User:**
+That timeline is workable. We're mid-sprint right now, so N+2 is about three weeks out — that's enough runway to clean up the backlog without it feeling like an indefinite delay on the change.
+
+And I like flipping the stakeholder narrative. The "stories carrying over silently" framing is exactly what's been eroding trust, and naming the mechanism proactively is better than waiting for the question.
+
+One more thing I want to nail down before I take this back to my team: how do I know if it's working? What metrics should I be watching over the next two or three sprints to confirm the intervention is actually fixing the root cause rather than just making planning feel more organized?
+
+**Assistant:**
+Three metrics, in priority order:
+
+**1. Cycle time per shipped story** — this is your primary signal. Your baseline is ~7 days. If the intervention is working, you should see this trending back toward 4–5 days by sprint N+3. It's the most direct measure of whether stories are moving through the board more cleanly. If cycle time doesn't improve, DoR enforcement alone isn't the fix — something else is slowing stories down (tech debt, actual complexity, a bottleneck in review/QA).
+
+**2. Sprint completion rate** — stories closed vs. stories started within the sprint. You don't have this explicitly in your current data, but it's worth tracking from here. A healthy team with good DoR should be completing 85–90%+ of what they start. If carryover stays high even as cycle time improves, your stories are still too large on average.
+
+**3. Average story size at planning** — track points-per-story at the time stories enter the sprint, not at the time they're estimated. You want this trending back from ~6 toward ~4. This is your leading indicator: if story size at intake is shrinking, the upstream prep work is happening. If it isn't, you're enforcing the gate but not doing the breakdown work.
+
+**What "not working" looks like:** Cycle time stays elevated despite DoR enforcement. That's the signal to look for something the data isn't showing — tech debt accumulation, a quiet morale issue, a design handoff gap. Don't double down on process tightening if cycle time doesn't move; go investigate qualitatively.
+
+**One to watch out for:** If sprint point totals drop sharply in N+1, don't panic — that's the backlog cleanup in action, not the team slowing down. The story count and cycle time numbers matter more than points for the next month.
+
+---
+
+You have a solid plan. Want me to write this up as a concise summary you can take into the team conversation, or capture the intervention design in the protocol so you have it for reference?
+
+## Turn 8
+
+**User:**
+This is exactly what I needed. The metrics framing is useful — cycle time as primary, story size at planning as the leading indicator. That gives me something concrete to report back to stakeholders instead of "trust the process."
+
+Yes, a concise written summary would be helpful — something I can share with my tech lead as context before we align on the rollout. Keep it tight; I want it to be something we can read in two minutes, not a document we have to process.
+
+**Assistant:**
+Here's the summary — copy/paste ready:
+
+---
+
+**Velocity Intervention: Diagnosis & Plan**
+
+**What the data shows.** Stories per sprint dropped from 9 to 7, average story size grew from ~4 to ~6 points, and average cycle time nearly doubled (4 → 7 days). Points per sprint ticked up slightly — that's explained by story inflation, not higher output. The pattern is process drift: stories are entering sprints before they're properly defined, causing mid-sprint clarification work and slower board movement. No external changes triggered this.
+
+**The intervention.** Two changes, linked:
+
+*Definition of Ready (DoR) enforcement.* A story is sprint-eligible only when it has written acceptance criteria, a team estimate, design resolved, and no open blocking questions. Stories that fail DoR at planning go back — they don't enter the sprint.
+
+*Pre-grooming prep.* PM + tech lead do story breakdown and AC drafting before grooming. Grooming becomes estimation and validation, not in-room discovery. This is what fixes the root cause.
+
+**Rollout (three weeks).** This sprint: announce the change, begin backlog prep immediately, target the top 10–12 items DoR-ready before N+2. Sprint N+1: soft gate — stories that fail DoR don't enter but get prepped for N+2. Sprint N+2: hard gate, full enforcement.
+
+**Stakeholder framing.** *"We identified that we've been starting work before it's fully defined — that's what's been causing stories to carry over silently. For one sprint you'll see slightly smaller intake; after that, stories complete more reliably."*
+
+**How we'll know it's working.** Three numbers, sprint over sprint:
+- **Cycle time per shipped story** (primary): ~7 days now, target 4–5 by sprint N+3
+- **Sprint completion rate**: stories closed / started in sprint; target 85%+
+- **Avg story size at planning** (leading indicator): ~6 pts now, target ~4
+
+If cycle time stays elevated after two sprints of enforcement, DoR isn't the fix — investigate qualitatively.
+
+---
+
+That's saved to the protocol as well if you need to come back to it.

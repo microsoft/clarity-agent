@@ -1,7 +1,16 @@
 # Notes
 
-[To be determined. Guiding principles and cross-phase observations will be added here as the project develops. Items tagged `[for: <phase>]` are actionable observations for a specific phase; untagged items are permanent guiding principles.]
+## Project context
+B2B SaaS churn research. Head of CS building evidence-based answer to 7%→11% gross logo churn increase. 6-week deadline to inform COO's annual planning "churn plan." NRR remains above 100% — dollar story is forward compounding risk, not historical ARR loss.
 
-[for: requirements] The CRM tagging exercise has an organizational risk: CSMs tagging their own accounts have an incentive to under-flag their own issues. Consider self-tagging vs. cross-tagging vs. Head of CS doing a normalization pass. Separate the exercise clearly from performance management in communications.
+## Research design principles
+Sequence quantitative before qualitative — data sprint generates hypothesis-driven interview questions. Interviews are not downstream of data; outreach starts week 2 regardless of sprint status.
 
-[for: requirements] Critical gap: what decisions does this research need to support at annual planning? Without knowing the decision space (headcount, tooling, ICP, product escalation, pricing response), the research might answer the wrong questions. The COO will ask "so what do we do?" — the answer should be pre-determined by design, not discovered at the presentation.
+## Evidence thresholds are pre-defined
+Each of the five hypotheses has a defined "what confirmed looks like" in solution.md. Assess findings against those thresholds, not under pressure at synthesis time.
+
+## ICP hypothesis handling
+If ICP is a primary finding, the path is: CS Head → COO (private briefing) → COO leads conversation with CRO. Frame as "ICP refinement opportunity," not attribution. Three-source corroboration required before taking it cross-functional.
+
+## Political sequencing
+Full findings → COO first. CSMs briefed before anything goes upward. CRO conversation is COO-to-CRO. Annual planning doc is action-oriented (churn plan), not research-oriented.

@@ -1,32 +1,65 @@
 # Requirements
 
-Any solution must:
+## Data Model
 
-## Functional Requirements
+Each engineer has exactly one status row per team. A row contains:
 
-1. Engineers can post and update what they're working on, with a status (in progress / blocked / done).
-2. Engineers can flag work as touching a shared or sensitive area (e.g., auth layer, billing pipeline, cross-service shared state). The set of "sensitive areas" is team-defined, not system-enforced.
-3. The full team's current status is visible at a glance — scannable in ~30 seconds.
-4. The dashboard provides a read-only shareable view suitable for showing to the VP on demand (not a live feed).
-5. Engineers receive a nudge if they haven't updated their status in 24 hours.
+- **Primary focus**: free text, max ~140 characters (required)
+- **Status**: dropdown — `on track` | `blocked` | `in review` (required)
+- **Blockers**: free text, optional
+- **Jira reference**: optional ticket number or URL for cross-reference (not synced — manually entered)
+- **Last updated**: timestamp, set automatically on any save
 
-## Non-Functional Requirements
+Secondary item slot is explicitly out of scope for v1.
 
-### Performance
-- No specific latency requirements; the team is small (7 people) and the data volume is trivial.
+## Permissions
 
-### Reliability
-- Should be available when needed (before VP syncs, at standup). Data should persist — nothing ephemeral.
+- **Engineers**: read all rows on their team; write only their own row
+- **Managers / VP**: read-only access to team dashboard(s); no editing
+- **No cross-team editing**: engineers cannot modify teammates' entries
+- Authentication is Google Workspace OAuth; permissions are enforced server-side
 
-### Usability
-- Update friction must be lower than the current workaround (a shared doc or Slack). If it's not significantly easier to use, it won't be maintained.
-- The interface should be scannable — optimized for reading, not just writing.
+## Multi-Team Structure
 
-### Security
-- Access should be limited to the team by default; the VP read-only view is on-demand and intentionally shared, not always-on.
+The data model must accommodate multiple teams without schema changes. A team is a named group of engineers. Engineers belong to exactly one team. Managers may have read access to multiple teams. Team lead is a role within a team, not a separate user type.
 
-## Constraints
+## Update Experience
 
-- **Team size**: 7 engineers. The tool doesn't need to scale beyond a small team.
-- **Existing tools**: Must not require Jira integration or replace sprint planning — engineers already have workflows around those.
-- **Adoption**: The team lead cannot enforce mandatory updates with authority alone; the tool must make updating feel natural enough that engineers do it voluntarily (or with a light nudge).
+- An engineer must be able to update their status in under 30 seconds
+- No approval workflow — saves are immediate
+- No mandatory update frequency, but the "last updated" timestamp should make staleness visible to teammates
+
+## Presentation Quality
+
+- The dashboard must be readable on a projected screen in an exec review (adequate contrast, legible at distance, no clutter)
+- Must work in a standard desktop browser; mobile is not a v1 requirement
+
+## Authentication
+
+Google Workspace OAuth. Identity is established at login; no separate user provisioning. The Google account determines who you are and therefore which row you own.
+
+## Role Assignment
+
+Three roles, each building on the last:
+
+- **Engineer**: reads all current rows for their team(s); writes their own row only
+- **Team Lead**: same as engineer, plus can view status history for their team members
+- **Manager / VP**: read-only access to current status rows for assigned teams; no history access
+
+Engineers are associated with a specific team and row by the team lead at setup. Role assignment is not self-serve.
+
+## Staleness Display
+
+A status row is considered stale after 2 days without an update. Stale rows are visually dimmed — reduced opacity or equivalent treatment that makes staleness obvious at a glance without checking timestamps. No notifications or automated actions.
+
+## Multi-Team Layout
+
+All teams appear on a single dashboard, separated by named team dividers. No per-team pages. Managers with cross-team access see all their teams on one view, enabling cross-team blocker visibility.
+
+## Explicit Non-Scope (v1)
+
+- Jira sync (read or write) — ticket reference is a manual field only
+- Historical status data or audit trail
+- Notifications or reminders when status is stale
+- Mobile-optimized experience
+- Analytics or reporting on status patterns

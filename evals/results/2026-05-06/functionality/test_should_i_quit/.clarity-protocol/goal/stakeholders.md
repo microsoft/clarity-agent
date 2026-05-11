@@ -1,13 +1,17 @@
 # Stakeholders
 
-## You (primary)
-Mid-level software engineer, 3.5 years at current company. Wants a clean transition to a better environment without income disruption or burned bridges. Has savings runway and a moderate network. Not in crisis — has optionality and time to be selective.
+## Primary: The user (backend engineer)
 
-## Current employer
-Needs professional treatment: standard notice, smooth handoff, no drama. The relationship with the new manager is strained but burning bridges here has real costs (references, future colleagues).
+**Needs:** Land a backend role with a healthier team dynamic, without burning significant runway. Currently employed, survivable situation, not in crisis.
 
-## Network contacts
-Former colleagues who've reached out about roles before. They need to be approached as humans first, not job leads — but they're the highest-ROI path in this search.
+**Constraints:** Tired from current job, limited energy for a high-volume search. Rep and output intact — has leverage but doesn't feel like it yet.
 
-## Prospective employers
-Need to perceive you as serious and available. The current passive posture (one recruiter screen, no active applications) doesn't send the wrong signal yet, but needs to shift.
+**Optimizing for:** Team culture above all; industry and specific company are secondary. Similar technical scope (backend).
+
+## Secondary: Current employer
+
+Not adversarial. Manager is incompetent but not malicious. Clean exit preferred. Notice should come only after a signed offer is in hand.
+
+## Secondary: Future employer
+
+Series B healthtech is the only active process. Cautiously interested. Broader market not yet activated.

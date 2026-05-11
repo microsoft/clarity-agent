@@ -1,162 +1,182 @@
 ## Turn 1
 
 **User:**
-Hey, I need some help thinking through a situation that's been weighing on me. I'm a Director of Engineering and I'm caught between competing priorities — sales made a commitment to a customer that my engineering team says we can't hit without blowing up other things we're already committed to. I'm trying to figure out how to balance all of this without everything catching fire.
+Hey, I could use some help thinking through a situation I'm in the middle of. I'm a Director of Engineering at a ~200-person B2B SaaS company, and I've got a classic competing-priorities problem that's been grinding on me for three days.
+
+Short version: our VP of Sales committed to a large enterprise customer that we'd ship an SSO and provisioning feature set in Q2 — without looping me in. That contract is worth about $1.2M ARR. My most senior lead says Q3 at earliest. And we're already mid-stream on a platform migration that was explicitly prioritized last quarter by our VP of Engineering.
+
+I'm trying to figure out how to balance these competing needs without blowing something up. What's the best way to think through this?
 
 **Assistant:**
-That's a genuinely tough spot — the classic tension between what sales promises and what engineering can deliver, with real commitments already in flight.
+This is a real situation that deserves careful thinking — let me capture what you've shared while I ask a few things that will sharpen the picture.
 
-To help you think through this clearly, a few questions:
+A couple of questions to get the most important context:
 
-**What's the commitment?** What did sales promise, and roughly when? Is this a signed contract, a verbal promise, or something in between?
+**On the timeline gap:** When your lead says "Q3 at earliest," does that mean early July or more like August-September? And is the Q2 deadline in the contract as a hard delivery date, or was it a verbal commitment from your VP of Sales?
 
-**What's already at stake?** What are the existing commitments that engineering says would get blown up — are those internal (a roadmap, another team's dependency) or external (other customers, a launch date)?
+**On the migration:** How far in are you — are you 20% done and flexible, or 80% done and stopping would be genuinely painful? And what breaks if it slips?
 
-And maybe most importantly: **who knows what right now?** Has this surfaced yet with your leadership, the customer, or is it still mostly between you and your team?
+**On the org dynamics:** Does your VP of Engineering know about the sales commitment yet? And do you have a direct relationship with the VP of Sales, or does this need to go through your VP of Engineering?
+
+The reason I ask: there are a few very different situations that look similar on the surface here. In one version, you're managing a scoping/negotiation problem with a path to a creative solution. In another, you're navigating a genuine political fire that needs to be escalated, not solved at your level.
 
 ## Turn 2
 
 **User:**
-So — VP Sales committed to a large enterprise customer that we'd ship SSO and provisioning features by end of Q2. That's SAML, SCIM, fine-grained roles, audit logging. Worth about $1.2M ARR if it closes. The commitment was verbal but it's now in the customer's procurement timeline, so it's basically real.
+Good questions. Let me fill in the gaps.
 
-My most senior lead, Raj, says Q3 at earliest. His team is already heads-down on a platform migration that my VP of Engineering prioritized last quarter. Slipping the migration means slipping Data Retention and Growth Metering work downstream — those are internal commitments, but real ones.
+Q3 for Raj means August at the earliest if we pull some people — he said "Q3" but when I pushed him it was more like "not before August." The customer's deadline is end of June. The sales commitment was verbal, but the customer is treating it as real — their procurement cycle closes then.
 
-As for who knows: VP Sales knows there's tension. My VP of Engineering has said "I'll back what you decide" which is... not super helpful. And the CEO hasn't been briefed in any real way. I've been trying to handle it at my layer.
+On the migration: I'd say we're 30-35% in. Not trivial to pause, but not 80% done either. The thing that breaks if it slips is Data Retention and Growth Metering — both were waiting on this migration to even start. Those are things our VP of Engineering specifically cited when he prioritized the migration last quarter.
+
+VP Engineering does know about the sales commitment — he's been in the same email threads I have. His position is basically "I'll back what you decide." Which is supportive in theory and not super helpful in practice. I do have a direct relationship with VP Sales, though it's been strained this week.
+
+That last framing you offered — scoping problem vs. political fire — I think that's the right question actually. My instinct has been to treat it as the former and find a creative solution. But I'm starting to wonder.
 
 **Assistant:**
-This is a lot — and one thing stands out immediately: your VPE's "I'll back what you decide" is a red flag. This is a cross-functional resource conflict involving a $1.2M deal and competing organizational priorities. That's not a Director-layer decision — that's a VP+ conversation that hasn't happened yet.
+Your instinct to reframe that question is right — and I think the honest answer is: **it's both, and you need to sequence them correctly.**
 
-But before going there, a few things I want to understand better:
+Here's the key thing the numbers tell you: the gap isn't weeks, it's months. End of June vs. August isn't a "crunch harder" problem — it's a calendar problem. No amount of creative scoping closes a 6-week gap on a feature set Raj already estimated *with* resource pulls. So the first conclusion is:
 
-**On the scope:** SAML + SCIM + fine-grained roles + audit logging is a lot. Has anyone pressure-tested with the customer what's actually blocking the deal vs. what's nice-to-have? Sometimes "we need all four" actually means "we need SSO to satisfy security review and the rest can follow."
+**You cannot engineer your way out of this.** The variables that actually matter — customer flexibility on timeline, customer flexibility on scope, whether VP Sales will renegotiate, whether there's a partial delivery that satisfies the procurement requirement — none of those are in your control.
 
-**On the migration:** When you say slipping it creates downstream slippage — how bad is that, really? Is Data Retention a customer-facing commitment with its own deadline, or more of an internal quality/technical debt investment?
+The second thing that stands out: your VP of Engineering saying "I'll back what you decide" is well-meaning but it's putting you in a genuinely bad position. This decision involves a Sales commitment and an Engineering priority that *he* set. That's a VP-level tradeoff, not a Director-level one. If you make the wrong call — or even the right call that someone disagrees with later — you're exposed. That's not a fair position to be in.
 
-**On what you're trying to solve:** Are you looking for help thinking through *what decision to make*, or more *how to navigate the organizational dynamics* around whatever you decide? Because those are related but different problems, and it sounds like the org dynamics piece might actually be the harder one here.
+So before you solve the technical problem, I think you need to answer one structural question: **Is the right move to own the decision, or to force it up?**
+
+My read is you should force it up — but not by abdicating. The move is to go to your VP of Engineering and say: *"I need you and [VP Sales] in the same room. Here's exactly what's achievable by June 30, here's what August actually means, and here's what we lose in each scenario. I'll give you the options. You two need to make the call together."* That's not weakness — that's correctly routing a cross-functional business decision.
+
+Before that conversation, though, there's one thing worth finding out fast: **what does the customer actually need SSO for?** Sometimes "we need SSO by June" means "our security review requires it." Sometimes it means "our IT admin will hate onboarding without it." Those have very different minimum viable answers. Does VP Sales have that context — or is that a conversation you could be part of?
 
 ## Turn 3
 
 **User:**
-On scope — actually, that's a good question and one I haven't fully pushed on. The contract language apparently has some flexibility around roles specifically. So there's a scenario where we ship SAML for Q2, defer SCIM and fine-grained roles to Q3, and it still satisfies procurement. I haven't validated that with Sales or the customer directly though.
+The logic tracks, but "force it up" is where I get uncomfortable. I've been trying to handle this at my layer precisely because I don't want to be the person who drops a $1.2M problem on the CEO's desk because I couldn't figure it out. That feels like failure.
 
-On the migration — Data Retention has some regulatory angle for a couple of existing customers. It's not imminent-crisis-level, but it's not nothing. A 6-8 week slip is probably manageable, but it starts a chain of "we'll get to it" that worries me.
+And VP Engineering saying "I'll back what you decide" — I hear you that it's not ideal, but I also took it as genuine. He's been around a long time. I don't think he's hanging me out to dry, I think he genuinely trusts me to work it.
 
-And honestly, both. I need to figure out what the right call is AND how to get there without a war with Sales. But if I'm being honest, I think I also know I'm probably going to have to escalate to the CEO and I've been avoiding it. I don't love escalating.
+But — the customer question is actually something I haven't dug into enough. VP Sales has been in "this is existential" mode and I've been reacting to that framing. I don't actually know what the customer's procurement requirement is underneath the headline ask. Like, does SAML alone satisfy their security review? Can they onboard manually for a quarter if roles come later? I don't know, and that feels like a gap.
+
+I've been sitting on some scope-reduction options I haven't fully pressure-tested either. Ship SAML for Q2 and SCIM for Q3. Or basic SSO without fine-grained roles, if the contract language actually lets us defer that. I don't know if any of these would satisfy the customer, and I realize I've been treating that as an unknown instead of going to find out.
 
 **Assistant:**
-The scoped delivery angle is potentially the most important thing in this whole situation — and the fact that it hasn't been validated yet is where I'd focus first. You might be carrying a lot of weight on a tradeoff that doesn't fully exist.
+That's the right diagnosis — you've been managing the *perception* of the problem ("existential!") instead of the *substance* of it. And the customer requirements gap is exactly where to start. Let me also clarify what I meant by "force it up," because I think it landed wrong.
 
-Here's what I'm hearing as the actual shape of this:
+I wasn't suggesting dropping this on the CEO. I meant: don't make the final tradeoff call *alone* when it has VP-level consequences. Coming to your VP of Engineering with a proposal and saying "here's the path I'm recommending, I need your sign-off" is not failure — that's how this should work. The bad version is you quietly deciding to de-prioritize the migration and nobody at VP level explicitly blessed that tradeoff. Your VP saying "I trust you" doesn't protect you if that comes back later.
 
-**There might be a viable path no one has confirmed yet.** SAML in Q2, SCIM + roles in Q3 — if procurement accepts that, the platform migration stays intact, Data Retention slips a manageable amount, and the deal closes. But right now that's a hypothesis sitting in your head.
+But — that's a later problem. Right now you've correctly identified that you're missing the foundation for *any* of the scope options. You can't evaluate SAML-only-for-Q2 until you know whether SAML satisfies the customer's actual requirement.
 
-**The thing blocking you isn't the decision — it's that the right conversations haven't happened.** You need Raj to tell you whether SAML-only in Q2 is actually achievable without derailing the migration. You need Sales to find out whether the customer will accept the scoped delivery. And yes, you need the CEO in the loop.
+**Here's the sequence that makes sense to me:**
 
-On the escalation piece — I want to push on that a little. You said you know you need to do it and you've been avoiding it. What's the actual fear there? Is it being seen as someone who can't handle their domain? Not wanting to create a Sales vs. Engineering political situation above you? Something else?
+**Step 1 (next 24 hours): One focused conversation with VP Sales.** Not about timelines — about requirements. Specific questions to get answered:
+- What does the customer's security review actually gate on? SAML alone, or does it require automated deprovisioning via SCIM?
+- How big is their initial rollout? If it's 50 users, manual provisioning for a quarter is fine. If it's 5,000, it's not.
+- What language is in the contract/SOW? "SSO and provisioning" or something more specific?
+- Is there any flexibility if you can give them *something* concrete by June 30 — even a working SAML integration with SCIM on a committed Q3 date?
 
-That matters, because there's a version of escalating this that isn't "I can't solve this" — it's "I have a plan, here's the tradeoff, I need your sign-off." Those feel very different to a CEO. The second one is what you'd be doing if you go in with the scoped delivery option in hand.
+**Step 2 (in parallel or right after): Quick scope conversation with Raj.** Not "can we do it all," but specific variants: SAML only — what's the estimate? SAML + basic provisioning without fine-grained roles — what's the estimate? These are probably different answers than "the whole thing."
+
+**Step 3: You'll know.** Either a path exists at your layer, or it doesn't and you go to VP Sales with a specific counter-proposal rather than a problem.
+
+The point about VP Sales being in "existential" mode is worth holding onto. That framing may be accurate, or it may be VP Sales managing their own anxiety about the commitment they made. You won't know until you get under the headline ask.
+
+What's your read on VP Sales — will they let you have that requirements conversation directly, or is this going to filter through them?
 
 ## Turn 4
 
 **User:**
-Yeah, I think it's both of those things. I don't want to be the person who kicks problems upstairs when they could be solved at my level. And I'm genuinely worried about creating a Sales vs. Engineering thing — VP Sales is pretty forceful and I'd rather not have that fight in a room with the CEO if I can avoid it.
+Okay, that reframe on "force it up" actually helps. Coming to VP Engineering with a recommendation and asking for sign-off — yes, that's different from what I was picturing. That I can do.
 
-But you're right that going in with "here's the tradeoff, here's my recommendation, I need sign-off" is different from "help, I can't figure this out." And honestly the CEO is probably going to be annoyed if this surfaces later without warning, especially given the size of the contract.
+On VP Sales: yes, I can go directly. We have a working relationship, it's just been tense this week because he keeps framing everything as a crisis and I've been trying to pump the brakes. But he's not going to route me through VP Engineering. If I come to him with specific questions instead of another "here's why it's hard" conversation, I think he'll engage.
 
-Okay, so — the scoped delivery option. Let's say I go validate it. Raj confirms SAML-only is doable in Q2. Sales goes back to the customer and they accept it. What am I actually deciding at that point? Because even then, I feel like there are real tradeoffs I'd want the CEO to understand rather than me just solving it quietly.
+Honestly, your step 1 questions are almost exactly what I should have asked three days ago instead of getting pulled into the timeline fight. The SCIM deprovisioning one in particular — I have no idea whether their security review requires automated deprovisioning or whether that's a nice-to-have. That's a real gap.
+
+The thing I'm still uncertain about: even if I do steps 1 and 2 and find a path, at some point VP Sales and VP Engineering are going to need to be aligned. If I bring them a phased proposal — SAML for Q2, SCIM for Q3 — VP Engineering still needs to bless de-prioritizing two weeks of migration work to make the Q2 part real. So I guess my question is, when does that conversation happen? Before I have the requirements clarity, or after?
 
 **Assistant:**
-That's exactly the right question — and it shows you're thinking about this the right way.
+After. Clearly after. Here's why:
 
-Even in the "scoped delivery validates" scenario, here's what you'd actually be deciding:
+Right now you don't have anything concrete to align on. If you bring VP Engineering in before steps 1 and 2, you're asking him to evaluate a hypothetical tradeoff — "should we pause some migration work to potentially do SAML for a customer who might be okay with that?" That's not a real ask. He can't meaningfully say yes or no, and you'll likely end up in another abstract discussion.
 
-**1. Who owns the Data Retention risk.** A 6-8 week slip with regulatory implications for existing customers — even if manageable — is a risk that should be explicitly accepted by someone with the authority to accept it. If you absorb that quietly and it becomes a problem later, you own it alone.
+His "I'll back what you decide" is telling you something: he wants you to come back with a recommendation, not another status update. Come to him when you can say: *"Here's what I found out. SAML alone satisfies the customer's security review. Raj says six weeks with two engineers, and I've identified which two. That means the migration slips by two weeks on the data retention work. I'm recommending we take that tradeoff. I need your explicit sign-off."*
 
-**2. Whether the Q3 SCIM/roles commitment is real.** Deferring to Q3 creates a new promise. To the customer, to Sales. Is that commitment being made with the same rigor (or lack thereof) as the Q2 one was? Someone needs to make it deliberately, not just as the residue of solving the current problem.
+That's a 10-minute conversation and he'll say yes or no. You walk out with an answer.
 
-**3. What happens to the process that created this situation.** VP Sales made a verbal commitment without an engineering sign-off loop. If that doesn't get addressed, you'll be back here in six months with a different customer.
+The three-way alignment — you, VP Sales, VP Engineering — only needs to happen if there's a conflict that can't resolve at your layer. Which you won't know until you've done the discovery. Most likely it doesn't happen at all: VP Engineering blesses the tradeoff, you tell VP Sales what you can deliver and by when, VP Sales manages the customer.
 
-So even in the clean scenario, you're not just "solving it quietly" — you're making organizational decisions about risk tolerance and process. Those belong in a room with the CEO, not because you can't handle your domain, but because they're actually above your domain.
+**On urgency:** it's May 8. If SAML-only is even 4-5 weeks of work, you're making this decision on borrowed time. The discovery conversations — VP Sales and Raj — should happen in the next 48 hours, not next week.
 
-The framing I'd suggest: *"I've worked through this and I have a recommendation. But there are two things I need from you: sign-off on accepting the Data Retention slip, and a conversation about how we prevent this pattern with Sales going forward."*
+One framing shift for the VP Sales conversation: don't walk in with scope options to negotiate. Walk in with questions. *"I want to find a path here, but I need to understand what actually matters to the customer before I can propose anything credible."* That repositions you from "Engineering pushing back" to "Engineering doing due diligence to solve this." Different dynamic entirely.
 
-That's not escalating a problem. That's doing your job and asking the CEO to do theirs.
-
-Does that framing feel usable, or is there something about the dynamic with your CEO or VP Sales that makes it more complicated?
+What's your calendar look like — can you get VP Sales tomorrow?
 
 ## Turn 5
 
 **User:**
-That framing actually helps a lot. The "sign-off on the risk" piece especially — I think I was unconsciously treating this like my problem to solve cleanly, when some of it is genuinely above my pay grade.
+Yes, I can get him tomorrow morning. That's not the obstacle.
 
-The VP Sales dynamic is real though. He's going to come into that room pushing hard for the full Q2 commitment and probably framing any scope reduction as Engineering being difficult. I've seen it before. I'm a little worried that if I go to the CEO with a recommendation and Sales pushes back hard in the room, it turns into a negotiation I lose — and then I'm worse off than if I'd tried to align with Sales first before bringing the CEO in.
+The framing shift you offered — questions, not options — that's actually the thing I most needed to hear. I've been going into every conversation in defense mode, explaining why the timeline doesn't work. That's the wrong posture and I've known it but haven't been able to get out of it.
 
-So maybe the sequencing matters here? Like, do I try to get Sales to co-own the scoped delivery option before I take it to the CEO? Or does that just give him the chance to kill it before it gets there?
+Okay. So my week looks like: tomorrow, VP Sales with the requirements questions. Tomorrow afternoon or Monday, Raj with the specific variants. Then VP Engineering with a recommendation once I have real numbers.
+
+The thing I want to make sure I'm not kidding myself about: is there a scenario where steps 1 and 2 don't produce a path — where even SAML alone is too much to do in 6 weeks, or the customer won't accept a phased approach — and then what? At some point this becomes a VP-level problem that has to go above me, right? Including potentially to the CEO if Sales and Engineering can't get aligned?
 
 **Assistant:**
-The sequencing instinct is right — this matters. But I'd reframe the choice slightly.
+Yes, and you're right to not kid yourself. Let's name it clearly.
 
-The risk with pre-aligning Sales is that you're asking him to *agree* to something before the CEO meeting. That gives him veto power. But there's a different conversation you could have with Sales that doesn't carry that risk: instead of "will you co-own this scoped option," ask "will you find out if the customer will accept it."
+**The no-path scenarios:**
 
-That's not negotiation — it's information-gathering. And it's genuinely collaborative. You're not proposing scope reduction; you're saying: *"I need to know if this deal can still close with SAML in Q2 and SCIM/roles in Q3, because that's the question that determines what we recommend to the CEO. Can you get me that answer?"*
+1. Raj comes back and says even SAML-only is 8-9 weeks — there's genuinely not enough runway regardless of scope.
+2. The customer's security review requires automated deprovisioning, making SCIM non-deferrable.
+3. Both things are technically achievable, but the migration cost is so high that VP Engineering won't bless the tradeoff.
+4. You find a path, bring it to VP Sales, and the customer won't accept anything phased — they want the full commitment honored.
 
-He can't really say no to that. And if the customer says yes, he's now the one who validated it — which makes it much harder for him to fight it in the room.
+In any of these cases: yes, it becomes a VP-level problem. And yes, if VP Sales and VP Engineering can't align, it goes to the CEO.
 
-**The sequencing I'd actually suggest:**
+**But here's the thing — that's not your failure.** The failure would be if you showed up to that conversation empty-handed. If you arrive having done the work — customer requirements understood, scope options with real estimates, a specific proposal, a clear articulation of what doesn't work and why — you're not dropping a problem on the CEO's desk. You're doing exactly what a Director should do: surfacing a decision that requires authority above your level, with all the information needed to make it.
 
-1. **Raj first** — confirm SAML-only in Q2 is achievable without blowing up the migration. Quick, internal, you control it.
-2. **Sales as information-gatherer, not decision-maker** — ask him to validate customer acceptance of scoped delivery. Collaborative framing.
-3. **Brief the CEO informally before any formal meeting** — a quick heads-up: "There's a customer commitment situation I'm working through, I'll have a recommendation for you by [date]." This means the CEO isn't blindsided and has time to think. It also subtly signals that you're in control of this.
-4. **Formal meeting with full picture** — recommendation, tradeoffs, what you need from them.
+The version that looks bad is "I've been going in circles for three weeks and I don't know what to do." The version that looks good is "I've pressure-tested every path, here's the one option that might work and what it costs, here's what happens in each scenario, and VP Sales and VP Engineering can't align — I need a call." Those are very different conversations.
 
-The informal CEO heads-up is probably the most underrated move here. It reframes the whole dynamic — you're not escalating a crisis, you're briefing your CEO on something you've already largely solved.
+There's also a reframe worth having on the CEO question specifically: **a $1.2M ARR commitment made without engineering input is already a VP-level problem.** It became one the moment VP Sales signed that deal. You didn't create this situation. You're trying to resolve it. If it ultimately requires executive arbitration, that's the natural consequence of how the commitment was made — not evidence that you failed to solve it.
 
-What's your read on your CEO? Is this someone who'd appreciate that heads-up, or someone who'd rather just get the full recommendation when it's ready?
+Your plan for this week is right. Do the discovery. Come back with real numbers. Then you'll know which scenario you're in — and you'll know exactly what to do next in either case.
 
 ## Turn 6
 
 **User:**
-He'd appreciate the heads-up. He doesn't like surprises — especially on anything revenue-adjacent. So yeah, a quick "heads up, here's the situation, I'll have a recommendation by Thursday" is probably exactly right. That's actually relieving to hear framed that way.
+That last paragraph actually helps more than the rest of it put together. I've been carrying this like it's my fault to solve, and that's not quite right.
 
-Okay. I think I have a clearer picture of what this week looks like. Talk to Raj today or tomorrow, get Sales to go back to the customer on the scoped option, drop the CEO a heads-up note, and come back with a full recommendation once I have the customer answer.
+One thing I should probably admit: the CEO hasn't been briefed on any of this. Like, at all. I've been managing it at my layer specifically to avoid it becoming a CEO-level thing. If it does need to go there — which now I'm thinking it might — that's going to be a more complicated conversation because it'll feel like it came out of nowhere for him.
 
-The one thing I'm still sitting with is the process question — the "how do we prevent this with Sales going forward" piece. I know it needs to be part of the CEO conversation, but I'm a little worried about how to raise it without it sounding like I'm throwing VP Sales under the bus. Any thoughts on how to frame that piece?
+I don't know if that changes anything about the sequence you laid out, but it feels relevant.
 
 **Assistant:**
-The key move is to make it about the gap, not the person — and to position yourself as proposing a solution, not filing a complaint.
+It's relevant, but it doesn't change your sequence — it adds one thing to step 3.
 
-Something like: *"One thing I'd like to use this situation to address is how we handle enterprise feature commitments going forward. We don't currently have a lightweight check-in process between Sales and Engineering before timelines get shared externally. I'd like to propose one."*
+Steps 1 and 2 are still exactly right. You don't have enough information to brief anyone usefully yet, including the CEO. A heads-up with no resolution path creates anxiety without helping anything.
 
-Notice what that framing does:
-- It doesn't say VP Sales did something wrong — it says there's no process, which is true
-- It positions you as solving a company problem, not settling a grievance  
-- It gives VP Sales a graceful exit — he wasn't reckless, he was operating in a gap
+What it changes: when you bring your recommendation to VP Engineering, you add one explicit thing to that conversation: *"He hasn't been briefed on any of this. If this needs to go up, I think we need a plan for that — whether that's a proactive heads-up from you now, or a joint conversation if it turns into an escalation."*
 
-VP Sales may even welcome it. He's presumably not happy that his $1.2M deal is at risk either. A quick "engineering feasibility check before we put a date in a customer's procurement timeline" protects him too.
+That's his call to make, not yours. VP Engineering has been in the email threads. This isn't a situation where you've been hiding something from your chain of command — you've been managing at your layer, appropriately, while your VP was aware. The CEO briefing is a VP-level decision about what to surface up. You surfacing it explicitly in your recommendation conversation is the right move; you going around VP Engineering to brief the CEO directly would not be.
 
-The process itself doesn't need to be heavy — probably just a standing agreement that any feature commitment with a specific timeline gets a 24-48 hour engineering read before it leaves the building. Frame it as lightweight and sales-enabling, not a gate or a blocker.
+The one thing I'd flag: the longer a significant situation stays invisible to the CEO, the worse the "it came out of nowhere" problem gets. If VP Engineering's response to your flag is "let's just see how the discovery goes first," that's probably fine — you've got a week before you have real information anyway. If his response is "I don't think we need to loop him in," that's worth a gentle pushback: a $1.2M commitment in question, 8 weeks from deadline, is exactly the kind of thing CEOs want early visibility on. A heads-up framed as "we're working on a path" is a very different conversation than an emergency briefing.
 
----
+But that's his call. Your job is to surface it — once, clearly — and let him own it.
 
-You've got a solid plan. To summarize where you've landed:
-
-- **Today/tomorrow:** Talk to Raj — confirm SAML-only Q2 feasibility
-- **This week:** Ask Sales to validate scoped delivery with the customer
-- **Soon:** Drop the CEO a heads-up note
-- **By Thursday:** Full recommendation with tradeoffs and a process proposal
-
-That's a Director handling a hard situation well. What would be most useful to work through next — how to structure the CEO recommendation itself, or something else?
+Does that feel like it resolves the concern, or is there something else about the CEO dynamic that's weighing on you?
 
 ## Turn 7
 
 **User:**
-No, I think I actually have what I needed. The CEO recommendation will be easier to structure once I have the answers from Raj and Sales — at that point it's just laying out the options and the tradeoffs, which I can do.
+No, that resolves it. "Surface it once, clearly, and let him own it" — I can do that. That's actually a relief to hear framed that way.
 
-Honestly this was helpful. I came in thinking the problem was "how do I balance everything" and I think the real problem was that I was trying to solve something that was only partly mine to solve. The framing around escalating as someone who has a plan — not someone who needs rescuing — makes this feel a lot more manageable.
+I came in this morning pretty tangled up in this, and I feel like I have an actual week in front of me now. Tomorrow VP Sales with the requirements questions, Raj with the specific scope variants, then VP Engineering with a real recommendation. And I stop managing this like it's my private problem to solve.
 
-Thanks. I've got enough to move on this today.
+Thanks for not just handing me back a restatement of my options. I've been staring at those for three days.
 
 **Assistant:**
-Good luck today. That reframe you landed on — *"partly mine to solve"* — is the one worth holding onto. The action plan is solid and the sequencing is right.
+Good luck tomorrow. You've got the right questions and the right posture — that's most of it.
 
-Come back when you have the answers from Raj and Sales if you want help structuring the CEO recommendation.
+One thing worth remembering when VP Sales does his "this is existential" framing: you're not there to push back on it, and you're not there to agree with it. You're there to find out what's actually true underneath it. That's a very stable place to operate from.
+
+Come back if the discovery surfaces something unexpected. There may be more to think through once you have real numbers.Glad it helped. Good luck tomorrow.

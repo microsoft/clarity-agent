@@ -1,6 +1,6 @@
 {
   "clarityAgent": {
-    "path": "/Users/yzunger/src/clarity-agent",
+    "path": "C:/Users/eho/source/repos/clarity-agent",
     "version": "1.0.0"
   },
   "thinkers": {
@@ -11,63 +11,48 @@
     "custom": []
   },
   "documentState": {
-    "summary.md": {
-      "contentHash": "83d7ceef158390770fbcb6ee7d3ad06543ca4e448220f6a72e147d73da245002",
-      "dependencyHashes": {
-        "goal/problem.md": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc",
-        "goal/stakeholders.md": "2c15ddd040cf82a1512ae15603b895b657b682707d405429ffef66c208131398",
-        "solution/solution.md": "8d885e4619057b26c23f9d053458fccc62d7fe1f0e964c2d08e71b32b5ceaa2b"
-      }
-    },
     "goal/problem.md": {
-      "contentHash": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc",
+      "contentHash": "79f5d9e721f3e9327506f981ce542ff0f36dd64691b6c75e1a2545f50f25f792",
       "dependencyHashes": {}
     },
     "goal/stakeholders.md": {
-      "contentHash": "2c15ddd040cf82a1512ae15603b895b657b682707d405429ffef66c208131398",
+      "contentHash": "11ef270182df9dca7c439ca81c5e57447aeb0bbfb2194a30b08e83cf38d44984",
       "dependencyHashes": {
-        "goal/problem.md": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc"
+        "goal/problem.md": "79f5d9e721f3e9327506f981ce542ff0f36dd64691b6c75e1a2545f50f25f792"
       }
     },
     "goal/requirements.md": {
-      "contentHash": "e771dface66a4a6aaf175e42ed2396744d6d5dc7f1a2901999d2afa3b0bfc09c",
+      "contentHash": "3ef6f7729efb7574017cd34eb17c7d251a25f69aea517d43cd6cba13de5cc83b",
       "dependencyHashes": {
-        "goal/problem.md": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc",
-        "goal/stakeholders.md": "2c15ddd040cf82a1512ae15603b895b657b682707d405429ffef66c208131398"
+        "goal/problem.md": "79f5d9e721f3e9327506f981ce542ff0f36dd64691b6c75e1a2545f50f25f792",
+        "goal/stakeholders.md": "11ef270182df9dca7c439ca81c5e57447aeb0bbfb2194a30b08e83cf38d44984"
       }
     },
     "goal/open-questions.md": {
-      "contentHash": "c8e70979f015d27083d7b7c3caaa3ce0470ebea9860d5c662e55e2aafc626299",
+      "contentHash": "11ecfd51519d5406128ec818b695c9ad4aaee49cc3e548f0a14056535071d4c9",
       "dependencyHashes": {
-        "goal/problem.md": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc"
+        "goal/problem.md": "79f5d9e721f3e9327506f981ce542ff0f36dd64691b6c75e1a2545f50f25f792"
       }
     },
     "solution/solution.md": {
-      "contentHash": "8d885e4619057b26c23f9d053458fccc62d7fe1f0e964c2d08e71b32b5ceaa2b",
+      "contentHash": "e56a0ce58281b3f5f931f834c6d5b24e041aab1a58e6f143efef68d6732a7ed9",
       "dependencyHashes": {
-        "goal/problem.md": "9142027b3ce3591d61fc1e43033d37675977a938b677288a3c936474683548cc",
-        "goal/requirements.md": "e771dface66a4a6aaf175e42ed2396744d6d5dc7f1a2901999d2afa3b0bfc09c",
-        "goal/open-questions.md": "c8e70979f015d27083d7b7c3caaa3ce0470ebea9860d5c662e55e2aafc626299"
-      }
-    },
-    "solution/solution-summary.md": {
-      "contentHash": "a5ac4a68e62e989874b47badd751ddf47887d98b99a9c41b39718d6d0a69d5ba",
-      "dependencyHashes": {
-        "solution/solution.md": "8d885e4619057b26c23f9d053458fccc62d7fe1f0e964c2d08e71b32b5ceaa2b",
-        "solution/architecture.md": "1cf121561af2397cb7ceb36aa67102813b97027c8e4c7b4404d95e7158f5493a"
-      }
-    },
-    "failures/failures.md": {
-      "contentHash": "4aadeafd18c13e373ef287417965b68461fed7dce5ad8cdc8777e7a1bf1da452",
-      "dependencyHashes": {
-        "solution/solution.md": "8d885e4619057b26c23f9d053458fccc62d7fe1f0e964c2d08e71b32b5ceaa2b"
+        "goal/problem.md": "79f5d9e721f3e9327506f981ce542ff0f36dd64691b6c75e1a2545f50f25f792",
+        "goal/requirements.md": "3ef6f7729efb7574017cd34eb17c7d251a25f69aea517d43cd6cba13de5cc83b",
+        "goal/open-questions.md": "11ecfd51519d5406128ec818b695c9ad4aaee49cc3e548f0a14056535071d4c9"
       }
     },
     "solution/architecture.md": {
-      "contentHash": "1cf121561af2397cb7ceb36aa67102813b97027c8e4c7b4404d95e7158f5493a",
+      "contentHash": "83bebedfde97e3ff47ef14914de94d8951f6c433173e8ff82e2c08a4c03f87c5",
       "dependencyHashes": {
-        "solution/solution.md": "8d885e4619057b26c23f9d053458fccc62d7fe1f0e964c2d08e71b32b5ceaa2b",
-        "failures/failures.md": "4aadeafd18c13e373ef287417965b68461fed7dce5ad8cdc8777e7a1bf1da452"
+        "solution/solution.md": "e56a0ce58281b3f5f931f834c6d5b24e041aab1a58e6f143efef68d6732a7ed9"
+      }
+    },
+    "solution/solution-summary.md": {
+      "contentHash": "630d13174f2832b191d317d37459b14141f0bf4228238dfc2309dbadc1394dd1",
+      "dependencyHashes": {
+        "solution/solution.md": "e56a0ce58281b3f5f931f834c6d5b24e041aab1a58e6f143efef68d6732a7ed9",
+        "solution/architecture.md": "83bebedfde97e3ff47ef14914de94d8951f6c433173e8ff82e2c08a4c03f87c5"
       }
     }
   }

@@ -1,32 +1,45 @@
-# Problem Statement
+# Problem
 
-YATA-based rich-text CRDT with a separate attribute layer for marks. When a mark range and a concurrent local insertion straddle the mark boundary, the YATA ordering resolves correctly, but the insertion ends up attributed to the mark roughly 50% of the time against user intent — depending on which side of the boundary the insertion logically belongs.
+## What we're working on
 
-Three candidate approaches have been evaluated:
-- (a) Explicit attach-left/attach-right bits per mark endpoint (Fuchs-Fuchs style)
-- (b) Deriving attachment intent from causal relationships in cursor metadata
-- (c) Accepting ambiguity and surfacing UI disambiguation on divergence
+A mark-attribution ambiguity in a YATA-based rich-text CRDT. When a mark (e.g., bold) has a right-open boundary and a concurrent insertion lands at or near that boundary, the merge produces a correct total order but incorrect attribution roughly half the time — the insert inherits the mark when it shouldn't, or vice versa, depending on which side of the boundary the user's intent placed it.
 
-Design review is in two days. Need to evaluate spec complexity, runtime cost, and team intelligibility — and determine whether a fourth option is worth considering.
+## Success criteria
 
-## Decision
+A design that:
+- Produces correct, deterministic mark attribution for concurrent inserts at mark boundaries
+- Keeps mark-semantic logic out of the CRDT merge path
+- Is auditable for legacy documents (bare `char_id` left-origins)
+- Can be phased: fix the bug now, improve bias derivation later without a second protocol change
 
-Option (a): per-instance attach-left/attach-right bits on mark endpoints, with a type registry providing defaults (bold = right-sticky, links = closed, comments = author-specified). Type registry and per-instance bits are layered, not alternatives.
+## Approaches evaluated
 
-Options (b) and (c) eliminated: (b) defers the problem to cursor metadata layer without resolving it; (c) gives up on determinism.
+### Option A: Explicit attach-left/attach-right bit on mark endpoints (Fuchs-Fuchs)
+Type-level (one expand policy per mark type) is correct. Instance-level is a footgun — every mark-creation callsite becomes load-bearing correctness. Key decision: type-level vs. instance-level matters more than mechanism choice.
 
-## Second-Order Concerns (with mitigations)
+### Option B: Deriving attachment from causal cursor metadata at insert time
+Not viable. Local cursor state at insert time may conflict with post-merge mark state. No principled resolution when metadata contradicts position-derived attribution. High complexity, low maintainability.
 
-**Gap case**: Two concurrent marks with closed endpoints anchored to the same character leave a formatting gap. Cannot be prevented at creation time in a concurrent system. Requires post-merge detection and a stated tiebreak policy (e.g., lower Lamport timestamp wins the boundary claim).
+### Option C: UI disambiguation on merge conflict
+Not viable for the common case (typing at a mark boundary happens constantly). Only defensible for rare, exotic conflicts. Breaks the CRDT's seamless-collaboration promise.
 
-**Span flattener**: Serializer must handle marks with different extents at the same boundary position — A extending past B's closed endpoint. Requires explicit test cases; cannot assume clean nesting.
+### Typed anchors (fourth option, extension of A)
+Left-origin becomes `{ id: char_id, bias: 'left' | 'right' }` rather than a bare `char_id`. Marks are attributed by comparing anchors directly — no mark-schema logic in the merge path. The editor sets bias from keyboard navigation direction when available; falls back to the mark-type expand rule otherwise. The CRDT stays decoupled from mark semantics entirely.
 
-**Cursor context**: Editor must derive toolbar state from the stickiness bit of the enclosing mark's right endpoint, not just from whether cursor position falls inside the character span. Rule: at a boundary, cursor is "in" the mark iff the mark's endpoint is right-sticky.
+## Chosen direction
 
-## Why This Matters
+**Typed anchors with type-level fallback, shipped in two phases:**
 
-Concurrent boundary insertions are not edge cases in collaborative rich-text editing — they happen constantly as users type. A ~50% misattribution rate is a user-visible bug that undermines trust in the CRDT's correctness.
+- **Phase 1 (immediate):** Add `expand: { left, right }` to mark type schema. Change left-origin wire format to `{ id, bias }`. Editor derives bias from mark-type schema (same decisions as Option A). CRDT uses bias field; never consults mark schemas. Fixes the attribution bug.
+- **Phase 2 (later, no protocol change):** Editor derives bias from keyboard navigation direction when available; falls back to type schema when not (mouse clicks, programmatic inserts, contenteditable ambiguity).
 
-## Success Criteria
+## Legacy migration policy
 
-A chosen approach that is: deterministic (no ambiguity in merge output), implementable within the YATA framework without major protocol changes, intelligible to the team, and defensible at the design review.
+Bare `char_id` left-origins in existing documents are interpreted as `{ id: char_id, bias: 'right' }` — the least-wrong default, not a semantic implication of YATA (YATA's left-origin is an ordering constraint, not a mark-attribution statement). The audit of mark types where boundary attribution is semantically critical is load-bearing, not optional. Per-type migration flags handle anything that doesn't hold up.
+
+## Key constraints
+
+- Full control over insert schema across all clients — typed anchors not blocked on protocol grounds
+- Mix of ProseMirror and contenteditable implementations; contenteditable requires virtual cursor state tracking (not DOM selection) to reliably capture navigation direction
+- Comment marks need non-expanding behavior (type-level `expand: { left: false, right: false }`) — not an argument for instance-level bits
+- Design review in two days — frame as "lead with the fix, not the architecture"

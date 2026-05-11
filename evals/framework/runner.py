@@ -232,7 +232,7 @@ def protocol_content(result: SessionResult) -> str:
     parts: list[str] = []
     for path in sorted(result.protocol_dir.rglob("*.md")):
         try:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         if text.strip():

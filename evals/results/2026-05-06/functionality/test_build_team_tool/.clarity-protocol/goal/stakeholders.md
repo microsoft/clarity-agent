@@ -1,44 +1,21 @@
 # Stakeholders
 
-## Engineers (7-person team)
+## Engineers (Primary Users) — Direct, Aligned
 
-**Type:** aligned  
-**Engagement:** direct
+Seven engineers on one team. They update their own status row and read everyone else's. Technically comfortable but won't tolerate friction: if updating takes more than a few clicks, they'll stop doing it. They need to trust the system to reflect reality (i.e., other people's entries are real, not stale). Concerns: extra tool overhead, feeling surveilled.
 
-**Characteristics:** Full-time engineers, same timezone, mostly in-office 3 days/week. Technically capable. Currently using Jira (but not updating it) and Slack for coordination. Have an informal shared understanding of "risky" areas in the codebase.
+## Team Lead / Engineering Manager — Direct, Aligned
 
-**Goals:** Know what teammates are working on, especially in adjacent areas. Be able to flag their own work as touching shared infrastructure so others are aware. Update their status with minimal overhead — ideally as a natural part of starting and finishing work.
+The person who commissioned this tool (primary stakeholder driving the build). Needs a clean, always-ready view for exec reviews and for spotting blockers before they escalate. Will be the de facto admin. Cares about adoption — a dashboard that engineers don't update is worse than nothing.
 
-**Concerns:** Another tool that becomes a burden to maintain. Being interrupted or nagged. Overhead that doesn't pay off.
+## VP and Other Managers — Direct, Aligned (Read-Only)
 
----
+Consume the dashboard in review settings; don't contribute to it. Need a clean, legible view at a glance — this is their signal about team health, not a project-management tool. Won't want to learn a new interface; the experience needs to be zero-friction for a viewer.
 
-## Team Lead (the user)
+## Future Team Leads / Additional Teams — Indirect, Aligned
 
-**Type:** aligned  
-**Engagement:** direct
+Not current users, but the data model and permissions design should not require rework if the team splits or a second team is added. Their needs are similar to the current team's.
 
-**Characteristics:** Manages the 7-person team, responsible for coordination, fielding management questions, and preventing incidents. Currently relies on memory and standup for team status — knows this is incomplete and late.
+## Surveillance-Sensitive Engineers — Aligned but Tension Point
 
-**Goals:** Accurate, current mental model of what the team is doing. Ability to answer VP questions confidently. Early warning when work is happening in shared/risky areas. Standup that covers depth rather than basics.
-
-**Concerns:** Still having a stale picture despite a new tool, because engineers don't update it. Tool adds friction without payoff.
-
----
-
-## VP / Executive Stakeholder
-
-**Type:** aligned  
-**Engagement:** indirect
-
-**Characteristics:** Receives periodic updates from the team lead. Not monitoring the team day-to-day. Asks "who's working on what" in exec reviews.
-
-**Goals:** Confidence that engineering is organized and that leadership has a handle on the team.
-
-**Concerns:** Receiving an incomplete or uncertain answer from the team lead (as happened in the exec review). Doesn't want to be pulled into team-level tooling.
-
----
-
-## Adversarial Stakeholders
-
-None identified. This is an internal tool for a small, trusted team. There is no meaningful adversarial surface.
+Engineers who feel the tool is being used to micromanage rather than coordinate. Not an external adversary, but a real risk to adoption. If status updates feel like time-tracking or performance monitoring, engineers will stop updating or update performatively. The design should minimize this perception: no history/audit trail visible to managers, no "last active" indicators beyond the last-updated timestamp on the status itself.

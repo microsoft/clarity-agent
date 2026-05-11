@@ -260,11 +260,10 @@ Please begin the conversation with your opening message.
 
 ## ASSISTANT (turn 1)
 
-Hey. I've been applying to software engineer jobs for about ten weeks now — roughly 80 applications — and I'm getting almost no responses. Three recruiter phone screens, no technical interviews, no offers. I think my resume might be the problem. Can you take a look and tell me what to fix?
+Hey, I've been applying for software engineer jobs for about ten weeks now — roughly 80 applications — and I've gotten three recruiter phone screens and nothing else. No technical interviews, no offers. I think the resume is the problem but I'm not sure what to fix. Here's what I've been sending:
 
-Here's what I've been sending out:
+---
 
-----------
 TYLER BROOKS
 tyler.brooks.tx@gmail.com · Austin, TX · (512) 555-0192
 
@@ -282,9 +281,10 @@ United States Marine Corps — 2018–2024
 
 TECHNICAL SKILLS
 Python · JavaScript · HTML/CSS · Git · Linux command line
-----------
 
-I've heard ATS systems care a lot about keywords and that bullet points should start with action verbs. I want to make sure I'm doing both of those things.
+---
+
+I've heard ATS systems care a lot about keywords and that bullet points should start with action verbs. I want to apply both of those things. Can you help me get this resume into better shape?
 
 STATUS: ONGOING
 
@@ -292,57 +292,33 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Honest answer: the ATS keywords and action verbs are real concerns, but they're not your biggest problem. I'd put them third on the list. Here's what I actually see:
+Before we touch ATS keywords, I want to be honest with you about something I see in this resume.
 
----
+**The military experience section is almost certainly a bigger problem than ATS formatting.** You have a six-year gap with a single line: "United States Marine Corps — 2018–2024." No role, no location, no bullet points, nothing about what you actually did. A recruiter looking at this doesn't know if you were infantry, logistics, IT, intelligence, or administration. That ambiguity is likely killing you faster than any keyword issue.
 
-**The critical issue: your Marine Corps service is invisible.**
+Recruiters spend 6–10 seconds on a first pass. Right now your resume says: "I have six years I can't talk about and some Coursera certificates." The ATS stuff matters, but you need *content* first.
 
-Six years of service — 2018 to 2024 — and the resume just says "United States Marine Corps." That's it. Recruiters see a six-year gap with no content and move on. But those six years almost certainly contain exactly what hiring managers want: leadership under pressure, accountability for people and equipment, operational problem-solving, technical systems experience. We don't know because you haven't told us.
+A few questions before we rebuild this:
 
-This is the most important thing to fix, and it can't be fixed with keywords — it has to be filled in with real content.
+1. **What did you actually do in the Marines?** Job title/MOS, what you were responsible for, how many people you led or worked with, any technical systems you used or maintained.
 
----
+2. **Have you built anything?** Personal projects, class projects, anything you could put on GitHub — even small stuff. For someone transitioning into software without professional engineering experience, projects are your portfolio.
 
-**Second: no projects section.**
+3. **What kinds of roles are you applying for?** Front-end, back-end, full-stack, something else? Entry-level? And are you targeting Austin specifically or open to remote?
 
-For a career transitioner without commercial software experience, projects are your proof of technical ability. Coursework projects, personal projects, anything you built — they belong on this resume. Without them, recruiters have no evidence you can write code beyond the skills list.
-
----
-
-**Third: your objective line is working against you.**
-
-"Software Engineer position at a growth-stage technology company" is filler — every recruiter has read it a hundred times. Replace it with a 2–3 sentence summary that leads with who you are: *Marine veteran, CS student, [specific skills], looking to bring [X] to [type of role]*. That's a person. The objective line is a form.
-
----
-
-**Fourth: technical skills are thin.**
-
-Python, JavaScript, HTML/CSS, Git, Linux is a starting point. What frameworks have you used? React? Flask? FastAPI? Any databases — SQL, SQLite, PostgreSQL? Any cloud basics — AWS, GCP? Any testing tools? If you've used them even in coursework, they belong here.
-
----
-
-**On ATS and action verbs specifically:** Yes, both matter — but only once you have content. You can't put action verbs on empty lines. Once you flesh out your Marine service and projects, we can make sure every bullet starts strong (*Led, Managed, Built, Reduced, Deployed*) and that the skills section echoes keywords from the job descriptions you're targeting.
-
----
-
-A few questions that'll help us actually fix this:
-
-1. What did you do in the Marines? MOS, rank, any technical or leadership roles?
-2. What have you built — even small things from your coursework or on your own?
-3. What kinds of roles are you applying to — frontend, backend, full-stack, something else?
+The answers will tell us what story the resume needs to tell — and *then* we make sure the right keywords are there to tell it.
 
 ## ASSISTANT (turn 2)
 
-Fair enough. Let me answer those.
+Fair point. I'll answer in order.
 
-1. I finished as an E-6, Staff Sergeant. Two deployments to Kandahar — 2019 and 2020-2021 — on Security Force Assistance teams. Basically embedded advisors to Afghan National Army units. I learned Pashto for it, conversational now. Last two years stateside I was a training NCO at the School of Infantry. Ran a 12-week small-unit-tactics course, led four other instructors, designed three new training modules. Two of them are still in the current curriculum.
+My MOS was 0369, Infantry Unit Leader. The last two years I was a training NCO at the School of Infantry — I ran lesson plans for a 12-week small-unit-tactics course, managed a section of four instructors, and built three new training modules. Before that I did two deployments to Kandahar with a Security Force Assistance team, where my job was advising Afghan National Army units. I learned Pashto for it; I'm conversationally fluent now.
 
-2. Projects are thin. I built a to-do app in Python and did some of the freeCodeCamp front-end stuff. Nothing I'd call impressive.
+Reason none of that's on the resume: my transition counselor at Camp Pendleton told me to only include things directly relevant to the job I'm applying for. I didn't see how training Afghan soldiers was relevant to software engineering, so I cut it.
 
-3. Full-stack or backend, mostly. I've been applying pretty broadly.
+For projects: I built a to-do list app in Python, and I've been doing the freeCodeCamp curriculum. Nothing on GitHub yet that I'd be confident showing someone.
 
-I'll be honest — I left almost all of that out because my transition counselor at Pendleton told me to only include things directly relevant to the job I'm applying for. Training Afghan soldiers didn't seem relevant to a software engineer role, so I cut it.
+Roles: entry-level or junior software engineer, mostly full-stack or back-end. Applying in Austin but open to remote.
 
 STATUS: ONGOING
 
@@ -350,59 +326,35 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Your transition counselor meant well but gave you advice that's quietly destroying your application rate. Here's why it's wrong:
+Your transition counselor gave you advice designed for someone with a full career of relevant experience who needs to *cut* things. You're in the opposite situation — you need to *build* content. Omitting the military experience didn't declutter your resume; it gutted it.
 
-**"Relevant" doesn't mean the task is the same — it means the skill maps to something the employer cares about.**
+Here's why what you did *is* relevant to software engineering:
 
-You didn't just "train Afghan soldiers." You ran a foreign military advisory program in a combat zone with incomplete information, built trust with people across a language and culture barrier, and made it work. Then you came home, took ownership of a training program, managed a team of four, and designed curriculum that outlasted your own tenure. That's not irrelevant to software engineering. That's the exact profile a team lead looks for when deciding who to hire.
+- **Building three training modules** = breaking complex systems into understandable pieces, writing documentation, iterative design. That's exactly what senior engineers do when they write onboarding docs or design APIs.
+- **Managing four instructors running a 12-week course** = leading a small team, accountability for outcomes, evaluating performance. Engineering managers want junior devs who've already done this.
+- **Learning Pashto to advise ANA units** = this is your best signal. You learned a Category IV language (one of the hardest for English speakers) because the mission required it. That tells a hiring manager you will figure out Rust, distributed systems, or whatever they need, because you've proven you learn hard things when it matters.
 
-Here's what your Marine background *actually* signals to a tech hiring manager:
+The "not relevant" framing was wrong. The *content* of small-unit tactics is not relevant. The *demonstrated capabilities* are extremely relevant.
 
-- **High performer.** E-6 in six years means you were promoted ahead of your peers, repeatedly. That doesn't happen by being average.
-- **Systems thinker.** You designed training programs from scratch and they survived institutional review. That's documentation, abstraction, and iteration.
-- **Team lead.** You managed four instructors. You've already done the job that a lot of junior devs spend years trying to get promoted into.
-- **Can learn hard things.** You learned Pashto. Conversationally. For a job. Hiring managers who see that don't think "military stuff" — they think "this person will learn our stack."
+A couple quick questions before I write a revised draft:
 
----
-
-Here's a draft of what your experience section could look like. Fill in the numbers I've marked with `[?]`:
-
----
-**United States Marine Corps** | 2018–2024 | Staff Sergeant (E-6)
-
-*Training NCO — School of Infantry, Camp Pendleton* | 2022–2024
-- Led a team of 4 instructors delivering a 12-week small-unit tactics course to [? Marines] per cycle
-- Designed 3 new training modules from scratch; 2 remain in the active SOI curriculum
-- Managed instructor scheduling, performance tracking, and student evaluations across [? training cycles]
-
-*Security Force Assistance Advisor — Kandahar Province, Afghanistan* | 2019, 2020–2021
-- Embedded with Afghan National Army units as a tactical advisor across two combat deployments
-- Built operational trust and coordinated directly with local commanders in Pashto (conversational)
-- Operated in high-ambiguity environments requiring rapid decision-making with incomplete information
-
----
-
-That last bullet is worth keeping even though it sounds non-technical — "high-ambiguity environments" and "incomplete information" are phrases software engineers recognize from their own work, and it distinguishes you from someone who's never had real stakes.
-
----
-
-**On projects:** a to-do app isn't nothing, but you're right that it won't turn heads on its own. The question is: does it actually work, and is the code on GitHub? If yes, we can write it up honestly. If you have a few weeks and want to build something slightly meatier — a small REST API with a database, or a simple full-stack app — that would help. It doesn't have to be impressive; it has to prove you can wire things together end to end.
-
-What numbers can you fill into those experience bullets? Approximate is fine — class sizes, number of cycles per year, whatever you remember.
+1. **Roughly how many students** cycled through the SOI course per year? (Even a ballpark — "~200 Marines per year" turns a vague bullet into a quantified one.)
+2. **Any SQL, frameworks, or other tech** — even from tutorials or class? Django, Flask, React, Node, anything? Or is the stack genuinely Python + JS + HTML/CSS for now?
+3. **Timeline**: Are you actively applying right now, or do you have a week or two to also put the to-do app on GitHub before the next wave of applications?
 
 ## ASSISTANT (turn 3)
 
-Okay. That reframe on the counselor's advice actually lands. I've been thinking about "relevant" wrong.
+That reframe on the Pashto point actually lands. I hadn't thought about it that way.
 
-Numbers I can give you:
+To your questions:
 
-- Class sizes were roughly 80 Marines per cycle at SOI
-- We ran about 4 cycles per year, so maybe 3 of those overlapped with my time as training NCO — call it 12 cycles over two years
-- Instructor scheduling and evals I handled myself; the other four instructors each owned specific blocks of instruction
+1. Roughly 300 Marines per year cycled through, maybe a little more. Four cohorts at around 75 per class.
 
-The to-do app is on GitHub, it runs, it's just not interesting. Basic CRUD, no database — stores to a JSON file. I'd rather build something better than put it front and center.
+2. Stack is pretty much what's on the resume. I've done a little Flask through tutorials — built a basic REST endpoint — but nothing I'd call proficient. No SQL yet, though I understand the concept.
 
-One thing I want to ask: you mentioned the Marine background signals "team lead" to a hiring manager. But I'm applying for junior SWE roles — is that framing going to backfire? Like, am I going to look overqualified for the entry-level stuff and underqualified for anything with actual leadership in the title?
+3. Actively applying. I've got time to put the to-do app on GitHub before the next round, it's not much but it's clean.
+
+What was wrong with the not-relevant framing — I get it now. Though I'll be honest, I'm still not sure how a recruiter at a software company reads "trained Afghan soldiers" and gets to "this person can code." Is the pitch that I'm a fast learner who can be developed, rather than someone who walks in already knowing the stack?
 
 STATUS: ONGOING
 
@@ -410,46 +362,86 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-The concern is real but I think you're imagining a sharper trap than exists in practice.
+Yes, exactly — and that's actually a strong pitch, not a weak one, if you say it explicitly. But let me sharpen it slightly:
 
-**The "overqualified" risk is mostly about two things:** whether you'll get bored and quit, and whether you expect a salary above what they're paying. Neither of those is written on your resume — they come up in conversations where you can address them directly. What *is* written on your resume is up to you.
+The pitch isn't "I'm a fast learner" (everyone says this). The pitch is: **"I've already done the hard parts of engineering leadership — I just need to finish building the technical foundation."** You've designed curriculum (documentation, breaking complex systems into teachable pieces), managed a team toward outcomes, and learned something categorically difficult because your role required it. Most junior devs have none of that. They'll develop it over years. You have it now.
 
-**The "underqualified for leadership" ceiling isn't really a ceiling yet.** No one is hiring you as a tech lead without commercial software experience. That's not on the table regardless of framing. So the floor is what matters, not the ceiling.
+For the right hiring manager, that's differentiated, not just developmental. You'll do best at companies that hire junior engineers with explicit plans to grow them — places where "can this person eventually lead a team or own a project" is part of the junior eval.
 
-The right frame isn't *"I'm a leader, give me responsibility."* It's *"I bring unusual reliability and ownership to a junior role, and I grow fast."* That's a genuinely attractive pitch for a junior hire — it signals you'll be a strong mid-level engineer faster than the average new grad. Hiring managers for junior roles are often thinking about growth trajectory, not just current skill level.
-
-The real question is: what's the cost of trying the fuller resume versus the current one? The current one has gotten you 3 phone screens from 80 apps. That's a ~4% response rate. The downside of showing your full background is probably some amount of "overqualified" rejection — but you're already getting effectively no responses, so the expected value of changing is strongly positive.
+Now, the draft. Here's a full rewrite:
 
 ---
 
-Here are the updated bullets with your real numbers:
-
----
-**United States Marine Corps** | 2018–2024 | Staff Sergeant (E-6)
-
-*Training NCO — School of Infantry, Camp Pendleton* | 2022–2024
-- Led 4 instructors delivering a 12-week small-unit tactics course to ~80 Marines per cycle across 12 cycles
-- Designed 3 new training modules; 2 remain in the active SOI curriculum
-- Owned instructor scheduling, block-of-instruction assignments, and student performance evaluations
-
-*Security Force Assistance Advisor — Kandahar Province, Afghanistan* | 2019, 2020–2021
-- Embedded with Afghan National Army units as a tactical advisor across two combat deployments
-- Coordinated directly with local commanders in Pashto (conversational) to build unit capability and operational trust
-- Made high-stakes decisions under ambiguity and time pressure with incomplete information
+**TYLER BROOKS**
+tyler.brooks.tx@gmail.com · (512) 555-0192 · Austin, TX · github.com/[yourusername]
 
 ---
 
-On the to-do app: if you want to build something better, what interests you? Not "what will impress hiring managers" — that's the wrong starting point and usually produces generic projects. What would you actually use? A small tool that scratches a real itch tends to get built and finished; something you built to impress tends to stall half-done.
+**SUMMARY**
+
+Marine infantry NCO transitioning to software engineering, with six years of experience designing training programs, leading teams, and solving problems under pressure. Developed curriculum for 300+ Marines annually, built new training programs from scratch, and achieved conversational Pashto fluency for an advising deployment to Afghanistan. Currently completing a B.S. in Computer Science while building full-stack skills in Python and JavaScript.
+
+---
+
+**TECHNICAL SKILLS**
+
+Languages: Python, JavaScript, HTML/CSS
+Frameworks & Tools: Flask, Git, Linux CLI
+Foundations: REST APIs, responsive web design
+
+---
+
+**PROJECTS**
+
+**Task Manager** | Python | github.com/[yourusername]/task-manager
+Command-line task management application. Supports adding, completing, and listing tasks with persistent storage.
+
+---
+
+**EXPERIENCE**
+
+**United States Marine Corps** | 2018–2024
+
+*Training NCO — School of Infantry West, Camp Pendleton* | 2022–2024
+- Designed and delivered lesson plans for a 12-week small-unit tactics course, training 300+ Marines per year across four cohorts
+- Built three new training modules, expanding the program curriculum from initial design through instructor certification
+- Led a four-person instructor section, managing scheduling, performance evaluation, and day-to-day operations
+
+*Security Force Assistance Advisor — Kandahar, Afghanistan* | 2020–2022
+- Advised Afghan National Army units on small-unit tactics, training, and operational planning
+- Achieved conversational fluency in Pashto — a Category IV language — to communicate directly with local forces
+- Worked across cultural and organizational boundaries to build trust and coordinate operations in a high-stakes environment
+
+---
+
+**EDUCATION**
+
+Austin Community College — B.S. Computer Science, expected 2026 *(in progress)*
+University of Texas at Austin — 60 credits completed, 2016–2018
+
+Certifications: Python for Everybody (Coursera, 2024) · Responsive Web Design (freeCodeCamp, 2024)
+
+---
+
+**Three things to do before you send this:**
+
+1. **Push the to-do app to GitHub** and write a README — what it does, how to run it, one sentence on what you learned. The README is a writing sample. Call it something slightly more polished than "todo-app" in the repo name.
+2. **Add your GitHub URL** to the header — this is now a live document that proves you can ship code.
+3. **Drop the UT Austin entry if it's hurting you** — 60 credits from 2016–2018 that you didn't finish might raise more questions than it answers for some recruiters. The ACC degree plus certifications is a cleaner story. Your call.
+
+Does this feel like an accurate picture of you, or are there things here that don't ring true?
 
 ## ASSISTANT (turn 4)
 
-Those bullets look good. That's more like an actual person.
+Yeah, this is substantially better. The bullets actually look like a resume now.
 
-On the project question — honestly, the thing that comes to mind is something scheduling-related. When I was running instructor schedules at SOI it was all in spreadsheets that were constantly out of date. Some basic tool that lets a small team track who's assigned to what block, flag conflicts, update in real time — I would've used that. I don't know how marketable it is but I'd actually finish it.
+A couple reactions: the summary feels a little aggressive to me — "I've already done the hard parts of engineering leadership" is how you framed it, but I'd feel like I was overselling if I said that out loud. Is that line intended to stay word-for-word or is it more the underlying logic I'm selling?
 
-One thing I want to push back on slightly: you keep framing this around me becoming a strong mid-level engineer faster than a new grad. And I'm not saying that's wrong, but — I'll be honest, I'm not sure software engineering is actually where my energy is. I liked the CS coursework okay but I liked the team projects more than the actual coding. What I actually liked in the Marines was the coordination side. The planning, getting people organized toward a real outcome, training junior Marines. The technical stuff — radios, weapons systems maintenance — I did it because I had to.
+On UT Austin — I'm actually still working toward the same degree at ACC, so dropping it might make the interrupted enrollment look worse. My plan is to finish there. I'd probably keep it.
 
-I've been assuming software engineering was the move because I started a CS degree. But I'm not sure the job I'm imagining actually looks like the thing I found rewarding.
+The GitHub thing I'll do this week. Task manager's not that impressive but the README advice makes sense.
+
+Honest question though: you said "for the right hiring manager." How do I identify which companies those are before I apply? Because right now I've been applying pretty broadly — whatever's on LinkedIn that says entry-level or junior — and I don't know how to filter for the ones where this pitch works.
 
 STATUS: ONGOING
 
@@ -457,31 +449,44 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-That's worth stopping for, because it changes the problem significantly.
+Good catch on the summary — that line was the underlying logic for you to understand the *pitch*, not literal resume copy. What I actually wrote in the draft is already softer: "designing training programs, leading teams, and solving problems under pressure." That's defensible and specific. Keep that.
 
-What you just described — coordination, planning, getting people organized toward an outcome, developing others — that's not a secondary interest. You led a 12-week training program for 80 Marines a cycle, designed curriculum that outlasted you, embedded with foreign military units and made them more effective. That's the thing you're *good* at and found meaningful. The coding was instrumental.
+On UT Austin — your reasoning is sound. One small tweak to make the continuity clearer:
 
-The question isn't "how do I get a software engineering job." The question is: **what role actually uses the thing you're good at?**
+> Austin Community College — B.S. Computer Science, expected 2026 *(continuing coursework begun at UT Austin)*
+> University of Texas at Austin — 60 credits completed, 2016–2018
 
-A few that fit your description much better than SWE:
-
-**Technical Program Manager (TPM).** Coordinates engineering teams on complex technical projects without writing the code. Owns timelines, dependencies, cross-team communication, unblocking people. Your Marine background is almost custom-built for this — Amazon, Microsoft, and Google actively recruit veterans into TPM roles specifically because they bring structured thinking under pressure and accountability without needing authority. Your CS coursework gives you the technical credibility to talk to engineers credibly.
-
-**Product Manager.** Defines what gets built and why. Lots of stakeholder coordination, prioritization under constraints, working from a user problem toward a solution. The scheduling tool you just described? That's product thinking — you identified a real pain point and designed a solution. That's the job.
-
-**Implementation/Delivery Manager at a SaaS company.** Gets customers from "we bought this software" to "this software is working for us." Heavy on coordination, change management, training people. Your SFAT experience — building capability in another organization — maps onto this almost directly.
-
-The CS degree isn't wasted in any of these. It gives you technical literacy that most people in those roles had to acquire on the job. It's an advantage, not a credential.
+That way it reads as a continuous path, not two abandoned attempts.
 
 ---
 
-I want to ask directly: when you imagined yourself in a software engineering job — the day-to-day of it — what did that look like? And does it match what you're describing when you talk about what you actually liked?
+**On identifying the right companies:**
+
+The "apply broadly to anything that says entry-level" strategy is almost certainly hurting your conversion rate. You're a non-traditional candidate — you need to find companies where non-traditional is an asset, not something to explain away.
+
+Three concrete filters:
+
+**1. Companies with veteran hiring programs.** Not charity — these companies have learned veterans perform. Amazon, Microsoft, Salesforce, Twilio, and many others have active programs. Google "company name veteran hiring" or look for a "military" page on their careers site. These programs often have more tolerance for unconventional technical backgrounds.
+
+**2. Defense tech and govtech startups.** Your domain knowledge is genuine differentiating value here, not just a soft-skill story. Companies like Anduril, Shield AI, Rebellion Defense, and dozens of smaller Austin-area contractors actually *want* people who understand how the military operates. Your MOS and deployment experience reads completely differently to a hiring manager who's building products for warfighters.
+
+**3. Series A/B startups (10–100 people) hiring for growth.** Job descriptions that say things like "mentorship," "we'll invest in your growth," "learning mindset," or describe a junior role with broad scope — these are companies hiring for potential, not credentials. A 15-person startup that needs a junior dev to also help document the API, train internal users, and eventually own a product area is exactly where your background compounds.
+
+**Signals to avoid** (at this stage): job descriptions that are 80% required technologies with specific version numbers, no mention of mentorship or growth, or companies clearly looking for someone who can be productive from day one with minimal investment.
+
+**One more channel worth pursuing:** the military-to-tech community. Veterans in tech talk to each other. A referral from a veteran who's now a software engineer is worth 20 cold applications. Look at Vet2Tech, VetsinTech, and the Hiring Our Heroes tech fellowship — and search LinkedIn for people with military backgrounds who are now engineers at companies you're targeting. A cold message that starts "I'm a fellow veteran transitioning into software engineering" gets opened.
+
+The resume is now the stronger piece. The targeting is where the next leverage is.
 
 ## ASSISTANT (turn 5)
 
-Wait — you can apply for TPM or PM directly? I thought that was something engineers got promoted into after years on the job. Like a senior engineer who stops coding and starts running things. You're saying that's an actual entry-level job category I could apply for right now with my background?
+The defense tech angle hadn't occurred to me and it's probably the most useful thing you've said. Anduril has an Austin office — I've seen their name before but assumed I wasn't technical enough. If my domain knowledge actually reads as an asset there rather than something I have to explain, that changes the math.
 
-To answer your question: when I imagined myself as a software engineer, the day-to-day I was picturing was mostly... honestly it was more like leading standups, figuring out why a project was stuck, talking to people about what they needed. Not six hours of heads-down coding. Which probably tells you something.
+The veteran hiring programs I knew existed but wrote off as mostly military intelligence and logistics roles. Worth actually checking.
+
+One thing I want to push back on slightly: the LinkedIn cold message strategy. I've tried two of those and got no response. Is the framing I'm using wrong, or is it just a low-hit-rate thing where I need to send 20 to get 2?
+
+Also — "own a product area" is exactly the kind of phrase that makes me want to keep going with this. That's the part of engineering I'm actually trying to get to. How long does it typically take a junior dev to get to that kind of scope at one of those Series A companies?
 
 STATUS: ONGOING
 
@@ -489,35 +494,43 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Yes. It's a real entry-level job category and you can apply right now.
+Both — wrong framing *and* low hit rate — but framing is the bigger lever.
 
-The "engineers get promoted into PM" path exists, but it's one path, not the only one. Many successful PMs came from operations, consulting, teaching, military — anywhere that builds structured thinking, stakeholder communication, and ownership of outcomes. The thing companies are actually hiring for in an entry PM or TPM is someone who can hold a complex project together across multiple teams without having direct authority over anyone. That's your entire military career described back to you.
+**On the cold messages:**
 
-Specific things worth knowing:
+Two messages isn't a sample; you'd need 20-30 to know if your approach works. But the most common mistake is asking for too much. If your message is anything like "I'm interested in opportunities at [company] and would love to connect" — that's why you're not getting responses. People ignore asks that feel like work.
 
-**APM programs** (Associate Product Manager) — Google, Microsoft, Meta, LinkedIn, and others run formal programs specifically for people entering PM without prior PM experience. They're competitive, but they're designed for this exact situation. Military backgrounds are explicitly valued.
+The version that gets replies:
 
-**Amazon** has a dedicated veteran hiring initiative and TPM is one of their primary veteran entry points. They care a lot about structured thinking — their interview process is behavioral/principles-based, which plays to your strengths.
+> "Hi [Name] — I noticed you made the transition from [military/non-traditional background] to software engineering at [Company]. I'm doing something similar — six years in the Marines as an infantry NCO, now building my CS skills. Would you have 15 minutes sometime to talk about what that first year looked like? No ask beyond that."
 
-**Microsoft** has a Military Affairs program and actively recruits veterans into PM and program management roles.
+Four sentences. Specific to them. Small ask. No pressure. The "no ask beyond that" line does real work — it signals you're not about to ask for a referral.
 
-And here's the thing: the resume we've been building gets *better* for these roles, not worse. Instead of apologizing for the leadership background in a junior SWE context, you lead with it. The Training NCO role — designing curriculum, managing a team, driving outcomes across 12 cycles — that's the centerpiece, not something to explain away.
-
-The scheduling tool you described is also a stronger PM portfolio piece than a SWE portfolio piece. "I identified a real coordination failure I experienced firsthand, designed a solution, and built a prototype to validate it" — that's a PM interview story, start to finish.
+If you're targeting Anduril specifically, there's a sharper version: lead with the domain knowledge, not the transition story. "I spent six years as an infantry NCO including a Security Force Assistance deployment to Kandahar — I've been following Anduril's work and would love to talk to someone about what it's like building software there with that kind of background." That's a different conversation than "I'm a career changer."
 
 ---
 
-What you said about the SWE day-to-day you were imagining: standups, figuring out why a project is stuck, talking to people about what they need. That's Tuesday afternoon for a PM. You weren't imagining a software engineering job. You were imagining this job.
+**On the timeline:**
 
-So the question becomes: do you want to change directions, or keep the SWE track? There's no wrong answer — SWE is a real path and what we've built is a genuinely improved resume for it. But the investment of effort is different depending on which way you go.
+Honest answer: at a 15-30 person Series A company, 18–24 months to meaningful ownership is realistic for someone with your background — faster than average, because the non-technical half of that development (communication, stakeholder management, leading without authority) is already built. Most junior devs are still developing that at year three.
+
+The catch is that the first 12 months will be mostly about proving technical execution. Shipping reliable code, understanding the codebase, building trust with senior engineers. Your leadership experience doesn't substitute for that — it sits on top of it. You have to earn the technical credibility before the soft skills become a visible asset.
+
+The upside of a small company: there's no bureaucratic queue for ownership. If you're good and the company is growing, responsibilities expand because there's no one else to take them, not because you waited your turn.
+
+---
+
+Worth naming: we've drifted from resume help into job search strategy, which I think is the right conversation to be having. The resume was the symptom; the underlying question is how to make this transition work. Do you want to keep pulling on that thread — targeting, outreach, positioning — or is the resume the priority right now?
 
 ## ASSISTANT (turn 6)
 
-Okay. That's genuinely the most useful thing anyone has told me in ten weeks of this job search.
+Keep pulling on the strategy thread. The resume's in better shape — that's done enough for now.
 
-I want to change directions. The SWE resume work isn't wasted — I'll keep those bullets — but if TPM or APM is a real target with my background, that's where I should be pointing. The day-to-day you're describing is what I was actually picturing when I thought about what I wanted.
+The 18-24 month timeline is honest and I can work with it. The part I'm sitting with is what you said about the first year: mostly proving technical execution, shipping reliable code. I understand why that's necessary. I'm just not sure it's the part I'm actually excited about.
 
-Practically speaking: what do I actually do next? Do I need to reframe the whole resume around PM, or is it mostly the same content repositioned? And are the APM programs realistic at 28, or are those really designed for new grads coming out of undergrad?
+The stuff you described as "already built" — stakeholder management, leading without authority — that's what I liked about the job I had. The coordination. Getting a 12-week course to run on time with four instructors who all had opinions. Getting Afghan commanders to trust a process they didn't design. That's where I was actually engaged. Writing code is fine, I can do it, but I don't think about it the way I think about that.
+
+I guess I just assumed software engineering was the path because of the CS credits and the self-study work I've done. It seemed like the obvious next step. Is there something about the way I'm describing what I liked that changes how you'd think about where I should be targeting?
 
 STATUS: ONGOING
 
@@ -525,46 +538,138 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-**On the resume:** mostly repositioning, with one meaningful addition. The Marine Corps bullets are already in good shape — they read like PM/TPM experience because they *are* PM/TPM experience. What changes:
+Yes, it changes things significantly. What you just described — coordination across stakeholders with different interests, earning trust in a process you didn't design, running a complex program with people who all had opinions — that's not the part of software engineering that gets you excited. That *is* the job of a Product Manager.
 
-1. **The summary replaces the objective line.** This is the most important single edit. Here's a draft:
+I want to name that clearly because I think it matters: you may be applying for the wrong role.
 
-   > *Marine veteran (E-6) with six years of leadership, coordination, and training experience, including two combat deployments and two years leading instructor teams at the School of Infantry. Technical foundation in software development (Python, JavaScript, CS coursework) applied to program management and cross-functional coordination. Track record of building team capability, designing systems that outlast individual tenure, and delivering outcomes in high-ambiguity environments.*
+Software engineering is a path to the work you described, but it's indirect. You'd spend 2-3 years doing the part you're only "fine" with before the coordination and leadership work becomes a real part of the job. Product management gets you there immediately — that's the whole job from day one.
 
-2. **Skills section gets reorganized.** Lead with the PM-relevant stuff: cross-functional coordination, curriculum design, stakeholder communication, training and development. Technical skills (Python, JavaScript, Linux) stay, but they're supporting evidence of technical literacy — not the headline.
+What a PM actually does, specifically:
+- Figures out what to build and why, working with engineers, designers, customers, and leadership who all have different opinions
+- Drives execution of something they didn't design and don't have authority to mandate
+- Gets a team to trust a roadmap and commit to it
+- Manages stakeholders across functions who don't report to them
 
-3. **Projects reframe slightly.** The scheduling tool — even if partially built — is now a PM case study: *"Identified coordination failure from direct operational experience; designed and prototyped a scheduling and conflict-detection tool for small instructor teams."* The story matters as much as the code.
+That's a nearly literal description of what you said you were engaged by.
 
----
+Your technical literacy — the CS coursework, the Python and JavaScript, understanding how software is built — makes you a *better* PM, not a less qualified one. You don't need to be a senior engineer to be an effective PM. You need to understand engineering well enough to work credibly alongside engineers, which you're building.
 
-**On APM programs at 28:** Honest answer — the Google APM and Meta RPM programs skew heavily toward 22-year-old new grads in practice. Not impossible, but not your best bet.
-
-What *is* realistic and worth prioritizing:
-
-- **Amazon Pathways** — a veteran-specific program that pipelines military talent into PM and TPM roles. This is designed for exactly your profile. Apply here first.
-- **Microsoft's Military Affairs hiring program** — active veteran recruiting into PM roles. Strong match.
-- **Defense tech companies** — Anduril, Palantir, Shield AI, and similar firms build products for the operational contexts you've actually worked in. Your Kandahar deployments aren't just leadership experience there — it's domain expertise. These companies pay well and actively recruit veterans.
-- **Direct junior PM/TPM applications** at Austin tech companies — no program required, just the right title search ("Associate PM," "Program Manager I," "Junior TPM").
-
----
-
-**Short priority order:**
-
-1. Rewrite the resume with that summary and repositioned skills
-2. Apply to Amazon Pathways and Microsoft veteran programs this week
-3. Look up Anduril, Shield AI, and Palantir — read their PM/TPM job postings and see if the language resonates
-4. Start the scheduling tool — even a basic working version with a clear README explaining the problem it solves
-5. Update LinkedIn to match the new framing — recruiters at these companies will look
-
-The ten weeks that felt like failure were ten weeks trying to get into the wrong door. The door you're looking for is a different door, and you're a much stronger candidate for it.
+**Before I go further:** Did you consider PM roles and decide against them for a reason, or did you just not see them as an option? That changes what's useful to say next.
 
 ## ASSISTANT (turn 7)
 
-That priority list is clear and I can act on it. The Amazon Pathways and Microsoft programs — I'll look those up today.
+Wait — you can apply for that directly? I thought PM was something you got promoted into after you'd been an engineer for a while. Like a senior title. I didn't know it was a role you could come in at from outside engineering.
 
-The defense tech angle I hadn't thought of. Anduril especially. I have domain experience in exactly the context they're building for. That's a different pitch than "veteran with CS coursework" — that's someone who's actually been in the operational environment their products are used in.
+I haven't considered it at all. I didn't rule it out for a reason, it just never occurred to me as something I'd apply for. When I've seen "PM" I assumed it was out of reach for where I am.
 
-One thing I want to confirm before I go rebuild the resume: the summary draft you wrote — is that the right length for a summary? It feels longer than what I've seen. And should I be tailoring it per application, or is one version good enough to start?
+If what you're describing is accurate — that the job from day one is the coordination and stakeholder work — then yeah, that's what I'm actually describing when I talk about what I liked. Getting disparate people aligned on a thing, driving it to completion, being accountable for the outcome. That's not something I'd have to grow into. That's been my job for years.
 
-STATUS: CLOSING
+What does entry-level PM even look like? And would my background actually get me in the door, or is this one of those situations where the role requires an MBA or an existing product background?
+
+STATUS: ONGOING
+
+## USER (turn 8)
+
+[Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
+
+Yes, you can apply for it directly. The "PM is a promotion from engineer" model exists at some companies, but it's not the norm and it's definitely not the only path.
+
+**Associate Product Manager programs** exist specifically for this. Google, Microsoft, Uber, Lyft, Salesforce, Atlassian, and dozens of others run formal APM programs designed for people entering PM from outside. No engineering background required. No MBA required. They explicitly recruit from military, consulting, and non-traditional paths because those backgrounds produce people who can lead without authority — which is the hardest part of the job and the part you can't teach in six months.
+
+At startups, entry-level PM is even more accessible. A 20-person company with one PM and a growing product needs someone who can own it — write the specs, talk to customers, drive the engineering team to a decision, ship the thing. They're not looking for credentials, they're looking for someone who's done that kind of work.
+
+**Would your background get you in the door?** For most of these paths, yes — and in some cases you'd be a strong candidate, not just a passable one.
+
+What they're evaluating for PM: communication, analytical thinking, leading without authority, user empathy, and understanding how software gets built. You have the first three demonstrably. The technical literacy you're building covers the last one. User empathy you'd need to make the case for — but "I had to earn trust from Afghan commanders who didn't design the process I was asking them to follow" is actually a credible answer to "tell me about understanding your user."
+
+The interview process is completely different from SWE — no LeetCode. Instead: product design questions ("design a feature for X"), metrics questions ("how would you measure success"), and behavioral questions where your military experience is a direct asset. You'd need to learn some PM vocabulary and frameworks, but that's weeks of prep, not months.
+
+**Your strongest angle right now:** PM roles at defense tech companies. Your domain knowledge isn't just a soft-skill story there — it's genuine subject-matter expertise that makes you better at the job from day one.
+
+**Practical question:** Do you want to pivot your applications toward PM, run both tracks in parallel, or figure out which first? Because the resume we wrote today is still mostly right — the accomplishments are the same — but the framing shifts.
+
+## ASSISTANT (turn 8)
+
+This is the most useful thing anyone's said to me since I started this process.
+
+I didn't know APM programs existed. That changes the calculus significantly. If there's a formal path in that doesn't require five years of engineering experience, I want to know more about it.
+
+On the decision — I don't think I want to run both tracks. That feels like trying to tell two different stories and doing both poorly. If PM is actually a better fit for what I want to be doing in three years, I should commit to it. What I'm not sure about is how confident I should be in that assessment after a fifteen-minute conversation. Is there a way to pressure-test it before I start redoing everything?
+
+And practically: how much does the resume shift? The accomplishments are the same but you said the framing changes. What's different about how a PM resume tells that story versus what we put together today?
+
+STATUS: ONGOING
+
+## USER (turn 9)
+
+[Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
+
+Good instinct on the single track. Split focus at this stage of a job search compounds the problems.
+
+**On pressure-testing it:**
+
+Fifteen minutes is enough to identify a hypothesis, not enough to commit. Here's how to validate it cheaply before redoing anything:
+
+**Talk to two or three actual PMs.** Not to ask for a job — ask what their week looks like. What's the part that drains them? What surprised them coming in? If the honest description still sounds like work you want, you have your answer. Target PMs at small companies or defense tech where the coordination-to-bureaucracy ratio is high. This takes a week, not a month.
+
+**Read five PM job descriptions carefully.** Not the qualifications — the responsibilities section. Does it sound like the job you want to have, or does it sound like someone else's job?
+
+**Do one product design question.** These are standard PM interview questions: "Design a feature that helps veterans transition into the workforce" or "How would you prioritize the roadmap for a training software product?" If that kind of thinking energizes you, that's signal. Google "PM interview product design questions" and spend an hour with one. Your reaction tells you something.
+
+The asymmetry here matters: the cost of spending a week validating is low. The cost of another 10 weeks applying for the wrong role is high.
+
+---
+
+**On how the resume shifts:**
+
+Same accomplishments, different lens. PM resumes emphasize outcomes, decisions, and cross-functional coordination. SWE resumes emphasize tools and what you built. Here's the diff on the bullets that change most:
+
+*Today's version (SWE framing):*
+> Designed and delivered lesson plans for a 12-week small-unit tactics course, training 300+ Marines per year
+
+*PM framing:*
+> Defined requirements, developed curriculum, and launched a 12-week training program serving 300+ Marines annually — iterating on content based on cohort performance
+
+"Defined requirements, developed, launched, iterated" is PM vocabulary for discovery → spec → delivery → learning. That's not spin; that's what you actually did, named correctly.
+
+*Today's version:*
+> Built three new training modules, expanding the program curriculum from initial design through instructor certification
+
+*PM framing:*
+> Identified gaps in existing curriculum, scoped and built three new training modules, and drove adoption through instructor certification — expanding program coverage without adding headcount
+
+"Identified gaps, scoped, drove adoption" — that's a product launch story.
+
+*The Afghanistan bullet stays almost the same* — but add one word:
+> Earned trust of Afghan National Army commanders for operational processes they didn't design, enabling sustained collaboration across significant cultural and organizational barriers
+
+"Earned trust for a process they didn't design" is exactly how PM describes stakeholder adoption.
+
+**Summary rewrite for PM:**
+> Marine infantry NCO transitioning to product management with six years of experience driving complex programs, aligning stakeholders across organizational boundaries, and delivering outcomes under pressure. Built and launched training programs from scratch; earned cross-cultural trust in high-stakes environments. Technically literate — completing B.S. in Computer Science — with hands-on experience in Python and JavaScript.
+
+**What changes structurally:** The GitHub project matters less. Technical skills stay (PM roles value technical literacy) but move lower. If you have any data on outcomes — pass rates, curriculum adoption, anything — those go in now.
+
+---
+
+**The practical sequence I'd suggest:**
+
+1. This week: have one real conversation with a PM (LinkedIn, veteran network, anyone)
+2. Do one product design question cold and notice your reaction
+3. If both feel right: reframe the resume, start researching APM programs and defense tech PM openings
+4. If something feels off: come back and interrogate it
+
+You're not throwing away the last few months. The Pashto story, the 300 Marines, the three modules — those work for PM at least as well as they work for SWE. Probably better.
+
+## ASSISTANT (turn 9)
+
+The reframed bullets are better. "Defined requirements, developed, launched, iterated" — I can see exactly what that's doing and it doesn't feel like spin. That's what I actually did, named in a way that's legible to the right audience.
+
+The validation sequence makes sense. Talking to a PM first is the right move before I redo anything. I can find someone through the veteran network or LinkedIn using the approach you gave me earlier.
+
+I came in thinking I needed better action verbs. I'm leaving with a different resume, a different job target, and a week of specific homework. That's a better outcome than I expected.
+
+I think I have what I need for now. Thanks.
+
+STATUS: DONE
 

@@ -156,7 +156,7 @@ def init_protocol(
     # Write config.json
     config_path: Path = protocol_dir / "config.json"
     if not config_path.exists():
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_CONFIG, f, indent=2)
             f.write("\n")
 
@@ -165,7 +165,7 @@ def init_protocol(
     for rel_path, content in TEMPLATES.items():
         full_path: Path = protocol_dir / rel_path
         if not full_path.exists():
-            full_path.write_text(content)
+            full_path.write_text(content, encoding="utf-8")
             created.append(rel_path)
 
     # Insert Clarity snippet into agent config file

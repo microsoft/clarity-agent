@@ -1,13 +1,9 @@
 # Notes
 
-[To be determined. Guiding principles and cross-phase observations will be added here as the project develops. Items tagged `[for: <phase>]` are actionable observations for a specific phase; untagged items are permanent guiding principles.]
+## Guiding principles
 
-## Team Status Dashboard
+**Engineer adoption is the real success criterion.** The tool only works if engineers actually update it. Design decisions should always favor reducing friction and avoiding the perception of surveillance over adding features for managers.
 
-Problem clarification, solution design, failure analysis, and architecture completed in one session.
+**History visibility is a trust boundary, not just a permissions detail.** Managers can see current status; team leads can see history; that line should not be blurred even if managers ask for it later. The distinction is what makes engineers willing to update honestly.
 
-Key design philosophy: the tool must feel like the team's coordination layer, not management's visibility tool. That framing governs everything from the snapshot URL design to how blockers are surfaced.
-
-The most important non-technical action before launch: establish the team norm around "blocked" status in 1:1s. The tool makes blocker under-reporting more consequential (false green instead of nothing), so psychological safety around surfacing blockers needs to be in place before the dashboard goes live.
-
-Marcus is the engineer building this. Walk him through collision deduplication logic and the heartbeat check before he starts — both are easy to skip in an initial build and both are first-class features.
+**Keep it boring.** This is a small internal tool. Resist complexity — the right answer to most "should we add X?" questions is no.
