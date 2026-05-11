@@ -5,7 +5,7 @@
       "dependencyHashes": {}
     },
     "goal/stakeholders.md": {
-      "contentHash": "ba78ea27d899f9a8c7bddfcc0a53feaad4aeb36afde347b6223271675dae9daa",
+      "contentHash": "1d16f9d23e3c03db25ae0ab88993293959d0f7bc5f83df9c134b87167bd2351c",
       "dependencyHashes": {
         "goal/problem.md": "d95b8256682688b5d8035e9df24f3eec7e2bdabed0e7e1d066b16fc32c512455"
       }
