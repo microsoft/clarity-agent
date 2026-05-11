@@ -268,9 +268,9 @@ def check_repo_freshness(agent_dir: Path) -> CheckResult:
 # ---------------------------------------------------------------------------
 
 def check_python_version() -> CheckResult:
-    """Verify Python >= 3.10."""
+    """Verify Python >= 3.12."""
     major, minor = sys.version_info[:2]
-    if (major, minor) >= (3, 10):
+    if (major, minor) >= (3, 12):
         return CheckResult(
             name="Python version",
             status=Status.PASS,
@@ -279,8 +279,8 @@ def check_python_version() -> CheckResult:
     return CheckResult(
         name="Python version",
         status=Status.FAIL,
-        message=f"Python {major}.{minor} found, but 3.10+ is required",
-        fix_hint="Install Python 3.10+ from https://www.python.org/downloads/",
+        message=f"Python {major}.{minor} found, but 3.12+ is required",
+        fix_hint="Install Python 3.12+ from https://www.python.org/downloads/",
     )
 
 
@@ -391,11 +391,11 @@ def check_npm_dependencies(agent_dir: Path) -> list[CheckResult]:
             name="Node.js",
             status=Status.WARN,
             message="Node.js not found (needed for web UI)",
-            fix_hint="Install Node.js 18+ from https://nodejs.org/",
+            fix_hint="Install Node.js 22+ from https://nodejs.org/",
         ))
         return results
 
-    # Node.js version >= 18?
+    # Node.js version >= 22?
     try:
         ver_out = subprocess.run(
             ["node", "--version"],
@@ -403,7 +403,7 @@ def check_npm_dependencies(agent_dir: Path) -> list[CheckResult]:
         )
         ver_str = ver_out.stdout.strip().lstrip("v")
         major = int(ver_str.split(".")[0])
-        if major >= 18:
+        if major >= 22:
             results.append(CheckResult(
                 name="Node.js version",
                 status=Status.PASS,
@@ -413,8 +413,8 @@ def check_npm_dependencies(agent_dir: Path) -> list[CheckResult]:
             results.append(CheckResult(
                 name="Node.js version",
                 status=Status.WARN,
-                message=f"Node.js {ver_str} found, but 18+ is recommended",
-                fix_hint="Install Node.js 18+ from https://nodejs.org/",
+                message=f"Node.js {ver_str} found, but 22+ is recommended",
+                fix_hint="Install Node.js 22+ from https://nodejs.org/",
             ))
     except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
         pass

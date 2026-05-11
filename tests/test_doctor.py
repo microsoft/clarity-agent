@@ -211,7 +211,7 @@ class TestCheckPythonVersion:
         with patch.object(sys, "version_info", (3, 9, 0)):
             result = check_python_version()
         assert result.status == Status.FAIL
-        assert "3.10" in result.message
+        assert "3.12" in result.message
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ class TestCheckNpmDependencies:
         (tmp_path / "web" / "dist").mkdir()
         with patch("clarity_agent.setup.doctor.shutil.which", return_value="/usr/bin/node"), \
              patch("clarity_agent.setup.doctor.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="v16.20.0\n")
+            mock_run.return_value = MagicMock(stdout="v20.0.0\n")
             results = check_npm_dependencies(tmp_path)
         node_ver = next(r for r in results if "version" in r.name.lower())
         assert node_ver.status == Status.WARN
@@ -292,7 +292,7 @@ class TestCheckNpmDependencies:
         (tmp_path / "web" / "package.json").write_text("{}")
         with patch("clarity_agent.setup.doctor.shutil.which", return_value="/usr/bin/node"), \
              patch("clarity_agent.setup.doctor.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="v20.0.0\n")
+            mock_run.return_value = MagicMock(stdout="v22.0.0\n")
             results = check_npm_dependencies(tmp_path)
         npm_result = next(r for r in results if "NPM" in r.name)
         assert npm_result.status == Status.WARN
@@ -305,7 +305,7 @@ class TestCheckNpmDependencies:
         (tmp_path / "web" / "dist").mkdir()
         with patch("clarity_agent.setup.doctor.shutil.which", return_value="/usr/bin/node"), \
              patch("clarity_agent.setup.doctor.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="v20.0.0\n")
+            mock_run.return_value = MagicMock(stdout="v22.0.0\n")
             results = check_npm_dependencies(tmp_path)
         assert all(r.status == Status.PASS for r in results)
 

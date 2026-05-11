@@ -84,12 +84,12 @@ class TestPreflightChecks:
         assert "3.12" in r.message
 
     def test_python_version_too_old(self) -> None:
-        cp = subprocess.CompletedProcess([], 0, stdout="Python 3.9.7\n", stderr="")
+        cp = subprocess.CompletedProcess([], 0, stdout="Python 3.11.5\n", stderr="")
         with patch("clarity_agent.setup.installer.subprocess.run", return_value=cp), \
              patch("clarity_agent.setup.installer.shutil.which", return_value="/usr/bin/python3"):
             r = check_python_version_preflight()
         assert r.outcome == Outcome.FAIL
-        assert "3.10" in r.message
+        assert "3.12" in r.message
 
     def test_python_not_found(self) -> None:
         with patch("clarity_agent.setup.installer.shutil.which", return_value=None):
@@ -97,14 +97,14 @@ class TestPreflightChecks:
         assert r.outcome == Outcome.FAIL
 
     def test_node_version_ok(self) -> None:
-        cp = subprocess.CompletedProcess([], 0, stdout="v20.11.0\n", stderr="")
+        cp = subprocess.CompletedProcess([], 0, stdout="v22.11.0\n", stderr="")
         with patch("clarity_agent.setup.installer.subprocess.run", return_value=cp), \
              patch("clarity_agent.setup.installer.shutil.which", return_value="/usr/bin/node"):
             r = check_node_version_preflight()
         assert r.outcome == Outcome.OK
 
     def test_node_version_too_old(self) -> None:
-        cp = subprocess.CompletedProcess([], 0, stdout="v16.20.0\n", stderr="")
+        cp = subprocess.CompletedProcess([], 0, stdout="v20.11.0\n", stderr="")
         with patch("clarity_agent.setup.installer.subprocess.run", return_value=cp), \
              patch("clarity_agent.setup.installer.shutil.which", return_value="/usr/bin/node"):
             r = check_node_version_preflight()
@@ -132,7 +132,7 @@ class TestPreflightChecks:
         assert "Install Node.js" in r.message
 
     def test_run_preflight_returns_four_results(self) -> None:
-        cp = subprocess.CompletedProcess([], 0, stdout="v20.0.0\n", stderr="")
+        cp = subprocess.CompletedProcess([], 0, stdout="v22.0.0\n", stderr="")
         py_cp = subprocess.CompletedProcess([], 0, stdout="Python 3.12.0\n", stderr="")
         with patch("clarity_agent.setup.installer.shutil.which", return_value="/usr/bin/x"), \
              patch("clarity_agent.setup.installer.subprocess.run", side_effect=[py_cp, cp]):

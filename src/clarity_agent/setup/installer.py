@@ -24,8 +24,8 @@ from enum import Enum
 from pathlib import Path
 
 CLARITY_DIR = ".clarity-agent"
-MIN_PYTHON = (3, 10)
-MIN_NODE = 18
+MIN_PYTHON = (3, 12)
+MIN_NODE = 22
 
 _IS_WINDOWS = sys.platform == "win32"
 
@@ -162,7 +162,7 @@ def check_command_exists(cmd: str, hint: str = "") -> StepResult:
 
 
 def check_python_version_preflight() -> StepResult:
-    """Check python3 >= 3.10 via subprocess.
+    """Check python3 >= 3.12 via subprocess.
 
     On Windows, ``python3`` is often a Microsoft Store stub that doesn't
     actually run Python, so we try ``python`` first on that platform.
@@ -182,7 +182,7 @@ def check_python_version_preflight() -> StepResult:
     if not python:
         return StepResult(
             Outcome.FAIL,
-            "python3 not found. Install Python 3.10+ from "
+            "python3 not found. Install Python 3.12+ from "
             "https://www.python.org/downloads/",
         )
     try:
@@ -197,7 +197,7 @@ def check_python_version_preflight() -> StepResult:
             return StepResult(
                 Outcome.FAIL,
                 f"'{python}' did not report a version. "
-                "Install Python 3.10+ from https://www.python.org/downloads/",
+                "Install Python 3.12+ from https://www.python.org/downloads/",
             )
         if ver >= MIN_PYTHON:
             return StepResult(Outcome.OK, f"Python {ver[0]}.{ver[1]}")
@@ -211,11 +211,11 @@ def check_python_version_preflight() -> StepResult:
 
 
 def check_node_version_preflight() -> StepResult:
-    """Check node >= 18 via subprocess."""
+    """Check node >= 22 via subprocess."""
     if not shutil.which("node"):
         return StepResult(
             Outcome.FAIL,
-            "Node.js not found. Install Node.js 18+ from https://nodejs.org/",
+            "Node.js not found. Install Node.js 22+ from https://nodejs.org/",
         )
     try:
         r = subprocess.run(
