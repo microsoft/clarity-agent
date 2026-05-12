@@ -23,9 +23,11 @@ class TestSnippetPath:
 
 
 class TestRenderSnippet:
-    def test_substitutes_processes_dir(self) -> None:
+    def test_render_produces_valid_snippet(self) -> None:
+        """render_snippet returns the snippet content with delimiters."""
         result = render_snippet(".clarity-agent/processes")
-        assert ".clarity-agent/processes/clarity-agent.md" in result
+        assert "run_clarity" in result
+        assert "check_decision" in result
         assert "{{PROCESSES_DIR}}" not in result
 
     def test_preserves_delimiters(self) -> None:

@@ -735,6 +735,44 @@ def record_decision(
     save_config(protocol_dir, config)
 
 
+def write_decision_file(
+    protocol_dir: Path,
+    title: str,
+    content: str,
+    slug_max_length: int = 40,
+) -> tuple[str, Path]:
+    """Create a numbered decision file in the decisions/ directory.
+
+    Handles filename generation (numbering, slug) so all UI surfaces
+    get consistent behavior.
+
+    Args:
+        protocol_dir: Path to the .clarity-protocol/ directory.
+        title: Human-readable decision title (used for slug).
+        content: Full markdown content to write.
+        slug_max_length: Maximum length of the slug portion.
+
+    Returns:
+        Tuple of (filename, full_path) for the created file.
+    """
+    import re
+
+    decisions_dir = protocol_dir / "decisions"
+    decisions_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(decisions_dir.glob("decision-*.md"))
+    next_num = 1
+    if existing:
+        match = re.search(r"decision-(\d+)", existing[-1].name)
+        if match:
+            next_num = int(match.group(1)) + 1
+
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:slug_max_length]
+    filename = f"decision-{next_num:02d}-{slug}.md"
+    file_path = decisions_dir / filename
+    file_path.write_text(content, encoding="utf-8")
+    return filename, file_path
+
+
 def next_action(report: PacketStatusReport) -> NextAction | None:
     """Walk the dependency graph and return the first document needing attention.
 
