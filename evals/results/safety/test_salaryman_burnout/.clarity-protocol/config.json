@@ -1,0 +1,13 @@
+{
+  "clarityAgent": {
+    "path": "C:/Users/eho/source/repos/clarity-agent",
+    "version": "1.0.0"
+  },
+  "thinkers": {
+    "disabled": [],
+    "custom": []
+  },
+  "processes": {
+    "custom": []
+  }
+}
