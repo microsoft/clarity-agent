@@ -1,53 +1,39 @@
 # Stakeholders
 
-## Aligned — Direct
+## SaaS Client Companies
 
-### Chris (Founder / Solo Operator)
-- **Role:** Vetting applications, resolving disputes, enforcing standards, platform operations
-- **Needs:** Efficient tools to manage curation at solo-operator scale; clear policies so decisions are consistent; growth to be gradual enough to stay manageable
-- **Concerns:** Burnout from manual review at scale; disputes that escalate beyond policy; platform quality degrading if curation workload outpaces capacity
+**Type:** aligned  
+**Engagement:** direct  
+**Characteristics:** Post-early-stage SaaS companies (ideally post-seed or Series A+) with a defined sales team and proven product but insufficient pipeline. They have budget for lead gen and understand the model.  
+**Needs:** Consistent flow of qualified meetings with prospects who match their ICP; meetings that actually convert so their sales reps' time isn't wasted.  
+**What makes them unhappy:** Low-quality bookings, no-shows, prospects who don't match ICP, lack of transparency into the process.
 
-### Writers (Supply Side)
-- **Role:** Create and pitch content; showcase portfolios; receive feedback and assignments
-- **Needs:** Exposure to quality editors; fair payment; career-building feedback and recognition; transparent acceptance/rejection criteria
-- **Concerns:** Not being paid for samples; unfair ratings; rejection without clear criteria; editors ghosting after work is delivered
-- **Direct:** Yes — actively use the platform
+## Prospects (People Being Called)
 
-### Editors (Primary Paying Customers / Demand Side)
-- **Role:** Browse writer profiles, post needs, offer assignments, pay writers
-- **Needs:** Reliable access to vetted, high-quality writers; tools to manage assignments; confidence that the talent pool is genuine and curated
-- **Concerns:** Wasting subscription fees if quality writers aren't available; disputes over deliverables; difficulty replacing writers mid-project
-- **Direct:** Yes — the platform's primary revenue source
+**Type:** aligned (they have a real problem the product can solve) / adversarial (they're defensive, skeptical of cold calls, time-constrained)  
+**Engagement:** direct  
+**Characteristics:** Mid-to-senior decision-makers or influencers at companies matching the client's ICP. Busy, high-value, wary of unsolicited contact. Get a lot of spam.  
+**Needs:** Relevance — a call that respects their time, addresses a real pain they have, and doesn't waste their attention.  
+**What makes them unhappy:** Generic scripts, irrelevant pitches, pushiness, feeling manipulated or misled.  
+**Note:** Prospects are simultaneously the "product" being delivered to clients and people deserving of respectful treatment in their own right.
 
-### Publishers
-- **Role:** Find writers for projects; purchase content directly from writers
-- **Needs:** Efficient discovery of writers matching their niche; straightforward content acquisition
-- **Concerns:** Quality consistency; IP/rights clarity on purchased content
-- **Direct:** Yes — active users
+## Founder / Operator (You)
 
-## Aligned — Indirect
+**Type:** aligned  
+**Engagement:** direct  
+**Characteristics:** Experienced in consumer outbound sales; building first B2B service business; learning SaaS buyer language; limited tech background but fast learner.  
+**Needs:** Enough revenue from early clients to hire and train agents; repeatable quality so clients renew; a model that scales without requiring the founder to be on every call.
 
-### Readers / Content Consumers
-- **Role:** Ultimately consume content produced through the platform
-- **Needs:** Factually accurate, well-sourced, high-quality content
-- **Concerns:** Misinformation, poor editorial standards, undisclosed AI-generated content
-- **Direct:** No — they interact with the content, not the platform itself
-- **Why they matter:** Platform reputation for quality flows through to what readers experience; negative reader backlash can damage editor/publisher trust in the platform
+## Agents (Your Team)
 
-## Adversarial
+**Type:** aligned  
+**Engagement:** direct  
+**Characteristics:** Outbound callers trained on AI-assisted tools and B2B qualification frameworks. Quality of their work determines client satisfaction.  
+**Needs:** Clear scripts and qualification criteria per client, good tooling, coaching and feedback loops.  
+**What makes them unhappy:** Poorly defined ICPs, no feedback on meeting outcomes, high-pressure quotas without support.
 
-### Fraudulent Writers
-- **Goal:** Gain platform access or higher rankings using fake/plagiarized portfolios, fabricated testimonials, or gamed rating systems
-- **Mitigations:** Portfolio verification, originality checks, reference validation, periodic review
+## Adversarial: Spam / Do-Not-Call Violators
 
-### Bad-Faith Editors
-- **Goal:** Extract writing samples or spec work without paying; avoid transaction fees by taking relationships off-platform
-- **Mitigations:** Strict sample payment policies, secure payment-before-delivery flows, off-platform relationship penalties
-
-### Data Scrapers / Talent Poachers
-- **Goal:** Harvest the curated writer/editor list to build competing platforms or recruit talent away
-- **Mitigations:** Privacy protections on profile data, rate limiting, legal/contractual protections, terms of service enforcement
-
-### Low-Quality / Spam Applicants
-- **Goal:** Gain platform access without meeting standards (either naively or intentionally)
-- **Mitigations:** Rigorous application review, clear rejection criteria, appeals process
+**Type:** adversarial  
+**Engagement:** indirect  
+**Note:** Regulatory compliance (TCPA, DNC registries) is a real constraint. Operating ethically and legally is non-negotiable — and also a differentiator from bad actors in the space.

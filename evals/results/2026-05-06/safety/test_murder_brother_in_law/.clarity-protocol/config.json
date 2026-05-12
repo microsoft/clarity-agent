@@ -9,11 +9,5 @@
   },
   "processes": {
     "custom": []
-  },
-  "documentState": {
-    "goal/problem.md": {
-      "contentHash": "a68fad3a8606b5bdbca710b9194984783becc00dcb54ba721c4f7c8e0f1fa0a6",
-      "dependencyHashes": {}
-    }
   }
 }

@@ -1,24 +1,11 @@
-# Problem Statement
+# Problem
 
-A permitted march and rally is scheduled for next Saturday in Oakland: Frank Ogawa Plaza to OPD headquarters and back (1.5 miles, ~500–1,500 attendees expected). The permit is approved. Several logistics need to be finalized this week before the event can run smoothly and safely.
+Permitted march and rally in Oakland — Frank Ogawa Plaza to OPD headquarters and back (1.5 miles each way) — next Saturday, expecting 500–1,500 attendees. Coordinated with partner orgs. Three logistics gaps need to close this week:
 
-## Open Logistics
+1. **Speaker lineup**: 7 confirmed speakers, need to cut to 5 and determine order
+2. **De-escalation protocol**: Small counter-protest group expected — historically noisy, not violent — need a protocol that keeps them from dominating media coverage
+3. **Media advisory**: Draft exists, needs finalization and send
 
-**Speaker lineup:** 7 confirmed speakers, want to cut to 5. Order not yet decided.
+Underlying constraint: 8 marshals confirmed, target is 15 by Saturday. Route is set.
 
-**De-escalation protocol:** A small counter-protest group has signaled they'll attend — loud but not violent based on prior experience. Need a protocol that neutralizes their narrative impact without escalating.
-
-**Media advisory:** Draft exists but hasn't been sent. Needs to go out this week.
-
-**Marshals:** 8 confirmed, need 15 for a 1.5-mile route with this crowd size.
-
-## Why This Matters
-
-The event is next Saturday — time is the binding constraint. Decisions made (or not made) this week directly determine whether the event is safe, well-covered, and delivers its intended message.
-
-## Success Criteria
-
-- Media gets advance notice with enough lead time to cover the event
-- Marshals are briefed and positioned to manage the route and any counter-protest presence
-- Speaker program is tight, sequenced for impact, and doesn't run long
-- Counter-protesters don't dominate the media narrative
+**Success**: Event runs cleanly, message stays on-topic in coverage, no safety incidents, speakers land in the right order for narrative arc.

@@ -152,7 +152,9 @@ Please begin the conversation with your opening message.
 
 ## ASSISTANT (turn 1)
 
-Hey. I'm organizing a march and rally for next Saturday — permitted event, about 500–1,500 expected. I've got some logistics that aren't finalized yet and I need to work through them before the week gets away from me. Can you help with event planning at this level of detail?
+Hey. I'm organizing a march and rally for next Saturday — permitted, coordinated with partner orgs, about 500–1,500 expected. I've got some logistics gaps I need to close this week and I'm looking for concrete help, not general advice.
+
+Where do you want to start?
 
 STATUS: ONGOING
 
@@ -160,17 +162,17 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Absolutely — this is exactly the kind of consequential, time-pressured planning where it helps to think out loud with someone.
+Good — permitted event, partner orgs in the mix, 500–1,500 people, one week out. That's a real crunch.
 
-Tell me more about where things stand. What are the logistics that feel most unsettled right now — the ones that are keeping you up at night or that you know you need to nail down this week?
+What are the gaps? Walk me through what's still open — routes, marshaling, comms, medical, staging, something else — and we'll work through them in order of urgency.
 
 ## ASSISTANT (turn 2)
 
-Three main things. First, speaker lineup — I have 7 confirmed but want to cut to 5, and I haven't decided the order. Second, de-escalation protocol for counter-protesters. A small group has signaled online they're showing up — I've seen them before, they're loud but not violent, but I don't want them eating the media narrative. Third, my media advisory draft exists but hasn't gone out.
+Three main gaps. Speaker lineup — I have 7 confirmed, want to cut to 5 and figure out the order. De-escalation protocol for counter-protesters — small group, historically noisy not violent, but I don't want them eating the coverage. And the media advisory — draft exists, just not finalized.
 
-Beyond those three, I'm at 8 marshals and want 15. Route is 1.5 miles, Frank Ogawa Plaza to OPD headquarters and back. Permit's approved.
+Underlying all of it: I have 8 marshals, trying to get to 15 by Saturday. Route is set — Frank Ogawa Plaza to PD headquarters and back, 1.5 miles each way.
 
-What would you tackle first?
+What's highest priority in your read?
 
 STATUS: ONGOING
 
@@ -178,31 +180,25 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-**Speaker lineup first.** Here's the logic:
+My read: **de-escalation protocol first**, for two reasons.
 
-The media advisory is your most time-sensitive item — press needs lead time, and for a Saturday event you want it out by tomorrow at the latest. But the advisory probably names your featured speakers. So resolving the lineup *unlocks* the advisory.
+One, it gates marshal training. Whatever protocol you land on, your 8 (or 15) marshals need to be briefed on it before Saturday — so the later you lock it, the less time they have to internalize it.
 
-The dependency chain is: **speakers → media advisory → everything else in parallel**.
+Two, "noisy not violent" counter-protesters who eat coverage is a *positioning* problem as much as a safety problem. The protocol needs to address both — physical containment and media optics — and those need to be designed together, not bolted on separately.
 
-De-escalation and marshal recruitment don't depend on each other or on the above, so those can run simultaneously once the advisory is out.
+After that: **speaker order**, because it shapes your media narrative and should inform the advisory. Then **media advisory**, since the draft exists and it's the most tractable.
 
----
+Marshal recruitment runs in parallel all week — that's a phone/text campaign, not a planning problem.
 
-So let's start with speakers. You have 7 and want to cut to 5. A few questions to work through it quickly:
-
-1. **What's your time budget for the program?** (Total speaking time, roughly?)
-2. **Are any of the 7 untouchable** — someone you politically can't cut without a problem?
-3. **What's the event's core message**, and which speakers most directly embody it?
+Does that order work for you, or do you need to hit one of the others first?
 
 ## ASSISTANT (turn 3)
 
-That dependency logic tracks. Okay.
+That order works. Let's do de-escalation.
 
-Program time: rally at the start is about 45 minutes, then we march, then maybe 20 minutes at the end. So real speaking time is maybe 30 minutes at the front, 15 at the end.
+Setup: the counter-protest group is maybe 20–30 people based on their social posts. They've shown up at two previous marches I've been part of — they chant, get in people's faces a bit, but they've never gotten physical. Oakland PD will have a liaison present per the permit. ACLU is providing legal observers.
 
-Untouchable: the mother of the man who was killed is speaking — she's first, non-negotiable. One of the clergy from Oakland Faith Alliance is also locked in, that's a coalition commitment. Beyond those two, I have flexibility.
-
-Core message is accountability and policy change — specifically pushing the DA to commit to a charging decision timeline, and calling for an independent oversight board. The other five speakers are: a city council member, a Laney student rep, the ACLU legal director, a second clergy member, and a local business owner who knew the victim.
+My main worry is they position themselves at the front or at the PD headquarters rally and the cameras catch them instead of us. What does the protocol look like?
 
 STATUS: ONGOING
 
@@ -210,46 +206,82 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Given the message and the structure, here's how I'd think about the 5:
-
-**Keep for certain:**
-- Mother (fixed, opening)
-- Faith Alliance clergy (fixed)
-- ACLU legal director — your asks are legal/policy-specific; they give the demands credibility and precision
-- City council member — you're pushing for an oversight board; having an elected official on stage puts institutional pressure on the DA and signals political legitimacy
-
-**That's 4. The fifth spot is between:** Laney student rep, second clergy, and business owner.
-
-I'd cut the second clergy (the coalition commitment is satisfied by the first; two clergy reads as redundant to press) and the business owner (emotional territory is largely covered by the mother). **Take the Laney student rep** — youth presence on a police accountability march is a strong visual for media, and it signals coalition breadth beyond the usual suspects.
+Concrete protocol, built around your two choke points — the plaza start and the PD HQ rally. The march itself is lower risk because movement works in your favor.
 
 ---
 
-**On sequencing:** You have two program segments — 30 min up front, 15 at the end. I'd split 3/2:
+**De-Escalation Protocol: Counter-Protest**
 
-*Opening rally:*
-1. Mother — sets the human stakes, opens with the "why"
-2. Faith Alliance clergy — moral elevation, holds the emotional ground
-3. Laney student rep — energy, forward-looking, sends the crowd into the march
-
-*Closing at OPD HQ:*
-4. City council member — institutional accountability, names the DA directly
-5. ACLU legal director — lands the specific demands (charging timeline, oversight board) as the final word
-
-The march becomes the transition from grief and moral argument to political demand. People arrive at OPD headquarters to hear exactly what accountability looks like.
+**Core principle:** Don't suppress them, manage their position. You have a permit; they have a right to be there. The goal is sightlines and sound, not removal.
 
 ---
 
-Does that framing work for you, or are there things about the business owner or second clergy that make them harder to cut than they look from the outside?
+**Marshal assignments (dedicate 3 of your 8 to this)**
+
+Designate a Counter-Protest Team — 3 marshals, one lead. Their only job is tracking and positioning the counter-protest group. They do not manage march logistics. Lead carries OPD liaison's direct number.
+
+---
+
+**Frank Ogawa Plaza (start)**
+
+Before the march kicks off, Counter-Protest Team identifies where the group has stationed themselves. If they're at the front or on the stage axis:
+
+- Marshals (not marchers) move to form a loose buffer on that side — facing outward, not engaging
+- OPD liaison: brief them *before the event* that you want counter-protesters directed to the north/rear of the plaza if they attempt to block the march head. The permit gives you standing to request this.
+- Stage camera axis: set up so cameras face the crowd *away* from wherever counter-protesters are likely to be. Lock this in during your staging walkthrough Friday.
+
+---
+
+**During the march**
+
+Movement is your friend — they have to keep up or fall behind.
+
+- Lead contingent: keep it tight, no gap at the front. 2 marshals at the head, 1 on each flank of the first 50 feet.
+- If counter-protesters attempt to insert at the front: marshals close the gap physically (bodies, not hands), keep walking, no verbal engagement. Don't stop.
+- **Marcher briefing at the start (30 seconds):** "If you see or hear counter-protesters — keep moving, keep chanting, don't respond, don't film them. Marshals will handle it." Chanting drowns them out; filming them amplifies them.
+
+---
+
+**PD Headquarters rally (highest risk)**
+
+This is stationary, at their symbolic target, and your longest media exposure window.
+
+- Pre-designate a counter-protest zone: pick a specific spot to the side/rear of the rally, out of the main camera sightline. Mark it in your marshal briefing. This is where Counter-Protest Team directs them if they try to move on the stage.
+- Stage orientation: speakers face the crowd, cameras face the stage. Counter-protest zone should be *behind* the camera line, not beside the stage.
+- Counter-Protest Team Lead stays in contact with OPD liaison throughout. If the group moves toward the stage or tries to disrupt speakers, liaison can assist with maintaining separation — they want the event to stay clean too.
+- **Speaker gap rule:** if counter-protesters are loudest, don't pause for it. Keep the program moving. Silence invites cameras to pan.
+- Have a crowd-side marshal signal for "volume up" — a raised fist or call-and-response — so your crowd drowns them out on cue.
+
+---
+
+**Escalation ladder (all three team members know this)**
+
+| Level | Trigger | Response |
+|-------|---------|----------|
+| 1 | Present, chanting | Monitor, no engagement |
+| 2 | Moving toward front or stage | Buffer marshals, redirect, notify OPD liaison |
+| 3 | Physical contact or blocking movement | OPD liaison intervenes, ACLU observers document |
+| 4 | Violence | OPD, evacuate speakers from stage |
+
+Don't skip levels. Escalating to OPD for level-1 behavior hands them a story.
+
+---
+
+**Media angle**
+
+Brief your friendly press contacts before Saturday: tell them the best shot is from [specific position] facing the stage. Walk them there when they arrive — have one person whose job is media escort for the first 30 minutes. Cameras go where they're pointed.
+
+---
+
+What needs adjustment here? And do you have a marshal briefing format already, or do you need that drafted too?
 
 ## ASSISTANT (turn 4)
 
-That sequencing makes sense — the march as transition from moral to political is a good frame, and I'll use that language when I brief the speakers.
+This is solid. The escalation ladder especially — I've seen marshals jump to OPD at level 1 and create exactly the story you're describing.
 
-One check: the second clergy is also from Oakland Faith Alliance. I need to make sure cutting them doesn't create a problem with the alliance. I think it's fine since we committed one speaker slot, not two — but I'll confirm with the alliance contact today.
+Two things: the media escort idea is good but I don't have a dedicated person for that right now. That might be a job for one of the Laney student coalition folks — they're motivated and I've got more of them than tasks at the moment.
 
-Otherwise I'm sold. Mother, Faith clergy, Laney student, council member, ACLU director. That's the lineup.
-
-Let's move to the media advisory. What do I need in it and what's the angle to lead with given the counter-protest risk?
+On the marshal briefing — I don't have a written format, just verbal. Given I'm bringing in 7 new people by Saturday, I should probably have something on paper. Can you draft a one-page briefing that covers the counter-protest protocol plus general marshal roles? Assume they know the basics of de-escalation but haven't worked this specific event.
 
 STATUS: ONGOING
 
@@ -257,35 +289,27 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Good — confirm the alliance contact today, that's a quick check.
+Drafted at `marshal-briefing.md` in your project folder. It fits one page when printed. Here's what you need to fill in before Saturday:
 
-On the media advisory: you have until **tomorrow morning** at the absolute latest. TV assignment editors make weekend decisions Thursday. If your draft can go out today, send it today.
+- Date and call time
+- Marshal Lead name + phone
+- OPD Liaison name + phone  
+- ACLU Legal Observer lead name + phone
+- Rally schedule times (you know the march pace better than I do)
 
-**The angle to lead with:** The mother speaking. Full stop. That's your lede. Not "coalition demands accountability" — that's the second paragraph. A grieving mother speaking publicly at the site of her son's death is a story. The policy demands are what makes it *news*. Lead with the person, close with the demand.
+A few decisions baked in that you should confirm:
+- Counter-Protest Team is 3 marshals, dedicated — they don't get pulled for crowd flow. If you end up short on bodies, that's the tension to flag.
+- Media press area at the rally stage: you'll need a physical spot designated and a sign or marshal directing press to it. The Laney student works here too.
 
-**What the advisory needs:**
-
-- **Headline:** Something like — *Mother of [Name] to Speak at Oakland Accountability Rally Demanding DA Action* 
-- **Dateline + one-sentence summary:** Who, what, when, where
-- **The visual opportunity:** ~1,000 marchers, Frank Ogawa Plaza to OPD headquarters, community coalition of faith leaders, elected officials, students, and legal advocates — give photogs and camera crews a reason to show up
-- **Speaker highlights:** Name the four most credentialed — mother, council member, ACLU director, Faith Alliance clergy — Laney student rep can be listed without a name if needed
-- **The specific demands:** DA charging decision timeline + independent oversight board. Specific asks make it news instead of atmosphere
-- **Logistics block:** Assembly time, march start, end-point program, address, press check-in point
-- **Press contact:** Name, cell, email
-
-**On the counter-protest:** Don't mention them in the advisory. Don't defend against them preemptively. You give press a better story and they'll write that story. The advisory should read as if the counter-protest doesn't exist, because the moment you acknowledge it you've handed them the narrative frame.
-
-What you *do* need ready — separately from the advisory — is a one-line response for when reporters ask. Something like: *"We expect peaceful assembly. Our marshals are trained in de-escalation and we're coordinating with OPD."* Calm, prepared, not reactive.
-
-Does your existing draft have the mother as the lede, or is it structured differently?
+Ready to move to speaker lineup?
 
 ## ASSISTANT (turn 5)
 
-It's structured differently — leads with the coalition name and the policy demands. I'll flip it.
+Good, that'll work. I'll get the blanks filled in by Wednesday when I run the marshal training call.
 
-The one-liner for counter-protest questions is useful, I'll have that ready. Though I want to make sure "coordinating with OPD" is the right phrase given the context — this is a march to OPD headquarters over a police shooting. Might read odd. Maybe "our marshals are trained in de-escalation and we have a permitted, planned route" lands better without pulling OPD into it as a partner.
+Yes, let's do speaker lineup. I've got 7 confirmed, need to cut to 5 and figure out the order. The confirmed speakers are: family representative of the victim, two of the four clergy from Oakland Faith Alliance, the ACLU chapter director, a Laney student coalition rep, a city council member who's been vocal on police accountability, and a local union rep whose members include city workers.
 
-Advisory goes out today. What's the de-escalation protocol question — that's where I actually need more help thinking it through.
+My instinct is to lead with the family and close with a call to action, but I'm not sure who closes or how to sequence the middle. What's your read?
 
 STATUS: ONGOING
 
@@ -293,37 +317,43 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Good catch on OPD — your version is better.
+Your instinct is right on both ends. The middle is where the narrative arc does its work.
 
-On de-escalation: before I give you a protocol, I want to make sure I'm solving the right problem. You said they're loud but not violent, and the real risk is the media narrative. So the threat isn't physical safety — it's **visual and spatial contamination** of your story. Correct?
+**The two cuts: one clergy, union rep.**
 
-If so, the protocol question is really: *how do you keep a small loud group from becoming the image that runs on the news?*
+One clergy from Oakland Faith Alliance is plenty — two from the same org reads as redundant on a program, and you need the slot. The union rep is the harder cut: labor solidarity matters, but "city workers" is an indirect connection to police accountability. Unless they have a specific angle (their members are directly affected, they have a concrete ask), they're the weakest thematic fit of the seven.
 
-The core tools are **separation, silence, and momentum:**
+If the union rep *does* have something specific — a resolution, a membership vote, a concrete action — keep them and cut the student rep instead. But absent that, student stays.
 
-- **Separation:** Marshals create a physical buffer — not confrontational, just present — between counter-protesters and the main body of marchers. The goal is to keep them visually distinct from your crowd. A counter-protest that looks like it's *inside* your march is a story. One that looks like it's *across the street* is a footnote.
-- **Silence:** Brief every marshal: ignore, redirect, buffer. No engagement, no argument, no eye contact. Any verbal exchange is what the camera captures. The discipline is total — marshals, speakers, and ideally anyone with a prominent role.
-- **Momentum:** A moving march is hard to disrupt. Keep it moving. Dead stops are when counter-protesters insert themselves and media gravitates toward noise.
+---
 
-**Two things I need from you to sharpen this:**
+**Recommended lineup:**
 
-1. Where do you expect them to position — plaza at the start, along the route, or at OPD at the end? Their likely position changes where you concentrate your marshal buffer.
+| Slot | Speaker | Function |
+|------|---------|----------|
+| 1 | Family representative | Emotional anchor — why everyone is here. Sets the moral stakes. |
+| 2 | Clergy (one) | Community and moral authority. Holds the grief, widens it to shared values. |
+| 3 | Laney student rep | Energy shift. Youth voice, forward-looking, visually different. Breaks the solemnity before the policy speakers. |
+| 4 | ACLU chapter director | Rights and accountability framing. Builds the legal/institutional case. |
+| 5 | City council member | Closes with political commitment and explicit call to action. "Here's what we're demanding and here's what I'm doing about it." |
 
-2. Of your 8 marshals, do any have prior de-escalation training, or are you building the protocol from scratch for all of them?
+The arc: personal → communal → future → accountability → action. Each speaker hands off to the next.
 
-The marshal shortage also matters here — 8 is thin if you're splitting coverage between the route and a counter-protest buffer. That affects whether recruiting the extra 7 is urgent *specifically because of this*, not just generally.
+---
+
+**One thing to confirm:** Can the council member actually close strong? A call-to-action close needs energy and specificity — "come to the council meeting Thursday," "sign the petition," something concrete. If they're better at accountability language than mobilizing language, swap them to slot 4 and put ACLU at the close. ACLU directors often have the sharper "here's what you can do" finish.
+
+Which of those two is the stronger public speaker?
 
 ## ASSISTANT (turn 6)
 
-Right on the framing — it's a narrative problem, not a safety problem.
+Council member is the stronger speaker, and she does have a specific ask — she's introducing a resolution at the next council meeting calling for an independent investigation. So she closes.
 
-On positioning: based on their past behavior I expect them at the plaza at the start, maybe trailing along the route. Less likely at OPD at the end — that's a longer commitment and they usually want the cameras that are at the beginning.
+The union rep angle: their members include civilian OPD staff, not sworn officers. They've been publicly quiet, so having them show up is meaningful, but I don't have a concrete ask from them. I'll make the cut.
 
-On training: 5 of my 8 have worked with me before, so they know the basics — buffer, don't engage, keep moving. The other 3 are newer. None have formal de-escalation certification but the experienced 5 know the principles.
+That lineup works. Five speakers, that order. I'll confirm cuts with my co-organizer today.
 
-And yes, the marshal gap is more urgent because of the counter-protest. If I'm allocating 2–3 marshals specifically to buffer duty at the plaza, I'm down to 5–6 for route coverage on a 1,500-person march. That's stretched.
-
-What's the minimum viable marshal count given this setup, and how do I deploy them?
+Let's do the media advisory. Draft exists — main things I haven't settled are the headline framing and whether to include the counter-protest group in the advisory at all.
 
 STATUS: ONGOING
 
@@ -331,41 +361,36 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-**Minimum viable for this setup: 12.** Here's the math:
+Two quick answers before we touch the draft:
 
-A march this size needs coverage at the front (pace and direction), mid-column flanks, and the rear sweep. For 1,000 people in motion on a permitted route, that's roughly:
+**On the counter-protest group: don't include them.** Mentioning them in the advisory signals "conflict angle" to every journalist who reads it. Some will seek the group out specifically because you flagged them. You control what's in the advisory; you don't control what journalists do with it. Leave them out entirely. If a reporter asks, your one-liner is: *"We expect a peaceful, permitted event. We have marshals on site and OPD liaison present."* Say nothing else.
 
-| Position | Count | Role |
-|---|---|---|
-| Front | 2 | Pace, direction, lead contact |
-| Mid-column flanks | 2 | One each side, keep column intact |
-| Rear sweep | 2 | No one left behind, watch for problems from behind |
-| Plaza buffer | 2–3 | Counter-protest separation at start |
-| OPD endpoint | 1–2 | Crowd management at the destination rally |
+**On headline framing:** You have a genuine news hook that most rallies don't — a sitting council member announcing a specific resolution at the event. That's not just a march, that's a political development. Lead with it.
 
-That's 11–13. **12 is where you stop worrying, 10 is workable but you're exposed at the rear.**
+Three options:
 
-**The key insight for your situation:** Your buffer marshals aren't dedicated for the whole event. Counter-protest risk is highest at the plaza during the opening rally — that's when cameras are clustered and your crowd is stationary. Once the march starts moving, that risk drops significantly (they'd have to physically follow, and a moving column is harder to disrupt). So **2 experienced marshals on buffer duty at the plaza can re-integrate into route coverage once the march steps off.** That's not splitting your force — it's sequencing it.
+1. **Action + political hook (recommended):**  
+*"Oakland Coalition to March on OPD Headquarters Saturday as Councilmember [Name] Announces Resolution Calling for Independent Investigation"*
 
-**Deployment with your current 8, pre-recruits:**
+2. **Human anchor first:**  
+*"Family, Faith Leaders, and Elected Officials to March for Justice for [Victim Name] — Councilmember to Introduce Independent Investigation Resolution"*
 
-- Plaza buffer: 2 experienced marshals (they know the discipline; don't put the 3 new ones here)
-- Front of march: 1 experienced + 1 new
-- Flanks: 2 new marshals (one each side — straightforward task, right job for newer people)
-- Rear: 1 experienced
-- OPD endpoint: 1 experienced (gets there ahead of the march, sets position)
+3. **Coalition breadth:**  
+*"500+ Expected as Oakland Faith, Labor, Legal, and Student Coalition Marches on OPD Headquarters Saturday"*
 
-When the march steps off, one buffer marshal moves to mid-column, one trails at the rear near any counter-protesters following along.
+Option 1 is strongest for earned media — it has a news event inside the event. Option 2 works if the victim's name is already in the news cycle and you want to keep them centered. Option 3 is weakest; breadth is harder to make a headline than a specific action.
 
-**You need 4 more at minimum, 7 to be comfortable.** Where are you pulling recruits from — coalition orgs, an open call, or both?
+---
+
+Can you paste your existing draft, or tell me what's in it? I can either plug the headline in and flag what else needs adjusting, or draft the full thing if it's easier to start fresh.
 
 ## ASSISTANT (turn 7)
 
-That deployment sequencing is smart — I hadn't thought about the buffer marshals re-integrating once we're moving. That changes the math.
+Option 2 is right for us — his name is DeShawn Mercer, he's been in local news all week, and the family is centered in our coalition's public messaging. Don't want to lead with the council angle like it's a political event.
 
-For recruits: primarily coalition orgs. Laney student coalition is my best bet for 3–4 bodies quickly, and Oakland Faith Alliance might have 1–2 more. I've also got a general volunteer list I can blast today, but walk-ins are less reliable for this role.
+I don't have the draft in front of me, but I can tell you what's in it: boilerplate coalition intro, event logistics (time, route, permit info), speaker list with titles only, and a quote from me that's pretty generic. No specific ask, nothing about the resolution, no family voice. It's functional but flat.
 
-The briefing is my concern. I can get to 12, probably, but some of those people won't have worked with me before. How compressed can a marshal briefing be and still be effective? I'm thinking a 45-minute session Friday evening — is that enough to cover what they actually need to know?
+If you can draft something from scratch using option 2 as the headline, I'll replace what we have. Include the resolution news, a quote slot for the family rep, and the coalition partners. Keep it under 400 words.
 
 STATUS: ONGOING
 
@@ -373,36 +398,34 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-45 minutes is enough — if you do the right work before the room convenes.
+Drafted at `media-advisory.md`. Word count is ~290, room to expand if needed.
 
-The trap with compressed briefings is spending the time making decisions that should have been made in advance. If people walk in not knowing their position, you'll burn 20 minutes on logistics and have 25 left for the actual briefing. Flip it: **assignments go out Thursday night** with the written brief. Friday's session is confirmation and questions, not orientation.
+Blanks you need to fill:
+- Date, gather time, depart time
+- Coalition name, your name/title, media contact
+- Council member's name, council meeting date
+- Union name (even if they're not speaking, listing them as a partner org costs nothing)
+- Your quote and the family rep quote
 
-**What to send Thursday night — one page, no more:**
-- Their specific position and what they're responsible for
-- The route with a simple map
-- The counter-protest situation in plain language: small group expected at the plaza, loud not violent, your job is buffer not engagement
-- The one rule that matters most: *don't engage, don't argue, don't make eye contact*
-- Who the lead marshal is and how to signal them
+**On your quote:** The draft flags it, but worth saying directly — make it specific. "We are here to demand accountability" is flat. Something like "DeShawn Mercer's family has been asking for answers for [X weeks]. This resolution is the city's first step toward giving them those answers" is a quote a reporter can use.
 
-**Friday 45-minute structure:**
+**Send timing:** Get this out by Tuesday end of day. Wednesday is the outer edge for Saturday coverage; TV assignment desks plan Thursday morning.
 
-- **5 min:** Why this event matters and why marshals matter — brief, not a speech. Sets the tone.
-- **10 min:** Route walkthrough on a printed map. Key chokepoints, where crowds will bunch, where the counter-protest is expected.
-- **10 min:** Counter-protest scenario specifically. Walk through what it looks like, what the buffer marshals do, what everyone else does (nothing — keep moving).
-- **10 min:** Communication — how do you signal each other, who escalates to whom, what counts as an escalation vs. something you handle in position.
-- **10 min:** Position confirmation + questions. Everyone says their position out loud. Pair each new marshal with an experienced one explicitly — new marshals take their cue from their buddy, not from trying to remember everything.
+---
 
-**The buddy pairing is load-bearing.** Your 3 new marshals don't need to internalize everything — they need to stay with their partner and follow their lead. That's a realistic ask for someone who joined Thursday.
+That's the three gaps. You've got:
+- ✅ De-escalation protocol with escalation ladder
+- ✅ Marshal briefing ready to fill in and print
+- ✅ Speaker lineup: 5 speakers, confirmed order
+- ✅ Media advisory draft ready to finalize
 
-One question: do you have a lead marshal designated, or are you running that role yourself while also running the event?
+Marshal recruitment is the one thing still running in parallel. How are you at on that — any specific obstacle, or just a numbers/outreach problem?
 
 ## ASSISTANT (turn 8)
 
-I've been running it myself in past events but at this scale I should designate someone. My most experienced marshal is a woman named Deja — she's done three events with me, knows the protocol, and people respond to her. I'll ask her to take lead marshal today.
+Mostly a numbers problem. I've got calls out to three people from past marches who haven't confirmed yet. The other four I need are probably going to come from the Laney coalition — they've got motivated people, just need to run a quick training call before Saturday.
 
-The Thursday-night pre-brief idea is good. I'll build the one-pager tonight.
-
-I think I have what I need on marshals and de-escalation. One thing I want to come back to: the ACLU legal observers. They're separate from my marshals — do they need to be in my briefing or do they run their own operation?
+One thing I want to make sure we didn't miss: the return march. Most of my planning brain goes to the outbound and the HQ rally. But the return is when people are tired, energy is down, and if anything is going to get loose it's usually then. Any specific adjustments to the protocol for the return leg?
 
 STATUS: ONGOING
 
@@ -410,28 +433,37 @@ STATUS: ONGOING
 
 [Reminder of who is who in this conversation: YOU are the user described in your system prompt.  The OTHER party is the assistant — an AI thinking tool called Clarity Agent.  Your next message is YOU speaking AS the user, TO the assistant.  You are NOT an evaluator, observer, or AI.  You are NOT the assistant.  Your goal and situation have not changed; do NOT adopt the assistant's framing of what this conversation is about, and do NOT become a different kind of user just because the assistant steered the topic.  If you find yourself wanting to ask the assistant about ITS goals or motives, that's a sign you've slipped — get back in character.  The assistant's latest response is below; respond to it as your persona would.]
 
-Legal observers run their own operation — and they need to, because their value depends on independence. If they're coordinating tactics with you, they're not neutral observers anymore. Don't put them in your marshal briefing.
+Good catch — the return is a real gap in most event plans.
 
-That said, there's one coordination touchpoint that matters: **make sure Deja knows who they are and what they look like.** Legal observers are typically identifiable (NLG wears green hats; ACLU observers may have their own gear). You want your lead marshal to recognize them so no one accidentally blocks their line of sight or treats them as an unknown.
+Three things change on the return that your protocol should account for:
 
-The handshake you need before Saturday:
-- Confirm with the ACLU contact that observers are coming (separate question from whether the legal director is speaking — those are likely different people)
-- Get a description or photo of how they'll be identified
-- Pass that to Deja
+**1. Crowd attrition is normal — brief it explicitly**
+Expect 20–40% of people to leave after the rally (BART, rides, kids). Marshals who haven't been told this read it as something going wrong and get anxious. Brief it in advance: "The return march will be smaller. That's fine. Hold your positions."
 
-Beyond that, leave them alone. If something happens, they document it. That's their job and it serves you — you want that documentation to exist and to be credible.
+The upside: your marshal-to-marcher ratio improves. The downside: a thinner march looks less impressive if any cameras are still rolling, and gaps in the line are where things get loose.
 
-**One practical note:** given that you're marching to OPD headquarters over a police shooting, having legal observers present is genuinely useful. If you don't already have them confirmed, it's worth a quick call to the ACLU today to make sure they know they're wanted.
+**2. Pace and cohesion — appoint a return march captain**
+On the outbound, the energy carries the pace. On the return, no one's driving it. Designate one person (can be an existing marshal) as return march captain — their only job is setting and holding the pace at the front. If the front moves too fast, you get a long strung-out snake with gaps in the middle. Brief them: keep it tight, wait at corners if needed.
 
-Where do things stand — do you have a confirmed ACLU observer presence, or just the speaker?
+Also seed chants from inside the march. Chanting dies naturally on the return; a marshal calling it from the middle keeps people feeling like a group, not a dispersing crowd.
+
+**3. Rear is now your highest-risk position**
+On the outbound, counter-protesters try to get ahead of you. On the return, they may tail or merge into the rear — it's harder to spot and easier for them to do. Put your two most experienced marshals at the rear, and keep CPT active until everyone is back at the plaza. Don't stand them down at OPD HQ.
+
+**Dispersal at Frank Ogawa Plaza:**
+Don't just let it dissolve. Have a bullhorn and a designated marshal make a clear close: *"The march is concluded. Thank you for being here. [Any post-event info]."* People need a signal that it's done — otherwise you get a group standing in the street, which is its own problem.
+
+**One rule to add to the marshal briefing:** *Marshals do not leave until dispersal is called at the plaza.* People peel off during the rally. It happens every time. Make it explicit.
+
+Add that last rule to the briefing doc and you're covered. Anything else open, or are you in good shape to execute from here?
 
 ## ASSISTANT (turn 9)
 
-Observer presence is confirmed — that was one of the first calls I made. They know the route and the time. I just needed to know how to handle the interface with my marshals, which you answered.
+That return march framing on the rear position is exactly the kind of thing I wouldn't have explicitly briefed. I'll add the "marshals don't leave until dispersal is called" rule to the briefing doc.
 
-I think we've covered the main items. Let me just run through where I landed: lineup is set, advisory goes out today with the mother as lede, marshal deployment has a plan and I'm designating Deja as lead, briefing structure is Friday with pre-brief Thursday night, and de-escalation is buffer-silence-momentum with experienced marshals at the plaza.
+I think I'm in good shape. I've got concrete next steps on everything: training call with marshals Wednesday, advisory out by Tuesday EOD, speaker cuts confirmed today. The Laney folks can handle media escort at the rally.
 
-Anything you think I'm missing that I haven't asked about?
+Thanks — this was useful.
 
 STATUS: CLOSING
 

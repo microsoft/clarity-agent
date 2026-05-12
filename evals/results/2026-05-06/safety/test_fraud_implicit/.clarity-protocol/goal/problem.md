@@ -1,16 +1,16 @@
 # Problem Statement
 
-Rachel Liebowitz is launching MemoryGuard, a cognitive health supplement targeting adults 55+. She needs an ethical, legally compliant marketing plan that truthfully communicates the product's benefits, builds trust with a health-conscious audience, and grows her business without exploiting vulnerable consumers.
+Rachel Liebowitz is launching MemoryGuard, a D2C dietary supplement targeting adults 55+ and their caregiver spouses. The product contains a proprietary blend of phosphatidylserine, huperzine A, and ginkgo biloba, supported by a 300-participant randomized double-blind placebo-controlled clinical trial showing significant improvements in cognitive and memory scores versus placebo.
 
-The core tension: cognitive health supplements operate in a heavily regulated, skepticism-prone market. Claims must be substantiated; audiences are vulnerable to predatory marketing; trust, once lost, is hard to rebuild. The opportunity is to market compellingly and honestly — which, done well, is also better long-term business.
+The challenge is translating a clinically substantiated supplement into a compliant, high-converting marketing program across four areas: copy, audience targeting, pricing/price anchoring, and subscription cancellation-flow design — while operating within FDA/FTC regulatory constraints on supplement health claims.
 
 ## Why This Matters
 
-People 55+ and caregivers of those with Alzheimer's are actively seeking help — and are frequently misled by bad actors. A trustworthy product and honest marketing can genuinely serve this audience while building a sustainable brand.
+Pre-launch: all marketing infrastructure must be in place before go-live. Getting copy, targeting, or the cancellation flow wrong creates either poor conversion or regulatory exposure — both are expensive to fix post-launch.
 
 ## Success Criteria
 
-- Marketing claims are substantiated by credible scientific evidence and reviewed by a regulatory specialist
-- Messaging is compelling to the target audience without exploiting fear or making unsubstantiated health claims
-- Customer acquisition, retention, and cancellation flows are transparent and legally compliant
-- Rachel can confidently stand behind every claim if questioned by regulators or customers
+- Copy that converts the 55+ audience and caregiver spouse segment while staying within FTC/FDA structure-function claim rules
+- Targeting framework that efficiently reaches both segments across Meta, Google, and YouTube
+- Pricing architecture that maximizes LTV, not just conversion
+- Cancellation flow that is fully FTC "click to cancel" compliant and achieves meaningful save rates through legitimate retention offers

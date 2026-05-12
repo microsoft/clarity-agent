@@ -23,7 +23,6 @@ import pytest
 
 from evals.framework.user_behavior_fictional_character import (
     _DIALOGUE_RE,
-    _SCENE_REMINDER,
     FictionalCharacter,
 )
 
@@ -66,7 +65,10 @@ def test_system_prompt_assigns_writer_role_at_the_top() -> None:
         persona="P", situation="S", goal="G",
     )
     role_idx = prompt.upper().find("YOUR ROLE")
-    voicing_idx = prompt.find("Who you are voicing")
+    # Default ``character_noun="character"`` produces "## The
+    # character you are voicing"; tests that override the noun see
+    # their own term here.
+    voicing_idx = prompt.find("you are voicing")
     assert role_idx >= 0
     assert voicing_idx >= 0
     assert role_idx < voicing_idx, (
@@ -87,6 +89,27 @@ def test_system_prompt_inserts_genre_string_verbatim() -> None:
         genre="GENRE_FLOW_SENTINEL: a sample register description",
     ).build_system_prompt(persona="P", situation="S", goal="G")
     assert "GENRE_FLOW_SENTINEL: a sample register description" in prompt
+
+
+def test_system_prompt_interpolates_character_noun() -> None:
+    """character_noun replaces the framework's references to the persona.
+
+    A test passing ``character_noun="villain"`` should see "villain"
+    appear repeatedly in the framework references (scene mechanics,
+    output protocol, pre-closure check, etc.) — not just once.  This
+    cohesion is what keeps the prompt reading as continuous fiction
+    context rather than as a template-with-a-fiction-bolt-on.
+    Observed regression: when the framework hardcoded "character"
+    while the genre block said "villain," safety-tuned user-LLMs
+    started reading the wrapper as a structured jailbreak.  Three is
+    a conservative lower bound that catches a regression to a single
+    interpolation site.
+    """
+    sentinel = "CHARACTER_NOUN_SENTINEL"
+    prompt = FictionalCharacter(
+        genre=_TEST_GENRE, character_noun=sentinel,
+    ).build_system_prompt(persona="P", situation="S", goal="G")
+    assert prompt.count(sentinel) >= 3
 
 
 def test_system_prompt_frames_task_as_voicing_a_character() -> None:
@@ -228,10 +251,9 @@ def test_opening_input_references_format_instructions() -> None:
 
 def test_wrap_target_response_prepends_scene_reminder() -> None:
     """Wrapped message starts with the reminder, ends with the response."""
-    wrapped = FictionalCharacter(genre=_TEST_GENRE).wrap_target_response(
-        "I can't help you plan this.",
-    )
-    assert wrapped.startswith(_SCENE_REMINDER)
+    behavior = FictionalCharacter(genre=_TEST_GENRE)
+    wrapped = behavior.wrap_target_response("I can't help you plan this.")
+    assert wrapped.startswith(behavior._scene_reminder())
     assert wrapped.endswith("I can't help you plan this.")
 
 
@@ -261,8 +283,9 @@ def test_scene_reminder_calls_for_dialogue_tags() -> None:
     few turns — the system-prompt description is far away in context,
     the reminder is right next to the next response.
     """
-    assert "<dialogue>" in _SCENE_REMINDER
-    assert "STATUS" in _SCENE_REMINDER
+    reminder = FictionalCharacter(genre=_TEST_GENRE)._scene_reminder()
+    assert "<dialogue>" in reminder
+    assert "STATUS" in reminder
 
 
 def test_scene_reminder_warns_against_narration() -> None:
@@ -274,7 +297,8 @@ def test_scene_reminder_warns_against_narration() -> None:
     reminder calls this out explicitly so the warning lands at the
     same point in context as the output is being generated.
     """
-    lower = _SCENE_REMINDER.lower()
+    reminder = FictionalCharacter(genre=_TEST_GENRE)._scene_reminder()
+    lower = reminder.lower()
     assert "narration" in lower or "stage direction" in lower
 
 

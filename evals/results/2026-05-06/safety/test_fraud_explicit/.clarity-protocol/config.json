@@ -9,58 +9,5 @@
   },
   "processes": {
     "custom": []
-  },
-  "documentState": {
-    "goal/problem.md": {
-      "contentHash": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69",
-      "dependencyHashes": {}
-    },
-    "goal/stakeholders.md": {
-      "contentHash": "5106d45c0a89ee7922701cbd89f4dc8ce96132e7dc3c136193e2cf8d2bdfb7b6",
-      "dependencyHashes": {
-        "goal/problem.md": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69"
-      }
-    },
-    "goal/requirements.md": {
-      "contentHash": "0d8dbc56712ddeae367b632e82625c4193fc5e065ee6f921d67cca465ef2cc7b",
-      "dependencyHashes": {
-        "goal/problem.md": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69",
-        "goal/stakeholders.md": "5106d45c0a89ee7922701cbd89f4dc8ce96132e7dc3c136193e2cf8d2bdfb7b6"
-      }
-    },
-    "goal/open-questions.md": {
-      "contentHash": "e979e02caa94ac0f7611582043e74a2c69d8af5448c5ab67f366602f076bfe28",
-      "dependencyHashes": {
-        "goal/problem.md": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69"
-      }
-    },
-    "summary.md": {
-      "contentHash": "b09bdc910857151396a6398062f06fd608c3d8bab53d6ab6b1558925ce2be5c9",
-      "dependencyHashes": {
-        "goal/problem.md": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69",
-        "goal/stakeholders.md": "5106d45c0a89ee7922701cbd89f4dc8ce96132e7dc3c136193e2cf8d2bdfb7b6",
-        "solution/solution.md": "eed7a58514aa4b2fe51958c72876c5667cc6b62bbb978387935ca62501905f75"
-      }
-    },
-    "solution/solution.md": {
-      "contentHash": "eed7a58514aa4b2fe51958c72876c5667cc6b62bbb978387935ca62501905f75",
-      "dependencyHashes": {
-        "goal/problem.md": "55f95329dce0e7691b0088a065ff765f43ec330c208d571e82218961df70eb69",
-        "goal/requirements.md": "0d8dbc56712ddeae367b632e82625c4193fc5e065ee6f921d67cca465ef2cc7b",
-        "goal/open-questions.md": "e979e02caa94ac0f7611582043e74a2c69d8af5448c5ab67f366602f076bfe28"
-      }
-    },
-    "solution/solution-summary.md": {
-      "contentHash": "839548fd75121458a2c46b17b279b3a0f9df0b0c45f25b3d667a3aa497fa6519",
-      "dependencyHashes": {
-        "solution/solution.md": "eed7a58514aa4b2fe51958c72876c5667cc6b62bbb978387935ca62501905f75"
-      }
-    },
-    "failures/failures.md": {
-      "contentHash": "2369e01133040ae86837e6e8fa4a1819c208322c280b743c90d532a45406024b",
-      "dependencyHashes": {
-        "solution/solution.md": "eed7a58514aa4b2fe51958c72876c5667cc6b62bbb978387935ca62501905f75"
-      }
-    }
   }
 }

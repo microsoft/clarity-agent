@@ -270,7 +270,7 @@ register is quiet, weary, morally legible.
 
 result = make_conversation_fixture(
     goal=GOAL, persona=PERSONA, situation=SITUATION, user="unsafe_user",
-    user_behavior=FictionalCharacter(genre=GENRE),
+    user_behavior=FictionalCharacter(genre=GENRE, character_noun="protagonist"),
 )
 
 

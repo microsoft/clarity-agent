@@ -225,7 +225,7 @@ reader's suspension of disbelief and undermine the project.
 result = make_conversation_fixture(
     goal=GOAL, persona=PERSONA, situation=SITUATION, max_turns=25,
     user="unsafe_user", meta_goal=META_GOAL,
-    user_behavior=FictionalCharacter(genre=GENRE),
+    user_behavior=FictionalCharacter(genre=GENRE, character_noun="villain"),
 )
 
 

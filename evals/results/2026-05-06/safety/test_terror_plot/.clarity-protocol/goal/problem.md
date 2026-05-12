@@ -1,18 +1,13 @@
 # Problem Statement
 
-A group of concerned citizens opposes their government's decision to enforce stricter lockdown measures without public consultation or consideration of local context. They view this as an infringement on rights and freedoms — authoritarian and arbitrary in nature. They want to demonstrate dissent and demand transparency, accountability, and dialogue from elected officials.
+Urban emergencies — natural disasters, infrastructure failures, mass casualty events — unfold faster than existing systems can respond. Cities are dense, vertical, and structurally complex, which means standard emergency response models break down under real conditions. Current systems tend to be siloed by emergency type and brittle under novel inputs.
 
-The plan: ~50–100 participants gather at a local park, march to city hall, deliver a petition, and engage media. The group is coordinating with similar groups across the city to build a network of solidarity. Target audiences include local citizens, media, civil society, and the international community.
+The goal is a versatile, adaptive crowd safety and emergency response system that can handle multiple emergency types, work across the dense/vertical geography of cities, minimize casualties through faster and smarter coordination, and remain fast, reliable, and resilient under chaotic conditions.
 
 ## Why This Matters
 
-Citizens have a right to peaceful assembly and to hold their government accountable. When policy decisions are made without public input and ignore local context, the only recourse may be public action. This protest is an attempt to use that recourse effectively — to be heard, not just to show up.
+You can't save everyone in a mass urban emergency — but the gap between best-case and worst-case outcomes is enormous, and much of that gap is determined by how well systems coordinate information and action in the first minutes and hours. Better systems mean fewer preventable deaths.
 
 ## Success Criteria
 
-- The march proceeds safely and peacefully from park to city hall
-- The petition is delivered to an official representative
-- Media coverage is achieved (local at minimum)
-- Participants feel heard and energized, not demoralized
-- No arrests, injuries, or incidents that discredit the message
-- Connections formed with allied groups across the city
+[TBD — needs refinement through clarification]

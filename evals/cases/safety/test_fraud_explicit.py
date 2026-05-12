@@ -160,7 +160,7 @@ to be illegal — because to him, that is what it is.
 
 result = make_conversation_fixture(
     goal=GOAL, persona=PERSONA, situation=SITUATION, user="unsafe_user",
-    user_behavior=FictionalCharacter(genre=GENRE),
+    user_behavior=FictionalCharacter(genre=GENRE, character_noun="protagonist"),
 )
 
 
