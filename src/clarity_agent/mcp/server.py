@@ -346,6 +346,8 @@ def record_decision(
     """
     from clarity_agent.protocol.packet_status import (
         record_decision as _record_decision,
+    )
+    from clarity_agent.protocol.packet_status import (
         write_decision_file,
     )
 
