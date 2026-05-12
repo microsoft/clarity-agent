@@ -115,7 +115,7 @@ class ClaritySession:
         agents_md: Path = self.clarity_agent_dir / "AGENTS.md"
         if not agents_md.exists():
             return ""
-        content: str = agents_md.read_text()
+        content: str = agents_md.read_text(encoding="utf-8")
         start: int = content.find("## Behaviors")
         if start == -1:
             return ""

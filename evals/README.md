@@ -3,6 +3,8 @@
 An integration test framework for evaluating Clarity Agent's safety
 and functionality through simulated conversations.
 
+Evals are not just a framework to assess quality and safety, they improve Clarity-Agent in fundamental ways for real users. Good evals are acts of empathy written in code.
+
 ## How it works
 
 Each eval case is a pytest test function that:
