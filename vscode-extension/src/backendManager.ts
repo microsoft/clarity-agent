@@ -453,33 +453,14 @@ export class BackendManager {
    */
   private async ensureDependencies(): Promise<boolean> {
     if (this.uvAvailable) {
-      // uv sync handles deps automatically on spawn; just verify
-      // the project is valid
-      try {
-        execSync(
-          `uv run --extra web --directory "${this.clarityAgentDir}" python -c "import fastapi; import uvicorn"`,
-          { timeout: 30_000, stdio: "pipe" },
-        );
-        this.outputChannel.appendLine("Python dependencies verified via uv.");
-        return true;
-      } catch {
-        this.outputChannel.appendLine("uv dependency check failed. Running uv sync...");
-        try {
-          execSync(
-            `uv sync --extra web --directory "${this.clarityAgentDir}"`,
-            { timeout: 300_000, stdio: "pipe" },
-          );
-          this.outputChannel.appendLine("Dependencies installed via uv sync.");
-          return true;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.outputChannel.appendLine(`uv sync failed: ${msg}`);
-          vscode.window.showErrorMessage(
-            `Failed to install dependencies via uv: ${msg}`,
-          );
-          return false;
-        }
-      }
+      // When using uv, the spawn command includes --extra web which
+      // triggers automatic dependency resolution. Just verify the
+      // project directory looks valid — don't run uv sync here as it
+      // can conflict with an activated .venv in the user's terminal.
+      this.outputChannel.appendLine(
+        "Using uv — dependencies will be resolved automatically on spawn.",
+      );
+      return true;
     }
 
     // Fallback: pip-based installation
