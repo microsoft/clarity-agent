@@ -43,6 +43,7 @@ export async function openPanelInNewWindow(
   launcherProjectId?: string | null,
 ): Promise<void> {
   const url = buildPanelUrl(panelId, launcherProjectId);
+  let invokeError: unknown = null;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("open_panel_window", {
@@ -59,12 +60,22 @@ export async function openPanelInNewWindow(
       // group.
       tabbingId: panelId.projectId,
     });
-  } catch {
-    // Not in Tauri (dev server, hosted web build) or the
-    // command failed.  Falling back to ``window.open`` keeps
-    // the affordance working in development; in a Tauri build
-    // a failure here is unexpected and worth logging, but we
-    // don't want to crash the UI either way.
-    window.open(url, "_blank");
+    return;
+  } catch (err) {
+    invokeError = err;
   }
+  // Log loudly before the fallback runs.  In a Tauri build the
+  // ``window.open`` path is effectively a no-op (no browser tab
+  // to open into) — so a silent invoke failure presents to the
+  // user as "the button does nothing."  Surfacing the underlying
+  // error in the console gives an actionable trail when the
+  // command path fails (missing capability, builder error,
+  // command not registered, args mismatch, etc.).
+  console.warn(
+    "[openPanelInNewWindow] Tauri invoke('open_panel_window') failed; " +
+      "falling back to window.open(). In a Tauri build this fallback " +
+      "is a no-op — the underlying error is:",
+    invokeError,
+  );
+  window.open(url, "_blank");
 }

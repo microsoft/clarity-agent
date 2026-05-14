@@ -1,0 +1,6 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-open-panel-window"
+description = "Allow the frontend to open additional panel windows via the open_panel_window app command."
+commands.allow = ["open_panel_window"]

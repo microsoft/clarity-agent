@@ -14,10 +14,9 @@ use tauri::{
 #[cfg(not(dev))]
 use tauri_plugin_shell::ShellExt;
 
-/// Open a startup log file for diagnosing sidecar launch issues.
+/// Open a startup log file for diagnosing sidecar launch and panel-window issues.
 /// Writes to ``%LOCALAPPDATA%/Clarity/clarity-startup.log`` (Windows)
 /// or ``~/.clarity/clarity-startup.log`` (other platforms).
-#[cfg(not(dev))]
 fn open_startup_log() -> Option<std::fs::File> {
     use std::fs::OpenOptions;
     let log_dir = if cfg!(target_os = "windows") {
@@ -271,6 +270,18 @@ fn refresh_recent_menu(app: AppHandle) -> Result<(), String> {
 static NEXT_PANEL_WINDOW: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
+/// Append a line to stderr and the persistent startup log.
+/// Used by ``open_panel_window`` so multi-window failures in release
+/// builds (where stderr is invisible without a terminal launch) leave
+/// a trace in ``~/.clarity/clarity-startup.log``.
+fn log_panel(msg: &str) {
+    use std::io::Write;
+    eprintln!("[panel] {}", msg);
+    if let Some(mut f) = open_startup_log() {
+        let _ = writeln!(f, "[panel] {}", msg);
+    }
+}
+
 /// Open a new webview window pointed at a given route.
 ///
 /// ``route`` is the absolute path component (e.g. ``"/history"`` or
@@ -299,22 +310,37 @@ fn open_panel_window(
     route: String,
     tabbing_id: String,
 ) -> Result<(), String> {
-    let main = app
-        .get_webview_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
-    let main_url = main.url().map_err(|e| e.to_string())?;
+    log_panel(&format!(
+        "open_panel_window called: route={:?} tabbing_id={:?}",
+        route, tabbing_id,
+    ));
+    let main = app.get_webview_window("main").ok_or_else(|| {
+        let e = "main window not found".to_string();
+        log_panel(&format!("error: {}", e));
+        e
+    })?;
+    let main_url = main.url().map_err(|e| {
+        let msg = e.to_string();
+        log_panel(&format!("error: main.url() failed: {}", msg));
+        msg
+    })?;
+    log_panel(&format!("main_url = {}", main_url));
     // ``Url::join`` with a path that begins with ``/`` replaces
     // the existing path entirely — exactly what we want, since the
     // main window's URL may have drifted from ``/`` via client-side
     // routing and we only need its origin (scheme + host + port).
-    let target = main_url
-        .join(&route)
-        .map_err(|e| format!("invalid route {:?}: {}", route, e))?;
+    let target = main_url.join(&route).map_err(|e| {
+        let msg = format!("invalid route {:?}: {}", route, e);
+        log_panel(&format!("error: {}", msg));
+        msg
+    })?;
+    log_panel(&format!("target = {}", target));
 
     let label = format!(
         "panel-{}",
         NEXT_PANEL_WINDOW.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
     );
+    log_panel(&format!("label = {}", label));
 
     let builder = tauri::WebviewWindowBuilder::new(
         &app,
@@ -340,7 +366,12 @@ fn open_panel_window(
     #[cfg(not(target_os = "macos"))]
     let _ = &tabbing_id;
 
-    builder.build().map_err(|e| e.to_string())?;
+    builder.build().map_err(|e| {
+        let msg = e.to_string();
+        log_panel(&format!("error: builder.build() failed: {}", msg));
+        msg
+    })?;
+    log_panel("window built successfully");
     Ok(())
 }
 
