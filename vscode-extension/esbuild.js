@@ -32,7 +32,6 @@ async function main() {
     platform: "node",
     outdir: "out",
     outbase: "src",
-    external: ["vscode", "mocha", "@vscode/test-electron", "glob"],
     logLevel: "info",
   });
 
