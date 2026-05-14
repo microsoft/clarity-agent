@@ -2,7 +2,7 @@
   "name": "clarity-agent",
   "displayName": "Clarity Agent",
   "description": "Structured thinking about what you're building, why, and what could go wrong — powered by LLMs.",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "publisher": "clarity-agent",
   "icon": "media/icon.png",
   "license": "SEE LICENSE IN LICENSE",
@@ -27,6 +27,7 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "extensionDependencies": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -42,11 +43,52 @@
         {
           "type": "webview",
           "id": "clarity.sidebarView",
-          "name": "Clarity Agent"
+          "name": "Chat"
+        },
+        {
+          "id": "clarity.protocolTree",
+          "name": "Protocol Documents"
         }
       ]
     },
     "commands": [
+      {
+        "command": "clarity.switchProject",
+        "title": "Clarity: Switch Project"
+      },
+      {
+        "command": "clarity.setup",
+        "title": "Clarity: Run Setup Wizard"
+      },
+      {
+        "command": "clarity.selectModel",
+        "title": "Clarity: Select Model"
+      },
+      {
+        "command": "clarity.generatePacket",
+        "title": "Clarity: Generate Packet"
+      },
+      {
+        "command": "clarity.listProcesses",
+        "title": "Clarity: List Processes"
+      },
+      {
+        "command": "clarity.viewTranscripts",
+        "title": "Clarity: View Transcripts"
+      },
+      {
+        "command": "clarity.sendFeedback",
+        "title": "Clarity: Send Feedback"
+      },
+      {
+        "command": "clarity.configureMcp",
+        "title": "Clarity: Configure MCP Server"
+      },
+      {
+        "command": "clarity.refreshProtocol",
+        "title": "Clarity: Refresh Protocol Tree",
+        "icon": "$(refresh)"
+      },
       {
         "command": "clarity.open",
         "title": "Clarity: Open"
@@ -81,21 +123,60 @@
           "type": "number",
           "default": 0,
           "description": "Port for the Clarity backend server. Set to 0 for automatic (ephemeral) port selection."
+        },
+        "clarity.useUv": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use 'uv' for dependency management if available. Falls back to pip when uv is not found."
+        },
+        "clarity.provider": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "anthropic",
+            "openai",
+            "azure",
+            "azure-openai",
+            "claude-sdk",
+            "google",
+            "github-copilot"
+          ],
+          "description": "LLM provider to use. Leave empty to use the default from .env."
+        },
+        "clarity.model": {
+          "type": "string",
+          "default": "",
+          "description": "LLM model name override. Leave empty to use the provider default."
         }
       }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "clarity.refreshProtocol",
+          "when": "view == clarity.protocolTree",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "bundle": "node bundle.js",
+    "test": "node esbuild.js && node out/test/runTest.js",
     "package": "npm run bundle && npx @vscode/vsce package --allow-missing-repository",
     "vscode:prepublish": "node bundle.js && node esbuild.js --production"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.4",
+    "glob": "^13.0.6",
+    "mocha": "^11.7.5",
     "typescript": "^5.6.0"
   }
 }

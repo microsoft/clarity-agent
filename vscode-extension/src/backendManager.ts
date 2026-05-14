@@ -1,10 +1,10 @@
 /**
  * Manages the Clarity Agent FastAPI backend as a child process.
  *
- * Spawns `python clarity.py web <project-dir> --port <port>`, polls
- * until the server is ready, and provides start/stop/restart lifecycle.
- *
- * When dependencies are missing, automatically installs them via pip.
+ * Spawns the launcher server (`clarity.py web --port <port>`) which
+ * handles multi-project routing internally. When `uv` is available
+ * and `clarity.useUv` is enabled, uses `uv run` for dependency
+ * management instead of pip.
  */
 
 import { ChildProcess, execSync, spawn } from "child_process";
@@ -28,6 +28,7 @@ export class BackendManager {
   private outputChannel: vscode.OutputChannel;
   private events: BackendManagerEvents;
   private depsInstalled = false;
+  private _uvAvailable: boolean | undefined;
 
   constructor(
     private readonly clarityAgentDir: string,
@@ -55,18 +56,44 @@ export class BackendManager {
   }
 
   /**
-   * Start the backend server for a given project directory.
+   * Check whether `uv` is available on the system.
    */
-  async start(projectDir: string): Promise<void> {
+  private get uvAvailable(): boolean {
+    if (this._uvAvailable === undefined) {
+      const config = vscode.workspace.getConfiguration("clarity");
+      const useUv = config.get<boolean>("useUv", true);
+      if (!useUv) {
+        this._uvAvailable = false;
+        return false;
+      }
+      try {
+        execSync("uv --version", { timeout: 5_000, stdio: "pipe" });
+        this._uvAvailable = true;
+      } catch {
+        this._uvAvailable = false;
+      }
+    }
+    return this._uvAvailable;
+  }
+
+  /**
+   * Start the backend launcher server.
+   *
+   * When a projectDir is provided, it is registered and activated
+   * via the launcher API after the server starts.
+   */
+  async start(projectDir?: string): Promise<void> {
     if (this._state === "running" || this._state === "starting") {
       return;
     }
 
     this.setState("starting");
     this.stderrBuffer = "";
-    this.outputChannel.appendLine(`Starting Clarity backend for: ${projectDir}`);
+    this.outputChannel.appendLine(
+      `Starting Clarity backend${projectDir ? ` for: ${projectDir}` : " (launcher mode)"}`,
+    );
 
-    // Ensure Python dependencies are installed
+    // Ensure dependencies are installed
     if (!this.depsInstalled) {
       const depsOk = await this.ensureDependencies();
       if (!depsOk) {
@@ -77,34 +104,21 @@ export class BackendManager {
     }
 
     try {
-      // Find a free port
       this._port = await this.findFreePort();
       this.outputChannel.appendLine(`Using port: ${this._port}`);
 
-      // Resolve Python path
-      const pythonPath = this.getPythonPath();
-      const clarityPy = path.join(this.clarityAgentDir, "clarity.py");
+      const { cmd, args } = this.buildSpawnCommand(projectDir);
+      this.outputChannel.appendLine(`Command: ${cmd} ${args.join(" ")}`);
 
-      this.outputChannel.appendLine(
-        `Command: ${pythonPath} ${clarityPy} web ${projectDir} --port ${this._port}`,
-      );
-
-      // Spawn the process
-      this.process = spawn(
-        pythonPath,
-        [clarityPy, "web", projectDir, "--port", String(this._port), "--host", "127.0.0.1"],
-        {
-          cwd: this.clarityAgentDir,
-          env: {
-            ...process.env,
-            // Ensure clarity_agent is importable
-            PYTHONPATH: path.join(this.clarityAgentDir, "src"),
-          },
-          stdio: ["ignore", "pipe", "pipe"],
+      this.process = spawn(cmd, args, {
+        cwd: this.clarityAgentDir,
+        env: {
+          ...process.env,
+          PYTHONPATH: path.join(this.clarityAgentDir, "src"),
         },
-      );
+        stdio: ["ignore", "pipe", "pipe"],
+      });
 
-      // Pipe stdout/stderr to output channel
       this.process.stdout?.on("data", (data: Buffer) => {
         const text = data.toString().trim();
         if (text) {
@@ -138,26 +152,36 @@ export class BackendManager {
         this.setState("error");
       });
 
-      // Wait for the server to respond
       const ready = await this.waitForServer(30_000);
       if (ready) {
         this.setState("running");
         this.outputChannel.appendLine("Backend is ready.");
+
+        // If a project dir was given, activate it via the launcher API
+        if (projectDir) {
+          await this.activateProject(projectDir);
+        }
+
+        // Apply model overrides from VS Code settings
+        await this.applyModelOverrides();
       } else {
         this.outputChannel.appendLine("Backend failed to start within timeout.");
 
-        // Check if it was a missing dependency issue
-        if (this.stderrBuffer.includes("ModuleNotFoundError") ||
-            this.stderrBuffer.includes("ImportError") ||
-            this.stderrBuffer.includes("No module named")) {
-          this.outputChannel.appendLine("Detected missing Python dependencies. Attempting install...");
+        if (
+          this.stderrBuffer.includes("ModuleNotFoundError") ||
+          this.stderrBuffer.includes("ImportError") ||
+          this.stderrBuffer.includes("No module named")
+        ) {
+          this.outputChannel.appendLine(
+            "Detected missing Python dependencies. Attempting install...",
+          );
           this.stop();
           this.depsInstalled = false;
-          // Try again — ensureDependencies will run
           await this.start(projectDir);
           return;
         }
 
+        this.handleStartupError();
         this.stop();
         this.setState("error");
       }
@@ -175,7 +199,6 @@ export class BackendManager {
     if (this.process) {
       this.outputChannel.appendLine("Stopping Clarity backend...");
       this.process.kill("SIGTERM");
-      // Force kill after 5 seconds
       const p = this.process;
       setTimeout(() => {
         if (p && !p.killed) {
@@ -188,9 +211,9 @@ export class BackendManager {
   }
 
   /**
-   * Restart the backend for a project directory.
+   * Restart the backend, optionally for a different project.
    */
-  async restart(projectDir: string): Promise<void> {
+  async restart(projectDir?: string): Promise<void> {
     this.stop();
     await new Promise((resolve) => setTimeout(resolve, 500));
     await this.start(projectDir);
@@ -208,16 +231,260 @@ export class BackendManager {
     this.outputChannel.dispose();
   }
 
+  /**
+   * Make an HTTP request to the running backend.
+   */
+  async apiGet(path: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const url = `${this.baseUrl}${path}`;
+      const req = http.get(url, { timeout: 10_000 }, (res) => {
+        let body = "";
+        res.on("data", (chunk: Buffer) => (body += chunk.toString()));
+        res.on("end", () => {
+          if (res.statusCode === 200) {
+            resolve(body);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${body}`));
+          }
+        });
+      });
+      req.on("error", reject);
+      req.on("timeout", () => {
+        req.destroy();
+        reject(new Error("Request timed out"));
+      });
+    });
+  }
+
+  /**
+   * Make an HTTP POST request to the running backend.
+   */
+  async apiPost(apiPath: string, data: Record<string, unknown> = {}): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify(data);
+      const url = new URL(`${this.baseUrl}${apiPath}`);
+      const options: http.RequestOptions = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        timeout: 10_000,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      };
+      const req = http.request(options, (res) => {
+        let respBody = "";
+        res.on("data", (chunk: Buffer) => (respBody += chunk.toString()));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(respBody);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${respBody}`));
+          }
+        });
+      });
+      req.on("error", reject);
+      req.on("timeout", () => {
+        req.destroy();
+        reject(new Error("Request timed out"));
+      });
+      req.write(body);
+      req.end();
+    });
+  }
+
   // -- Private helpers --
 
   /**
+   * Build the spawn command and arguments.
+   */
+  private buildSpawnCommand(projectDir?: string): { cmd: string; args: string[] } {
+    const clarityPy = path.join(this.clarityAgentDir, "clarity.py");
+    const baseArgs = ["web", "--port", String(this._port), "--host", "127.0.0.1"];
+
+    if (projectDir) {
+      baseArgs.splice(1, 0, projectDir);
+    }
+
+    if (this.uvAvailable) {
+      return {
+        cmd: "uv",
+        args: ["run", "--extra", "web", "--directory", this.clarityAgentDir, "python", clarityPy, ...baseArgs],
+      };
+    }
+
+    const pythonPath = this.getPythonPath();
+    return { cmd: pythonPath, args: [clarityPy, ...baseArgs] };
+  }
+
+  /**
+   * Activate a project in the launcher.
+   */
+  private async activateProject(projectDir: string): Promise<void> {
+    try {
+      const name = path.basename(projectDir);
+      // Register the project
+      await this.apiPost("/api/projects", { name, path: projectDir });
+      // Activate it
+      await this.apiPost(`/api/projects/${encodeURIComponent(name)}/activate`);
+      this.outputChannel.appendLine(`Activated project: ${name}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`Note: could not activate project via launcher API: ${msg}`);
+    }
+  }
+
+  /**
+   * Apply model overrides from VS Code settings.
+   */
+  private async applyModelOverrides(): Promise<void> {
+    const config = vscode.workspace.getConfiguration("clarity");
+    const provider = config.get<string>("provider", "");
+    const model = config.get<string>("model", "");
+
+    if (!provider && !model) {
+      return;
+    }
+
+    try {
+      const data: Record<string, string> = {};
+      if (provider) {
+        data.provider = provider;
+      }
+      if (model) {
+        data.model = model;
+      }
+      await this.apiPost("/api/model-profile/override", data);
+      this.outputChannel.appendLine(
+        `Applied model overrides: provider=${provider || "(default)"}, model=${model || "(default)"}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`Note: could not apply model overrides: ${msg}`);
+    }
+  }
+
+  /**
+   * Parse startup errors and show actionable messages.
+   */
+  private handleStartupError(): void {
+    const stderr = this.stderrBuffer;
+
+    if (stderr.includes("No such file or directory") && stderr.includes("python")) {
+      vscode.window
+        .showErrorMessage(
+          "Python was not found on your PATH. Install Python 3.12+ or set 'clarity.pythonPath' in settings.",
+          "Open Settings",
+          "Show Logs",
+        )
+        .then((choice) => {
+          if (choice === "Open Settings") {
+            vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "clarity.pythonPath",
+            );
+          } else if (choice === "Show Logs") {
+            this.showOutput();
+          }
+        });
+      return;
+    }
+
+    if (stderr.includes("uv") && stderr.includes("not found")) {
+      vscode.window
+        .showErrorMessage(
+          "uv was not found. Install uv (https://docs.astral.sh/uv/) or set 'clarity.useUv' to false.",
+          "Open Settings",
+          "Show Logs",
+        )
+        .then((choice) => {
+          if (choice === "Open Settings") {
+            vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "clarity.useUv",
+            );
+          } else if (choice === "Show Logs") {
+            this.showOutput();
+          }
+        });
+      return;
+    }
+
+    if (stderr.includes("Address already in use")) {
+      vscode.window
+        .showErrorMessage(
+          `Port ${this._port} is already in use. Set 'clarity.port' to 0 for automatic port selection.`,
+          "Open Settings",
+          "Show Logs",
+        )
+        .then((choice) => {
+          if (choice === "Open Settings") {
+            vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "clarity.port",
+            );
+          } else if (choice === "Show Logs") {
+            this.showOutput();
+          }
+        });
+      return;
+    }
+
+    // Generic error
+    vscode.window
+      .showErrorMessage(
+        "The Clarity backend failed to start. Check the output panel for details.",
+        "Show Logs",
+        "Retry",
+      )
+      .then((choice) => {
+        if (choice === "Show Logs") {
+          this.showOutput();
+        } else if (choice === "Retry") {
+          vscode.commands.executeCommand("clarity.restart");
+        }
+      });
+  }
+
+  /**
    * Check for and install missing Python dependencies.
-   * Returns true if dependencies are available, false if install failed.
    */
   private async ensureDependencies(): Promise<boolean> {
+    if (this.uvAvailable) {
+      // uv sync handles deps automatically on spawn; just verify
+      // the project is valid
+      try {
+        execSync(
+          `uv run --extra web --directory "${this.clarityAgentDir}" python -c "import fastapi; import uvicorn"`,
+          { timeout: 30_000, stdio: "pipe" },
+        );
+        this.outputChannel.appendLine("Python dependencies verified via uv.");
+        return true;
+      } catch {
+        this.outputChannel.appendLine("uv dependency check failed. Running uv sync...");
+        try {
+          execSync(
+            `uv sync --extra web --directory "${this.clarityAgentDir}"`,
+            { timeout: 300_000, stdio: "pipe" },
+          );
+          this.outputChannel.appendLine("Dependencies installed via uv sync.");
+          return true;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.outputChannel.appendLine(`uv sync failed: ${msg}`);
+          vscode.window.showErrorMessage(
+            `Failed to install dependencies via uv: ${msg}`,
+          );
+          return false;
+        }
+      }
+    }
+
+    // Fallback: pip-based installation
     const pythonPath = this.getPythonPath();
 
-    // Quick check: can we import the critical modules?
     try {
       execSync(
         `${pythonPath} -c "import fastapi; import uvicorn; import prompt_toolkit"`,
@@ -234,7 +501,7 @@ export class BackendManager {
       this.outputChannel.appendLine("Python dependencies are available.");
       return true;
     } catch {
-      // Dependencies missing — install them
+      // Dependencies missing
     }
 
     this.outputChannel.appendLine("Python dependencies not found. Installing...");
@@ -261,7 +528,6 @@ export class BackendManager {
         try {
           progress.report({ message: "Running pip install..." });
 
-          // Install from the bundled pyproject.toml with the web extra
           const pyprojectDir = this.clarityAgentDir;
           execSync(
             `${pythonPath} -m pip install --quiet "${pyprojectDir}[web]"`,
@@ -299,7 +565,6 @@ export class BackendManager {
     if (configured) {
       return configured;
     }
-    // Try python3 first (macOS/Linux), fall back to python (Windows)
     return process.platform === "win32" ? "python" : "python3";
   }
 
@@ -336,7 +601,6 @@ export class BackendManager {
           return;
         }
 
-        // Check if the process has died
         if (this.process === null || this.process.exitCode !== null) {
           resolve(false);
           return;
@@ -344,7 +608,6 @@ export class BackendManager {
 
         const req = http.get(url, { timeout: 2000 }, (res) => {
           if (res.statusCode === 200) {
-            // Consume the response body to free up the socket
             res.resume();
             resolve(true);
           } else {

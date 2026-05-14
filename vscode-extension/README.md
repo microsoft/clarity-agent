@@ -35,4 +35,39 @@ That's it. Start describing what you're building and Clarity will walk you throu
 | Setting | Default | Description |
 |---|---|---|
 | `clarity.pythonPath` | auto | Path to Python. Leave empty to auto-detect. |
+| `clarity.agentDir` | auto | Path to a clarity-agent clone. Leave empty to auto-detect. |
 | `clarity.port` | auto | Backend port. `0` = let the OS pick one. |
+| `clarity.useUv` | `true` | Use `uv` for dependency management if available. |
+| `clarity.provider` | (empty) | LLM provider override (anthropic, openai, azure, etc.). |
+| `clarity.model` | (empty) | LLM model name override. |
+
+## Additional Commands
+
+| Command | What it does |
+|---|---|
+| **Clarity: Switch Project** | Switch to a different project in the launcher |
+| **Clarity: Run Setup Wizard** | Configure your LLM provider |
+| **Clarity: Select Model** | Pick an LLM model at runtime |
+| **Clarity: Generate Packet** | Export protocol documents as markdown or DOCX |
+| **Clarity: List Processes** | Browse and start a clarity process |
+| **Clarity: View Transcripts** | Browse past session transcripts |
+| **Clarity: Send Feedback** | Submit feedback about Clarity |
+| **Clarity: Configure MCP Server** | Write MCP config to `.vscode/mcp.json` |
+
+## MCP Integration
+
+Clarity exposes an MCP server with 8 tools for coding agent integration.
+Run **Clarity: Configure MCP Server** to auto-generate the config, or
+add this to your `.vscode/mcp.json` manually:
+
+```json
+{
+  "mcpServers": {
+    "clarity-agent": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "--directory", "<clarity-agent-dir>", "python", "-m", "clarity_agent.mcp"],
+      "env": { "CLARITY_PROJECT_DIR": "${workspaceFolder}" }
+    }
+  }
+}
+```
