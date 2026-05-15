@@ -505,6 +505,11 @@ export default function PacketDialog() {
         const path = await save({
           defaultPath: defaultName,
           title: "Save packet",
+          filters: [
+            ext === "md"
+              ? { name: "Markdown", extensions: ["md"] }
+              : { name: "Word Document", extensions: ["docx"] },
+          ],
         });
         if (!path) {
           // User cancelled.
