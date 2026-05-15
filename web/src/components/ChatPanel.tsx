@@ -362,12 +362,12 @@ export default function ChatPanel() {
           // stays ephemeral during the brief loading window
           // instead of binding to a placeholder id.
           panelId={
-            sessionInfo && sessionInfo.session_id
+            sessionInfo && sessionInfo.thread_id
               ? {
                   projectId:
                     sessionInfo.project_id ?? sessionInfo.project_dir,
                   type: "chat",
-                  sessionId: sessionInfo.session_id,
+                  threadId: sessionInfo.thread_id,
                 }
               : null
           }

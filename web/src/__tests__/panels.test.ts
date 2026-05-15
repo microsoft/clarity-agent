@@ -26,17 +26,17 @@ import {
 const chatA: PanelId = {
   projectId: "/Users/test/proj-a",
   type: "chat",
-  sessionId: "session-1",
+  threadId: "session-1",
 };
 const chatA2: PanelId = {
   projectId: "/Users/test/proj-a",
   type: "chat",
-  sessionId: "session-2",
+  threadId: "session-2",
 };
 const chatB: PanelId = {
   projectId: "/Users/test/proj-b",
   type: "chat",
-  sessionId: "session-1",
+  threadId: "session-1",
 };
 const historyA: PanelId = {
   projectId: "/Users/test/proj-a",
@@ -68,14 +68,14 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("serializePanelId", () => {
-  it("encodes project, type, and session for chat panels", () => {
+  it("encodes project, type, and thread for chat panels", () => {
     const s = serializePanelId(chatA);
     expect(s).toContain(chatA.projectId);
     expect(s).toContain("chat");
-    expect(s).toContain(chatA.sessionId);
+    expect(s).toContain(chatA.threadId);
   });
 
-  it("distinguishes chat panels by session id", () => {
+  it("distinguishes chat panels by thread id", () => {
     expect(serializePanelId(chatA)).not.toBe(serializePanelId(chatA2));
   });
 
@@ -356,12 +356,12 @@ describe("usePanelSlot — sessionStorage backing", () => {
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
       if (k && k.startsWith("panel:")) {
-        // The key must contain the projectId, type, sessionId,
+        // The key must contain the projectId, type, threadId,
         // and slot name so a human reading sessionStorage can
         // tell what each entry is.
         expect(k).toContain(chatA.projectId);
         expect(k).toContain("chat");
-        expect(k).toContain(chatA.sessionId);
+        expect(k).toContain(chatA.threadId);
         expect(k).toContain("draft");
         found = sessionStorage.getItem(k);
         break;

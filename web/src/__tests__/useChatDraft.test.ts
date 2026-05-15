@@ -23,7 +23,7 @@ import { type DraftPanelId, useChatDraft } from "../hooks/useChatDraft";
 const chatA: DraftPanelId = {
   projectId: "/Users/test/proj-a",
   type: "chat",
-  sessionId: "session-1",
+  threadId: "session-1",
 };
 
 beforeEach(() => {

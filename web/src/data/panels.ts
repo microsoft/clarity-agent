@@ -6,7 +6,7 @@
  *
  *   - An identity (:class:`PanelId`), encoding which project and
  *     which kind of panel and any disambiguating params (the
- *     chat session id, the doc path being viewed).
+ *     chat thread id, the doc path being viewed).
  *   - Ephemeral state slots (draft text, scroll position,
  *     selection, search query) that survive mount/unmount so
  *     navigating away and back doesn't drop the user's
@@ -24,10 +24,10 @@
  * Why a discriminated union for ``PanelId`` instead of a generic
  * params bag:
  *   - Type safety per panel type: a "chat" panel always has a
- *     ``sessionId``; a "protocol" panel may have an optional
+ *     ``threadId``; a "protocol" panel may have an optional
  *     ``docPath``.  The discriminated union encodes that at the
  *     TypeScript level so a caller can't construct a chat panel
- *     id without a session, and switch statements get exhaustive
+ *     id without a thread, and switch statements get exhaustive
  *     checking for free.
  *   - Maps cleanly to the existing react-router routes (one
  *     ``PanelType`` per top-level route), which step 3
@@ -68,7 +68,7 @@ export type PanelType =
  * params.  Discriminated by ``type`` so each kind carries exactly
  * the params it needs.
  *
- * - ``chat`` requires ``sessionId`` — different sessions under
+ * - ``chat`` requires ``threadId`` — different threads under
  *   the same project are different panels for state purposes
  *   (each has its own draft).
  * - ``protocol`` has an optional ``docPath`` — once we wire up
@@ -84,7 +84,7 @@ export type PanelType =
  * ``project_dir``.
  */
 export type PanelId =
-  | { projectId: string; type: "chat"; sessionId: string }
+  | { projectId: string; type: "chat"; threadId: string }
   | { projectId: string; type: "history" }
   | { projectId: string; type: "protocol"; docPath?: string }
   | { projectId: string; type: "packet" }
@@ -102,7 +102,7 @@ export type PanelId =
 export function serializePanelId(id: PanelId): string {
   switch (id.type) {
     case "chat":
-      return `${id.projectId}|chat:${id.sessionId}`;
+      return `${id.projectId}|chat:${id.threadId}`;
     case "protocol":
       return id.docPath
         ? `${id.projectId}|protocol:${id.docPath}`
@@ -132,7 +132,7 @@ export function serializePanelId(id: PanelId): string {
  * state) combine them; this function only knows the panel-type
  * → route mapping.
  *
- * Disambiguators on the PanelId (chat's sessionId, protocol's
+ * Disambiguators on the PanelId (chat's threadId, protocol's
  * docPath) are intentionally not encoded in the route for v1.
  * The server's session state determines which session/doc is
  * active within each panel type; per-instance routing is a
