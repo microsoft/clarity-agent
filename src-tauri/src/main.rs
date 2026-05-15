@@ -141,7 +141,11 @@ fn read_recent_projects() -> Vec<ProjectEntry> {
         } else {
             return Vec::new();
         };
-    entries.sort_by(|a, b| b.last_opened.partial_cmp(&a.last_opened).unwrap_or(std::cmp::Ordering::Equal));
+    entries.sort_by(|a, b| {
+        b.last_opened
+            .partial_cmp(&a.last_opened)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     entries.truncate(MAX_RECENT);
     entries
 }
@@ -173,11 +177,8 @@ fn build_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let mut recent_sub = SubmenuBuilder::new(h, "Open Recent");
     let projects = read_recent_projects();
     for project in &projects {
-        let item = MenuItemBuilder::with_id(
-            format!("recent:{}", project.id),
-            &project.name,
-        )
-        .build(h)?;
+        let item =
+            MenuItemBuilder::with_id(format!("recent:{}", project.id), &project.name).build(h)?;
         recent_sub = recent_sub.item(&item);
     }
     if !projects.is_empty() {
@@ -267,8 +268,7 @@ fn refresh_recent_menu(app: AppHandle) -> Result<(), String> {
 // while keeping labels short and human-readable in dev tools.  The
 // capability config (``capabilities/default.json``) covers any
 // label matching ``panel-*``.
-static NEXT_PANEL_WINDOW: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static NEXT_PANEL_WINDOW: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Append a line to stderr and the persistent startup log.
 /// Used by ``open_panel_window`` so multi-window failures in release
@@ -298,6 +298,12 @@ fn log_panel(msg: &str) {
 /// primitive, so the new window appears as a discrete OS window
 /// until the cross-platform in-app tab bar is built.
 ///
+/// ``title`` is the OS window title — shown in the dock /
+/// taskbar / window switcher.  Computed on the frontend (see
+/// ``panelTitle`` in ``web/src/data/panels.ts``) so the
+/// panel-type taxonomy lives in one place; the Rust side just
+/// renders whatever string it receives.
+///
 /// Returns ``Err`` with a human-readable message on any failure
 /// (main window missing, URL malformed, window builder failed).
 /// The frontend converts a rejection into the ``window.open``
@@ -309,10 +315,11 @@ fn open_panel_window(
     app: AppHandle,
     route: String,
     tabbing_id: String,
+    title: String,
 ) -> Result<(), String> {
     log_panel(&format!(
-        "open_panel_window called: route={:?} tabbing_id={:?}",
-        route, tabbing_id,
+        "open_panel_window called: route={:?} tabbing_id={:?} title={:?}",
+        route, tabbing_id, title,
     ));
     let main = app.get_webview_window("main").ok_or_else(|| {
         let e = "main window not found".to_string();
@@ -335,6 +342,9 @@ fn open_panel_window(
         msg
     })?;
     log_panel(&format!("target = {}", target));
+    if target.origin() != main_url.origin() {
+        return Err(format!("unexpected route {}", target));
+    }
 
     let label = format!(
         "panel-{}",
@@ -342,14 +352,11 @@ fn open_panel_window(
     );
     log_panel(&format!("label = {}", label));
 
-    let builder = tauri::WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::WebviewUrl::External(target),
-    )
-    .title("Clarity")
-    .inner_size(1200.0, 800.0)
-    .min_inner_size(800.0, 600.0);
+    let builder =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(target))
+            .title(&title)
+            .inner_size(1200.0, 800.0)
+            .min_inner_size(800.0, 600.0);
 
     // macOS-only: ``tabbing_identifier`` causes the OS to merge
     // windows sharing this string into a single tabbed window.
@@ -404,7 +411,9 @@ mod tests {
         }
         assert_eq!(
             result,
-            Some(std::path::PathBuf::from("/tmp/test-clarity-data/projects.json")),
+            Some(std::path::PathBuf::from(
+                "/tmp/test-clarity-data/projects.json"
+            )),
         );
     }
 

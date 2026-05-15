@@ -22,7 +22,7 @@
  * in new tab/window" experience while iterating in vite dev.
  */
 
-import { buildPanelUrl, type PanelId } from "./panels";
+import { buildPanelUrl, panelTitle, type PanelId } from "./panels";
 
 /**
  * Open the given panel in an additional window.
@@ -43,6 +43,14 @@ export async function openPanelInNewWindow(
   launcherProjectId?: string | null,
 ): Promise<void> {
   const url = buildPanelUrl(panelId, launcherProjectId);
+  // Window title format: ``"Clarity — <Panel>"``.  Without this,
+  // every popped-out window shows the bare app name in the dock /
+  // taskbar / window switcher, making them indistinguishable when
+  // a user has several open.  Computed on the frontend so the
+  // panel-type taxonomy lives in one place (``panelTitle`` in
+  // ``./panels``) — the Rust side just renders whatever string
+  // it receives.
+  const title = `Clarity — ${panelTitle(panelId)}`;
   let invokeError: unknown = null;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -59,6 +67,7 @@ export async function openPanelInNewWindow(
       // project (when multi-project lands) gets its own tab
       // group.
       tabbingId: panelId.projectId,
+      title,
     });
     return;
   } catch (err) {

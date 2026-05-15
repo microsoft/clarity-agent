@@ -52,6 +52,7 @@ describe("openPanelInNewWindow — Tauri path", () => {
     expect(invoke).toHaveBeenCalledWith("open_panel_window", {
       route: "/p/abc123/history",
       tabbingId: historyA.projectId,
+      title: "Clarity — History",
     });
   });
 
@@ -65,6 +66,7 @@ describe("openPanelInNewWindow — Tauri path", () => {
     expect(invoke).toHaveBeenCalledWith("open_panel_window", {
       route: "/history",
       tabbingId: historyA.projectId,
+      title: "Clarity — History",
     });
   });
 
@@ -77,12 +79,14 @@ describe("openPanelInNewWindow — Tauri path", () => {
     expect(invoke).toHaveBeenLastCalledWith("open_panel_window", {
       route: "/p/abc123/",
       tabbingId: chatA.projectId,
+      title: "Clarity — Chat",
     });
 
     await openPanelInNewWindow(chatA);
     expect(invoke).toHaveBeenLastCalledWith("open_panel_window", {
       route: "/",
       tabbingId: chatA.projectId,
+      title: "Clarity — Chat",
     });
   });
 });

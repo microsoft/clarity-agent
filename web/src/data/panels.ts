@@ -48,7 +48,7 @@
  *     (or Tauri app data dir) and is deferred to a later step.
  */
 
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * The set of top-level panel kinds — one per route in
@@ -150,6 +150,32 @@ export function panelRoute(panelId: PanelId): string {
       return "/packet";
     case "packet-status":
       return "/packet-status";
+  }
+}
+
+/**
+ * Human-readable name for a panel, used as the window-title
+ * suffix when a panel is popped out into its own OS window.
+ *
+ * Returned as the panel-specific portion only (e.g. "History",
+ * "Protocol") — callers prepend the app name to produce the
+ * final title like ``"Clarity — History"``.  Keeping the app
+ * name out of this function means the suffix can be reused in
+ * other contexts (tab labels, breadcrumb fragments) without
+ * having to strip a redundant prefix.
+ */
+export function panelTitle(panelId: PanelId): string {
+  switch (panelId.type) {
+    case "chat":
+      return "Chat";
+    case "history":
+      return "History";
+    case "protocol":
+      return "Protocol";
+    case "packet":
+      return "Packet";
+    case "packet-status":
+      return "Packet Status";
   }
 }
 
@@ -332,10 +358,23 @@ export function usePanelSlot<T>(
     },
   );
 
-  const setValue = (next: T): void => {
-    if (panelId === null) return;
-    setSlot(panelId, slot, next);
-  };
+  // ``setValue`` is wrapped in ``useCallback`` so its identity is
+  // stable across renders for the same logical panel + slot.
+  // Callers thread this into effect/memo dep arrays (e.g.
+  // MessageInput's submit handler), and an unstable identity
+  // would invalidate those on every render of the host component.
+  // Deps key on ``serialized`` rather than ``panelId`` because
+  // callers commonly construct ``panelId`` inline as a fresh
+  // object literal each render — ``serialized`` is the canonical
+  // string form, stable for the same logical identity.
+  const setValue = useCallback(
+    (next: T): void => {
+      if (panelId === null) return;
+      setSlot(panelId, slot, next);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serialized, slot],
+  );
 
   return [value, setValue];
 }
