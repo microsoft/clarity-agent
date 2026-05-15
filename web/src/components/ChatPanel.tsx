@@ -32,6 +32,7 @@ export default function ChatPanel() {
     sendMessage,
     startProcess,
     stopGeneration,
+    startNewChapter,
     dismissError,
   } = useChat();
 
@@ -123,6 +124,34 @@ export default function ChatPanel() {
               {sessionCost > 0 && <>{" \u00b7 "}${sessionCost.toFixed(4)}</>}
             </span>
           )}
+          <button
+            onClick={() => {
+              // Friction proportional to consequence: archiving the
+              // current chapter is reversible (the old chapter stays
+              // browsable in History), but the active conversation
+              // does end.  A simple confirm() is unambiguous and
+              // matches the destructiveness-tier the user agreed to.
+              const ok = window.confirm(
+                "Start a new chapter?\n\n" +
+                "The current conversation will be archived (you can " +
+                "still read it in History), and the next message will " +
+                "start a fresh conversation with no carried-over context.",
+              );
+              if (!ok) return;
+              // Allow the auto-start effect to re-fire the
+              // clarity-agent process kickoff on the new chapter.
+              autoStarted.current = false;
+              void startNewChapter();
+            }}
+            disabled={streaming}
+            aria-label="Start a new chapter in this conversation thread"
+            className="text-xs px-3.5 py-1.5 border border-border-strong rounded-lg
+              text-body-label hover:bg-surface-dim hover:border-accent/30
+              disabled:opacity-40 disabled:cursor-not-allowed
+              transition-all duration-200"
+          >
+            New Chapter
+          </button>
         </div>
       </div>
 

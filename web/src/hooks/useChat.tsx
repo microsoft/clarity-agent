@@ -7,7 +7,7 @@ import {
   useRef,
 } from "react";
 import type { ChatMessage, ProcessMeta, ToolEvent, WsClientMessage, WsServerMessage } from "../types";
-import { getProcesses } from "../api/client";
+import { getProcesses, startNewChapter as apiStartNewChapter } from "../api/client";
 import { useWebSocket } from "./useWebSocket";
 
 // ---------------------------------------------------------------------------
@@ -308,6 +308,11 @@ export interface UseChatReturn {
   startProcess: (name: string) => void;
   stopGeneration: () => void;
   setModelOverride: (tier: string) => void;
+  /** Roll the conversation thread over to a new chapter.
+   *  Archives the current chapter, clears the visible message list,
+   *  and resets the backend SDK session so the next message starts
+   *  a brand-new conversation. */
+  startNewChapter: () => Promise<void>;
   dismissError: () => void;
 }
 
@@ -429,6 +434,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     send({ type: "stop" } as WsClientMessage);
   }, [send]);
 
+  const startNewChapter = useCallback(async () => {
+    // POST first so the backend rolls over before the UI clears —
+    // if the API call fails (no active session, network error), the
+    // existing chat stays intact rather than the UI lying about an
+    // operation that didn't happen.
+    await apiStartNewChapter();
+    dispatch({ type: "clear" });
+  }, []);
+
   const dismissError = useCallback(() => {
     dispatch({ type: "dismiss_error" });
   }, []);
@@ -454,6 +468,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     startProcess,
     stopGeneration,
     setModelOverride,
+    startNewChapter,
     dismissError,
   };
 

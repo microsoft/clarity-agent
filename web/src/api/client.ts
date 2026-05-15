@@ -68,6 +68,16 @@ export async function generatePacket(
 // Session
 export const getSession = () => fetchJson<SessionInfo>("/api/session");
 
+// Conversation thread
+/**
+ * Roll the current project's conversation thread over to a new chapter.
+ * The current chapter is archived (still browsable via History) and
+ * the next user message starts a fresh SDK conversation with no
+ * carried-over context.  Returns the new chapter number.
+ */
+export const startNewChapter = () =>
+  fetchJson<{ chapter: number }>("/api/thread/new-chapter", { method: "POST" });
+
 // Update check
 export const checkForUpdate = () => fetchJson<UpdateCheckInfo>("/api/update-check");
 

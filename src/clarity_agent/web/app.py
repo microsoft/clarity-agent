@@ -564,6 +564,27 @@ def create_app(
         }
 
     # ------------------------------------------------------------------
+    # REST: Conversation thread
+    # ------------------------------------------------------------------
+
+    @app.post("/api/thread/new-chapter")
+    async def new_chapter() -> dict[str, Any]:
+        """Roll the conversation thread over to a new chapter.
+
+        The current chapter becomes a read-only archive; the next
+        user message starts a fresh SDK conversation with no
+        carried-over context.  See :meth:`WebSessionAdapter.start_new_chapter`.
+        """
+        s: WebSessionAdapter | None = state["session"]
+        if s is None:
+            raise HTTPException(
+                status_code=409,
+                detail="No active session to start a new chapter on.",
+            )
+        chapter = s.start_new_chapter()
+        return {"chapter": chapter}
+
+    # ------------------------------------------------------------------
     # REST: Session info
     # ------------------------------------------------------------------
 

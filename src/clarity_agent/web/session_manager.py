@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,12 @@ from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import ChatBackend, LLMConfig
 from clarity_agent.llm.types import TokenUsage, ToolHandler
 from clarity_agent.session import ClaritySession
-from clarity_agent.web.session_state import load_session_state, save_session_state
+from clarity_agent.transcript import ChapterStarted
+from clarity_agent.web.session_state import (
+    clear_session_state,
+    load_session_state,
+    save_session_state,
+)
 
 
 class WebSessionAdapter:
@@ -158,6 +164,49 @@ class WebSessionAdapter:
         if self._backend is not None:
             return self._backend.llm_session_id
         return self._initial_llm_session_id
+
+    def start_new_chapter(self) -> int:
+        """Roll over the conversation thread to a new chapter.
+
+        The current chapter becomes a read-only archive; the backend's
+        SDK session is cleared so the next user message starts a
+        brand-new conversation with no carried-over context.  The
+        previously-loaded context-restore blob (if any) is discarded
+        for the same reason — the user has explicitly asked for a
+        clean slate.
+
+        Returns the new chapter number.  The new chapter is seeded
+        with a :class:`ChapterStarted` event so it's never "empty"
+        from the consumer's perspective.
+
+        Idempotent in the sense that calling repeatedly produces
+        further new chapters; not idempotent in the sense that each
+        call genuinely rolls over (consequence: the UI should gate
+        this behind a confirmation dialog).
+        """
+        backend_name = (
+            type(self._backend).__name__ if self._backend is not None else "unknown"
+        )
+        new_chapter = self._project_transcript.start_new_chapter()
+        self._project_transcript.write(ChapterStarted(
+            timestamp=datetime.now(timezone.utc),
+            project_dir=str(self.project_dir),
+            backend=backend_name,
+        ))
+
+        # Reset the SDK session so the next turn starts fresh.  Clear
+        # the persisted state too — otherwise the next process start
+        # would resume the now-archived conversation.
+        if self._backend is not None:
+            self._backend.llm_session_id = None
+        clear_session_state(self.project_dir)
+
+        # Drop any pending context-restore blob the start() path may
+        # have loaded — it would inject prior-chapter content into
+        # the brand-new chapter's first message, undoing the rollover.
+        self._transcript_context = None
+
+        return new_chapter
 
     def _on_tool_use(self, tool_name: str, detail: str) -> None:
         """Synchronous callback invoked from the executor thread.

@@ -195,3 +195,109 @@ class TestResumeWithValidSdkSession:
         # next chat call resumes via ``resume=session_id``.
         assert cfg.last_backend is not None
         assert cfg.last_backend.llm_session_id == "my-session"
+
+
+class TestStartNewChapter:
+    """``WebSessionAdapter.start_new_chapter`` is the persistence
+    primitive behind the "Start new chapter" UI button (#27).
+    Verifies the rollover side-effects: new chapter number, archived
+    old chapter, cleared SDK session, dropped context-restore blob."""
+
+    def test_rolls_over_to_next_chapter(self, project):
+        # Start a session and put some content into chapter 1 (the
+        # adapter's start() writes a ChapterStarted as the first
+        # event).  Then roll over.
+        adapter = _start_adapter(project)
+        # Sanity: chapter 1 exists with at least the header event.
+        from clarity_agent.transcript import Transcript
+        assert Transcript(project).current_chapter == 1
+
+        new_chapter = adapter.start_new_chapter()
+
+        assert new_chapter == 2
+        assert Transcript(project).current_chapter == 2
+
+    def test_new_chapter_seeded_with_chapter_started(self, project):
+        # Every chapter (new or freshly-attached) must start with a
+        # header event.  start_new_chapter writes it directly so the
+        # new chapter is never "empty" from a consumer's perspective.
+        from clarity_agent.transcript import ChapterStarted, Transcript
+        adapter = _start_adapter(project)
+        adapter.start_new_chapter()
+
+        events = list(Transcript(project).current_events())
+        assert isinstance(events[0], ChapterStarted)
+        # Backend name reflects the test stub class.
+        assert events[0].backend == "_StubBackend"
+
+    def test_clears_backend_sdk_session(self, project):
+        # The whole point of "Start new chapter" is a fresh
+        # conversation — the backend's SDK session id must be
+        # cleared so the next chat doesn't resume the archived
+        # conversation.
+        adapter = _start_adapter(project, llm_session_id="old-session")
+        assert adapter.llm_session_id == "old-session"
+
+        adapter.start_new_chapter()
+        assert adapter.llm_session_id is None
+
+    def test_clears_persisted_session_state_file(self, project):
+        # The on-disk session_state.json file must also be wiped —
+        # otherwise the next time the project loads it would
+        # resume the now-archived SDK conversation.
+        from clarity_agent.web.session_state import (
+            load_session_state,
+            save_session_state,
+        )
+        save_session_state(project, "persisted-session")
+        assert load_session_state(project) == "persisted-session"
+
+        adapter = _start_adapter(project, llm_session_id="persisted-session")
+        adapter.start_new_chapter()
+        assert load_session_state(project) is None
+
+    def test_drops_pending_context_restore(self, project):
+        # When start() loads a context-restore blob (existing
+        # transcript, no SDK session), and the user then clicks
+        # "Start new chapter" before sending any message, the
+        # buffered context must be discarded — injecting it into
+        # the brand-new chapter's first message would defeat the
+        # whole purpose of starting fresh.
+        from clarity_agent.transcript import Transcript, UserTurn
+        from datetime import datetime, timezone
+
+        # Seed the transcript with prior content so start() loads
+        # a context blob.
+        t = Transcript(project)
+        t.write(UserTurn(
+            timestamp=datetime.now(tz=timezone.utc), content="prior turn",
+        ))
+        t.close()
+
+        adapter = _start_adapter(project)
+        assert adapter._transcript_context is not None
+
+        adapter.start_new_chapter()
+        assert adapter._transcript_context is None
+
+    def test_archived_chapter_remains_readable(self, project):
+        # The old chapter doesn't get deleted — it's archived,
+        # browsable via History.  Verify chapter 1 still exists
+        # after rolling over to chapter 2.
+        from clarity_agent.transcript import Transcript, UserTurn
+        from datetime import datetime, timezone
+
+        adapter = _start_adapter(project)
+        # Add a recognizable event to chapter 1.
+        adapter._project_transcript.write(UserTurn(
+            timestamp=datetime.now(tz=timezone.utc), content="in chapter 1",
+        ))
+
+        adapter.start_new_chapter()
+
+        # Chapter 1 still has the seeded event.
+        ch1_events = list(Transcript(project).chapter_events(1))
+        assert any(
+            isinstance(e, UserTurn) and e.content == "in chapter 1"
+            for e in ch1_events
+        )
