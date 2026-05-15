@@ -157,7 +157,7 @@ export default function ChatPanel() {
               {sessionInfo.project_dir.split("/").filter(Boolean).pop() || "Clarity"}
             </div>
             <div className="text-xs text-gray-500">
-              Session: {sessionInfo.session_id || "—"}
+              Thread: {sessionInfo.thread_id || "—"}
               {" · "}
               {new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
             </div>

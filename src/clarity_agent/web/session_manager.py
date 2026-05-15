@@ -9,7 +9,6 @@ tool-use events to an :class:`asyncio.Queue` that the WebSocket handler drains.
 from __future__ import annotations
 
 import asyncio
-import uuid
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -39,7 +38,6 @@ class WebSessionAdapter:
         *,
         llm_session_id: str | None = None,
     ) -> None:
-        self.session_id: str = uuid.uuid4().hex
         self.project_dir = project_dir
         self.clarity_agent_dir = clarity_agent_dir
         self.llm_config = llm_config

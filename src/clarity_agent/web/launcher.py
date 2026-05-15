@@ -642,7 +642,7 @@ def create_launcher(
         # No active project or project server unreachable
         return {
             "active": False,
-            "session_id": None,
+            "thread_id": None,
             "process": None,
             "project_dir": None,
             "backend": None,

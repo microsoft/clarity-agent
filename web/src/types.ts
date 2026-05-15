@@ -97,7 +97,10 @@ export interface TranscriptEntry {
 // Session
 export interface SessionInfo {
   active: boolean;
-  session_id: string | null;
+  /** Persistent identifier of the conversation thread for this
+   *  project.  Stable across reconnects; null when no thread has
+   *  been established yet. */
+  thread_id: string | null;
   process: string | null;
   project_dir: string;
   project_id?: string;

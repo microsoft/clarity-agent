@@ -569,13 +569,19 @@ def create_app(
 
     @app.get("/api/session")
     async def session_info() -> dict[str, Any]:
-        """Return current session state."""
+        """Return current session state.
+
+        ``thread_id`` is the persistent identifier of the
+        conversation thread for this project — survives reconnects
+        and process restarts.  Currently sourced from the backend's
+        SDK session id; ``None`` when no thread has been established
+        yet.
+        """
         cfg: LLMConfig = state["llm_config"]
         s: WebSessionAdapter | None = state["session"]
         return {
             "active": s is not None,
-            "session_id": s.session_id if s else None,
-            "llm_session_id": s.llm_session_id if s else None,
+            "thread_id": s.llm_session_id if s else None,
             "process": s.current_process if s else None,
             "project_dir": str(project_dir),
             "backend": cfg.provider,
