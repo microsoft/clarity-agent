@@ -90,6 +90,37 @@ class ChapterStarted(_BaseEvent):
     backend: str
 
 
+class CompactionSummary(_BaseEvent):
+    """A summary of an earlier chapter, written as the first content
+    event of the chapter that *replaces* it.
+
+    Compaction starts a new chapter whose first event is this
+    summary — keeping the active read path small while preserving
+    the old chapter as a browsable archive.  The model never sees
+    the verbose source chapter during normal operation; it sees the
+    summary plus whatever turns followed.
+
+    The trigger (token threshold? user button?) and the LLM call
+    that *generates* the summary live in higher layers — this event
+    type is just the on-disk shape that those layers write.
+
+    Fields:
+        summary: The compacted summary text, suitable for prepending
+            to a fresh conversation as context.
+        source_chapter: The chapter number that was compacted into
+            this summary.  Lets the History UI link "this summary
+            covers chapter N" without scanning sibling files.
+        source_turn_count: Informational — how many turns were
+            collapsed.  Used for UI ("summary of 42 prior turns")
+            and for diagnostic.
+    """
+
+    type: Literal["compaction_summary"] = "compaction_summary"
+    summary: str
+    source_chapter: int
+    source_turn_count: int
+
+
 class SessionResume(_BaseEvent):
     """A new backend SDK session is attaching to this chapter.
 
@@ -219,6 +250,7 @@ class ModelOverride(_BaseEvent):
 Event = Annotated[
     Union[
         ChapterStarted,
+        CompactionSummary,
         SessionResume,
         UserTurn,
         AssistantText,

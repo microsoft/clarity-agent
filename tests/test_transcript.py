@@ -26,6 +26,7 @@ import pytest
 from clarity_agent.transcript import (
     AssistantText,
     ChapterStarted,
+    CompactionSummary,
     ModelOverride,
     ProcessStarted,
     SessionResume,
@@ -221,6 +222,106 @@ class TestWriting:
         # fresh instance and see the written event.
         events = list(Transcript(project).current_events())
         assert len(events) == 1 and events[0].content == "x"
+
+
+class TestCompaction:
+    """``start_compacted_chapter`` is the persistence primitive for the
+    Phase-2 compaction trigger.  These tests cover the data-shape
+    invariants; orchestration (when to trigger, how to generate the
+    summary) lives elsewhere."""
+
+    def test_rolls_over_to_next_chapter_with_summary_as_first_event(self, project):
+        t = Transcript(project)
+        # Bootstrap content in chapter 1.
+        t.write(UserTurn(timestamp=T0, content="prior turn"))
+        t.write(AssistantText(timestamp=_t(1), content="prior answer"))
+        # Compact — should open chapter 2 with the summary as its
+        # first entry.
+        new_chapter = t.start_compacted_chapter(
+            summary="The two turns above discussed X.",
+        )
+        t.close()
+
+        assert new_chapter == 2
+        events = list(t.chapter_events(2))
+        assert isinstance(events[0], CompactionSummary)
+        assert events[0].summary == "The two turns above discussed X."
+
+    def test_source_chapter_defaults_to_current(self, project):
+        t = Transcript(project)
+        t.write(UserTurn(timestamp=T0, content="x"))
+        t.start_compacted_chapter(summary="recap")
+        t.close()
+
+        summary_event = next(
+            e for e in t.chapter_events(2) if isinstance(e, CompactionSummary)
+        )
+        assert summary_event.source_chapter == 1
+
+    def test_source_turn_count_defaults_to_message_event_count(self, project):
+        # Default count looks only at "real" turn events
+        # (UserTurn / AssistantText / ToolUse / ToolResult /
+        # ToolUseText), not at metadata events like ChapterStarted
+        # or SessionResume.
+        t = Transcript(project)
+        t.write(ChapterStarted(
+            timestamp=T0, project_dir=str(project), backend="X",
+        ))  # metadata, not a turn
+        t.write(UserTurn(timestamp=_t(1), content="a"))   # 1
+        t.write(AssistantText(timestamp=_t(2), content="b"))  # 2
+        t.write(ToolUse(
+            timestamp=_t(3), tool_use_id="t1", name="Read", input={},
+        ))  # 3
+        t.write(SessionResume(timestamp=_t(4), backend="X"))  # metadata, not a turn
+        t.write(UserTurn(timestamp=_t(5), content="c"))   # 4
+
+        t.start_compacted_chapter(summary="recap")
+        t.close()
+
+        summary_event = next(
+            e for e in t.chapter_events(2) if isinstance(e, CompactionSummary)
+        )
+        assert summary_event.source_turn_count == 4
+
+    def test_old_chapter_is_archived_not_extended(self, project):
+        # After compaction, writes go to the new chapter only.  The
+        # old chapter is read-only by convention; subsequent
+        # ``write()`` calls must not append to it.
+        t = Transcript(project)
+        t.write(UserTurn(timestamp=T0, content="old"))
+        old_chapter_events_before = list(t.chapter_events(1))
+
+        t.start_compacted_chapter(summary="recap")
+        t.write(UserTurn(timestamp=_t(10), content="new"))
+        t.close()
+
+        # Old chapter unchanged.
+        assert list(t.chapter_events(1)) == old_chapter_events_before
+        # New chapter has the summary + the new turn.
+        new_events = list(t.chapter_events(2))
+        assert isinstance(new_events[0], CompactionSummary)
+        assert isinstance(new_events[1], UserTurn)
+        assert new_events[1].content == "new"
+
+    def test_context_summary_only_reads_compacted_chapter(self, project):
+        # The whole point of compaction: ``context_summary`` should
+        # render only the small compacted chapter, not the verbose
+        # archive.  This is what keeps rebuild costs bounded.
+        t = Transcript(project)
+        # Make chapter 1 sizable.
+        for i in range(50):
+            t.write(UserTurn(timestamp=_t(i), content=f"verbose turn {i}"))
+        t.start_compacted_chapter(summary="50 turns about X.")
+        t.write(UserTurn(timestamp=_t(100), content="follow-up"))
+        t.close()
+
+        ctx = t.context_summary()
+        assert ctx is not None
+        # Compacted chapter only — no original turns leak through.
+        assert "50 turns about X" in ctx
+        assert "follow-up" in ctx
+        assert "verbose turn 0" not in ctx
+        assert "verbose turn 49" not in ctx
 
 
 class TestThreading:
@@ -516,6 +617,39 @@ class TestAnthropicMessages:
         assert t.anthropic_messages() == [
             {"role": "user", "content": "hi"},
         ]
+
+    def test_compaction_summary_emits_user_message(self, project):
+        # CompactionSummary events become a single labeled user
+        # message at their position in the stream — the Anthropic
+        # API has no "summary" role, so labeling on the content side
+        # is the cleanest signal that the model should treat this
+        # as recap of prior conversation rather than fresh user
+        # input.
+        t = Transcript(project)
+        t.write(UserTurn(timestamp=T0, content="bootstrap"))  # placeholder in chapter 1
+        new_chapter = t.start_compacted_chapter(
+            summary="We decided X and shipped Y.",
+            source_chapter=1,
+            source_turn_count=2,
+        )
+        t.write(UserTurn(timestamp=_t(10), content="what next?"))
+        t.close()
+
+        # Anthropic-messages reconstruction of the NEW chapter only
+        # (current chapter; the source chapter is archived).
+        msgs = t.anthropic_messages()
+        # First message is the summary as a user message.
+        assert msgs[0]["role"] == "user"
+        assert "Summary of prior conversation" in msgs[0]["content"]
+        assert "We decided X" in msgs[0]["content"]
+        assert "chapter 1" in msgs[0]["content"]
+        assert "2 turns" in msgs[0]["content"]
+        # Second message is the user's actual follow-up.
+        assert msgs[1] == {"role": "user", "content": "what next?"}
+        # Sanity: nothing else.
+        assert len(msgs) == 2
+        # And the new chapter number is one past the source.
+        assert new_chapter == 2
 
     def test_legacy_tool_use_text_synthesizes_id(self, project):
         # Migrated legacy data has only name+detail.  We still emit

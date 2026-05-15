@@ -41,6 +41,7 @@ https://github.com/microsoft/clarity-agent/issues/35#issuecomment-4455572128.
 from clarity_agent.transcript.events import (
     AssistantText,
     ChapterStarted,
+    CompactionSummary,
     Event,
     ModelOverride,
     ProcessStarted,
@@ -60,6 +61,7 @@ __all__ = [
     # Event types — needed by any caller that writes events.
     "AssistantText",
     "ChapterStarted",
+    "CompactionSummary",
     "Event",
     "ModelOverride",
     "ProcessStarted",

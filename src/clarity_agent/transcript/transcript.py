@@ -46,6 +46,7 @@ import logging
 import re
 import threading
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -58,7 +59,12 @@ from clarity_agent.transcript._reconstruct import (
     build_context_summary,
 )
 from clarity_agent.transcript._render import render_event
-from clarity_agent.transcript.events import Event, parse_event, serialize_event
+from clarity_agent.transcript.events import (
+    CompactionSummary,
+    Event,
+    parse_event,
+    serialize_event,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -381,6 +387,66 @@ class Transcript:
         new_chapter = self._next_chapter_number()
         self._ensure_directory()
         self._writer = _ChapterWriter(self._project_dir, new_chapter)
+        return new_chapter
+
+    def start_compacted_chapter(
+        self,
+        summary: str,
+        *,
+        source_chapter: int | None = None,
+        source_turn_count: int | None = None,
+    ) -> int:
+        """Start a new chapter seeded with a :class:`CompactionSummary`.
+
+        This is the compaction primitive (Phase 2 trigger logic
+        elsewhere; this method just persists the result).  It:
+
+        1. Closes the current chapter's writer (if any).
+        2. Allocates the next chapter number.
+        3. Writes a :class:`CompactionSummary` event as the new
+           chapter's first entry.
+
+        After this returns, subsequent :meth:`write` calls append to
+        the new chapter.  The old chapter remains on disk as an
+        archive — readable via :meth:`chapter_events` for the
+        History view, but no longer part of the active read path
+        used by :meth:`context_summary` or :meth:`anthropic_messages`.
+
+        ``source_chapter`` defaults to the chapter that was current
+        immediately before this call — the natural choice.  Pass
+        explicitly when compacting a chapter that isn't the current
+        one (unusual; not currently expected).
+        ``source_turn_count`` is informational and defaults to a
+        count of message-producing events in the source chapter so
+        UI can show "summary of N prior turns" without re-scanning.
+
+        Returns the new chapter number.
+        """
+        # Derive defaults from current state BEFORE rolling over.
+        if source_chapter is None:
+            source_chapter = self.current_chapter or 0
+        if source_turn_count is None and source_chapter > 0:
+            # Count only message-shaped events (user turns + assistant
+            # text + tool uses).  Metadata events (ChapterStarted,
+            # SessionResume, ProcessStarted, ModelOverride) aren't
+            # "turns" from the user's perspective.
+            source_turn_count = sum(
+                1 for ev in self.chapter_events(source_chapter)
+                if type(ev).__name__ in {
+                    "UserTurn", "AssistantText", "ToolUse",
+                    "ToolResult", "ToolUseText",
+                }
+            )
+        elif source_turn_count is None:
+            source_turn_count = 0
+
+        new_chapter = self.start_new_chapter()
+        self.write(CompactionSummary(
+            timestamp=datetime.now(timezone.utc),
+            summary=summary,
+            source_chapter=source_chapter,
+            source_turn_count=source_turn_count,
+        ))
         return new_chapter
 
     def close(self) -> None:

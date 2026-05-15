@@ -36,6 +36,7 @@ from clarity_agent.llm.client import extract_tool_detail, truncate
 from clarity_agent.transcript.events import (
     AssistantText,
     ChapterStarted,
+    CompactionSummary,
     Event,
     ModelOverride,
     ProcessStarted,
@@ -70,6 +71,8 @@ def render_event(event: Event) -> str:
         return _render_tool_result(event)
     if isinstance(event, ChapterStarted):
         return _render_chapter_started(event)
+    if isinstance(event, CompactionSummary):
+        return _render_compaction_summary(event)
     if isinstance(event, SessionResume):
         return _render_session_resume(event)
     if isinstance(event, ProcessStarted):
@@ -129,6 +132,20 @@ def _render_chapter_started(event: ChapterStarted) -> str:
         f"**Started:** {event.timestamp.isoformat()}\n"
         f"**Project:** {event.project_dir}\n"
         f"**Backend:** {event.backend}\n\n"
+        "---\n\n"
+    )
+
+
+def _render_compaction_summary(event: CompactionSummary) -> str:
+    # Renders as a distinctive labeled block so a human reading the
+    # ``.md`` can see at a glance that this chapter starts with a
+    # digest of earlier work.  The label also signals to the LLM
+    # (when this rendering becomes part of a context-summary blob)
+    # that what follows is recap, not fresh user input.
+    return (
+        f"## Summary of prior conversation (chapter {event.source_chapter}, "
+        f"{event.source_turn_count} turns)\n\n"
+        f"{event.summary}\n\n"
         "---\n\n"
     )
 

@@ -44,6 +44,7 @@ from typing import Any
 
 from clarity_agent.transcript.events import (
     AssistantText,
+    CompactionSummary,
     Event,
     ToolResult,
     ToolUse,
@@ -139,6 +140,11 @@ def build_anthropic_messages(events: Iterable[Event]) -> list[dict[str, Any]]:
     ``ProcessStarted``, ``ModelOverride``) are skipped — they don't
     correspond to messages in the conversation.
 
+    :class:`CompactionSummary` events become a single labeled user
+    message at their position in the stream, so the rebuilt
+    conversation includes the digest of the prior chapter as
+    visible context.
+
     Legacy ``ToolUseText`` events become ``tool_use`` blocks with
     synthesized ids; the ``input`` is a single ``{"detail": ...}``
     field carrying the original string.  These never round-trip back
@@ -167,7 +173,28 @@ def build_anthropic_messages(events: Iterable[Event]) -> list[dict[str, Any]]:
             tool_result_blocks.clear()
 
     for event in events:
-        if isinstance(event, UserTurn):
+        if isinstance(event, CompactionSummary):
+            # Compaction summary: emitted as a clearly-labeled user
+            # message at the start of the rebuilt conversation.  The
+            # Anthropic API has no "summary" role, so prefixing with
+            # an explicit label is the cleanest way to signal to the
+            # model that the content is recap, not fresh user input.
+            # A future refinement could surface this via the system
+            # prompt instead, but that requires the caller to take
+            # responsibility for the system slot — out of scope for
+            # what this function does in isolation.
+            flush_assistant()
+            flush_tool_results()
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"[Summary of prior conversation "
+                    f"(chapter {event.source_chapter}, "
+                    f"{event.source_turn_count} turns):]\n\n"
+                    f"{event.summary}"
+                ),
+            })
+        elif isinstance(event, UserTurn):
             # Boundary: any pending assistant or tool-result content
             # must be emitted before the user turn that follows it.
             flush_assistant()

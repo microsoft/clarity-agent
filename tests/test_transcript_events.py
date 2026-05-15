@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from clarity_agent.transcript.events import (
     AssistantText,
     ChapterStarted,
+    CompactionSummary,
     ModelOverride,
     ProcessStarted,
     SessionResume,
@@ -135,6 +136,25 @@ class TestRoundTrip:
     def test_model_override(self):
         ev = ModelOverride(timestamp=T0, tier="fast", model="claude-haiku-4-5")
         _round_trip(ev)
+
+    def test_compaction_summary(self):
+        # Compaction-summary events carry the digest of an earlier
+        # chapter as the first content event of the chapter that
+        # replaces it.  Round-trip preserves the summary text and
+        # source-chapter bookkeeping.
+        ev = CompactionSummary(
+            timestamp=T0,
+            summary=(
+                "User and Clarity agreed to ship the auth refactor "
+                "by Friday; protocol decisions D-1..D-7 captured."
+            ),
+            source_chapter=1,
+            source_turn_count=42,
+        )
+        back = _round_trip(ev)
+        assert back.summary.startswith("User and Clarity")
+        assert back.source_chapter == 1
+        assert back.source_turn_count == 42
 
 
 class TestDiscriminator:

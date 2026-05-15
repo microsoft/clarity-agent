@@ -108,13 +108,15 @@ class WebSessionAdapter:
         if session_id:
             backend.llm_session_id = session_id
 
-        # Construct the Transcript that ClaritySession will record
-        # events into.  Full reconstruction-into-rebuild integration
-        # (replacing ``_load_transcript_context``) lands in task
-        # #23; for now this just keeps the writer wired up so events
-        # land in the new chaptered format.
+        # Construct the project's transcript.  Snapshot whether the
+        # transcript already had any chapters BEFORE ClaritySession's
+        # construction appends its header event — that's how we tell
+        # "fresh project, nothing to inject" apart from "existing
+        # project with prior conversation, rebuild context from it."
         from clarity_agent.transcript import Transcript
         self._project_transcript = Transcript(self.project_dir)
+        transcript_was_empty = self._project_transcript.is_empty
+
         self._session = ClaritySession(
             self.project_dir,
             self.clarity_agent_dir,
@@ -124,28 +126,30 @@ class WebSessionAdapter:
         )
         self._session.__enter__()
 
-        # ClaritySession.__init__ sets backend.on_tool_use for transcript
-        # logging, overwriting any previous callback.  Chain it with our
-        # WebSocket callback so both the transcript file and the frontend
-        # receive tool-use events.
-        session_tool_cb = backend.on_tool_use
-
-        def _chained_tool_use(tool_name: str, detail: str) -> None:
-            if session_tool_cb:
-                session_tool_cb(tool_name, detail)
-            self._on_tool_use(tool_name, detail)
-
-        backend.on_tool_use = _chained_tool_use
+        # Bridge backend callbacks to the WebSocket event queue.
+        # ClaritySession sets backend.on_tool_call (structured) for
+        # transcript persistence; we set on_tool_use (flattened) for
+        # the UI's real-time display.  The two callbacks fire in
+        # parallel — no chaining needed since they have different
+        # signatures and different consumers.
+        backend.on_tool_use = self._on_tool_use
         backend.on_text_delta = self._on_text_delta
         backend.on_cost = self._on_cost
         backend.on_usage = self._on_usage
         backend.on_warning = self._on_warning
         backend.on_status = self._on_status
 
-        # If we have no session to resume, load recent transcripts as context
-        # so the LLM can catch up on prior work.
-        if not backend.llm_session_id:
-            self._transcript_context = self._load_transcript_context()
+        # Context-restore path: when the SDK has no session to resume
+        # AND there's prior conversation in the transcript, synthesize
+        # a prior conversation context out of that transcript and prepend
+        # it to the system prompt on the first chat call (see :meth:`chat`).
+        # When the transcript was empty before this session attached,
+        # there's nothing meaningful to inject (the just-written
+        # ChapterStarted is just a header), so we skip.
+        if not backend.llm_session_id and not transcript_was_empty:
+            self._transcript_context = self._project_transcript.context_summary()
+        else:
+            self._transcript_context = None
 
         # Install the feedback tool so it's available in all chat calls.
         self._setup_feedback_tools()
@@ -212,45 +216,6 @@ class WebSessionAdapter:
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
             },
-        )
-
-    _MAX_TRANSCRIPT_CHARS = 50_000  # cap to avoid blowing the context window
-
-    def _load_transcript_context(self) -> str | None:
-        """Read recent transcripts and return them as LLM context, or None."""
-        transcript_dir = _protocol_dir(self.project_dir) / "transcripts"
-        if not transcript_dir.exists():
-            return None
-        files = sorted(transcript_dir.glob("*.md"), reverse=True)
-        if not files:
-            return None
-
-        # Read the most recent transcripts, up to the character budget.
-        parts: list[str] = []
-        chars = 0
-        for f in files:
-            try:
-                content = f.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if chars + len(content) > self._MAX_TRANSCRIPT_CHARS:
-                remaining = self._MAX_TRANSCRIPT_CHARS - chars
-                if remaining > 500:  # only include if meaningful
-                    parts.append(
-                        f"## {f.name} (truncated)\n\n"
-                        f"{content[:remaining]}\n\n[...truncated...]"
-                    )
-                break
-            parts.append(f"## {f.name}\n\n{content}")
-            chars += len(content)
-
-        if not parts:
-            return None
-        return (
-            "Below are transcripts from prior sessions on this project. "
-            "Use them to understand the current state of work — what has "
-            "been discussed, decided, and done so far.\n\n"
-            + "\n\n---\n\n".join(parts)
         )
 
     def _on_warning(self, message: str) -> None:
