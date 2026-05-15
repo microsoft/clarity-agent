@@ -88,9 +88,11 @@ class _StubLLMConfig:
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
+        transcript: object = None,
     ) -> _StubBackend:
         # Stash the backend so tests can interrogate it post-start.
         self.last_backend = _StubBackend()
+        self.last_backend._transcript = transcript
         return self.last_backend
 
     def resolve(self, process_name: str) -> str:
@@ -303,124 +305,80 @@ class TestStartNewChapter:
         )
 
 
-class TestCompactionTrigger:
-    """Verifies post-turn compaction.  Result-based: we check whether
-    the transcript rolled to a new chapter (and what the new chapter
-    contains) rather than stubbing internals — that way the tests
-    survive refactors of the orchestrator's seams.
+class TestCompactionBridge:
+    """Adapter forwards backend compaction callbacks to the WebSocket
+    event queue.  The decision to compact and the transcript
+    mechanics now live in the backend
+    (:meth:`ChatBackend.maybe_compact_after_chat`); the adapter's job
+    is purely to surface ``compaction_started`` / ``compaction_complete``
+    to the UI.  See ``test_client_chat_backend_compaction.py`` for
+    the decision-and-mechanics tests.
     """
 
-    def _seed_chapter_with_content(self, project, content_size_chars: int):
-        """Build an adapter and seed its chapter with enough message
-        content to push ``estimated_token_count`` past the threshold.
-        """
-        from clarity_agent.transcript import UserTurn
-        adapter = _start_adapter(project)
-        # One big UserTurn; each char ≈ 0.25 tokens by the estimator.
-        adapter._project_transcript.write(UserTurn(
-            timestamp=T0, content="x" * content_size_chars,
-        ))
-        return adapter
-
-    def test_no_fire_when_under_threshold(self, project):
-        # Small chapter, small input_tokens → no compaction;
-        # current chapter stays at 1.
-        from clarity_agent.transcript import Transcript
-        adapter = _start_adapter(project)
-        adapter._latest_input_tokens = 1_000
-
-        asyncio.run(adapter._maybe_compact_after_turn())
-
-        assert Transcript(project).current_chapter == 1
-
-    def test_fires_when_input_tokens_over_threshold(self, project):
-        # Live trigger: input_tokens > 85% of window (128K fallback).
-        # Compaction runs our summarizer → stub backend returns "ok".
-        from clarity_agent.transcript import (
-            CompactionSummary, Transcript, UserTurn,
-        )
-
+    def test_started_callback_emits_status_event(self, project):
+        # When the backend fires on_compaction_started, the adapter
+        # should queue a "Summarizing earlier conversation" status
+        # event for the WebSocket drain loop to pick up.
         cfg = _StubLLMConfig()
         adapter = WebSessionAdapter(project, project, cfg)
 
-        async def lifecycle() -> None:
+        async def lifecycle() -> dict:
             await adapter.start()
-            for i in range(10):
-                adapter._project_transcript.write(UserTurn(
-                    timestamp=T0, content=f"turn {i}",
-                ))
-            adapter._latest_input_tokens = 120_000  # > 85% of 128K
-            await adapter._maybe_compact_after_turn()
-        asyncio.run(lifecycle())
+            # call_soon_threadsafe defers to the loop; await a tick
+            # so it runs before we drain.
+            adapter._on_compaction_started()
+            await asyncio.sleep(0)
+            return adapter._event_queue.get_nowait()
 
-        # Chapter rolled over; new chapter starts with a
-        # CompactionSummary whose summary came from our stub backend.
-        t = Transcript(project)
-        assert t.current_chapter == 2
-        new_events = list(t.chapter_events(2))
-        assert isinstance(new_events[0], CompactionSummary)
-        # Stub backend returns "ok" — that's the summary text.
-        assert new_events[0].summary == "ok"
-        assert new_events[0].source_chapter == 1
-        # And the live token counter was reset.
-        assert adapter._latest_input_tokens == 0
+        evt = asyncio.run(lifecycle())
+        assert evt == {
+            "type": "status",
+            "phase": "Summarizing earlier conversation",
+        }
 
-    def test_fires_when_transcript_size_over_threshold(self, project):
-        # Rebuild-safety trigger: transcript content exceeds the
-        # threshold even though live input_tokens stays small.  This
-        # is the "provider compacted internally but our on-disk
-        # record is too big" case.  At 85% of 128K → 108,800
-        # tokens → ~435,200 chars.
-        from clarity_agent.transcript import (
-            CompactionSummary, Transcript, UserTurn,
-        )
-
-        cfg = _StubLLMConfig()
-        adapter = WebSessionAdapter(project, project, cfg)
-
-        async def lifecycle() -> None:
-            await adapter.start()
-            adapter._project_transcript.write(UserTurn(
-                timestamp=T0, content="x" * 450_000,
-            ))
-            adapter._latest_input_tokens = 5_000  # provider keeping it small
-            await adapter._maybe_compact_after_turn()
-        asyncio.run(lifecycle())
-
-        t = Transcript(project)
-        assert t.current_chapter == 2
-        new_events = list(t.chapter_events(2))
-        assert isinstance(new_events[0], CompactionSummary)
-
-    def test_backend_signaled_path_uses_provider_summary(self, project):
-        # When the backend has signaled compaction (e.g., the SDK
-        # detected it via the PreCompact hook + transcript
-        # inspection), we use the provider's summary verbatim — no
-        # extra LLM call on our side.
+    def test_complete_callback_emits_compaction_complete_event(self, project):
+        # When the backend fires on_compaction_complete with a
+        # CompactionInfo payload, the adapter queues a
+        # ``compaction_complete`` event carrying the summary
+        # + source turn count for the frontend's persistent banner.
         from clarity_agent.llm.types import CompactionInfo
-        from clarity_agent.transcript import CompactionSummary, Transcript, UserTurn
 
         cfg = _StubLLMConfig()
         adapter = WebSessionAdapter(project, project, cfg)
 
-        async def lifecycle() -> None:
+        async def lifecycle() -> dict:
             await adapter.start()
-            for i in range(5):
-                adapter._project_transcript.write(UserTurn(
-                    timestamp=T0, content=f"turn {i}",
-                ))
-            adapter._pending_backend_compaction = CompactionInfo(
+            adapter._on_compaction_complete(CompactionInfo(
                 summary="provider-produced summary text",
                 source_turn_count=42,
-            )
-            await adapter._maybe_compact_after_turn()
-        asyncio.run(lifecycle())
+            ))
+            await asyncio.sleep(0)
+            return adapter._event_queue.get_nowait()
 
-        t = Transcript(project)
-        new_events = list(t.chapter_events(2))
-        summary_event = next(
-            e for e in new_events if isinstance(e, CompactionSummary)
-        )
-        assert summary_event.summary == "provider-produced summary text"
-        assert summary_event.source_turn_count == 42
-        assert adapter._pending_backend_compaction is None
+        evt = asyncio.run(lifecycle())
+        assert evt == {
+            "type": "compaction_complete",
+            "summary": "provider-produced summary text",
+            "source_turn_count": 42,
+        }
+
+    def test_backend_wired_to_callbacks_at_start(self, project):
+        # ``start()`` wires the adapter's bridge methods onto the
+        # backend's ``on_compaction_*`` attributes so backend-side
+        # compaction surfaces through the WebSocket.
+        adapter = _start_adapter(project)
+        backend = adapter._backend
+        assert backend is not None
+        assert backend.on_compaction_started == adapter._on_compaction_started
+        assert backend.on_compaction_complete == adapter._on_compaction_complete
+
+    def test_backend_receives_transcript_at_construction(self, project):
+        # The transcript binding is passed to the backend at
+        # creation time (not via a later setter) so backend-side
+        # compaction can record into it without racing the first
+        # turn's events.
+        adapter = _start_adapter(project)
+        cfg = adapter.llm_config
+        assert cfg.last_backend is not None
+        # Stub records the transcript kwarg on a dedicated attr.
+        assert cfg.last_backend._transcript is adapter._project_transcript

@@ -128,9 +128,18 @@ class _SmokeLLMConfig:
         self.last_backend: _SmokeBackend | None = None
 
     def create_chat_backend(
-        self, *, project_dir: Path, clarity_agent_dir: Path,
+        self,
+        *,
+        project_dir: Path,
+        clarity_agent_dir: Path,
+        transcript: object = None,
     ) -> _SmokeBackend:
         self.last_backend = self._backend_factory()
+        # Mirror real LLMConfig.create_chat_backend: the transcript
+        # binding is passed straight through to the backend at
+        # construction time (here the stub captures it on a
+        # dedicated attribute for inspection).
+        self.last_backend._transcript = transcript
         return self.last_backend
 
     def resolve(self, process_name: str) -> str:

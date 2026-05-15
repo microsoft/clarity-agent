@@ -1347,6 +1347,168 @@ class TestClientChatBackend:
         assert result.text == "Done."
 
 
+class TestClientChatBackendCompaction:
+    """ClientChatBackend owns its own threshold-based compaction.
+
+    These tests exercise :meth:`ClientChatBackend.maybe_compact_after_chat`
+    directly — the place where the decision logic and transcript
+    mechanics live after the issue #35 refactor.  The adapter-level
+    bridge (``WebSessionAdapter._on_compaction_*``) is covered
+    separately in test_web_session_resume.py::TestCompactionBridge.
+    """
+
+    def _make_backend(self, tmp_path: Any, *, transcript=None) -> ClientChatBackend:
+        """Build a ClientChatBackend wired to a transcript.  The mock
+        client's ``create_message`` returns ``"summary text"`` so
+        the summarizer call produces a deterministic result.
+        """
+        from clarity_agent.llm.types import TokenUsage
+        client = AsyncMock()
+        client.TIER_DEFAULTS = {"default": "test-model"}
+        client.MODEL_CONTEXT_WINDOWS = {"test-model": 128_000}
+        client.create_message = AsyncMock(
+            return_value=LLMResponse(
+                content=[TextBlock(text="summary text")],
+                usage=TokenUsage(input_tokens=0, output_tokens=0),
+            ),
+        )
+        client.on_tool_use = None
+        client.on_usage = None
+        backend = ClientChatBackend(
+            client,
+            project_dir=tmp_path,
+            clarity_agent_dir=tmp_path,
+            transcript=transcript,
+        )
+        backend.connect()
+        return backend
+
+    def test_no_fire_when_under_threshold(self, tmp_path: Any) -> None:
+        # Small transcript, small input_tokens → no compaction.
+        # The wrapped client should never be asked to summarize.
+        from clarity_agent.transcript import Transcript, UserTurn
+        from datetime import datetime, timezone
+
+        transcript = Transcript(tmp_path)
+        transcript.write(UserTurn(
+            timestamp=datetime.now(timezone.utc),
+            content="tiny",
+        ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 1_000
+
+        backend.maybe_compact_after_chat()
+
+        # Still on chapter 1 — no rollover.
+        assert Transcript(tmp_path).current_chapter == 1
+        # And the client wasn't called to produce a summary.
+        backend._client.create_message.assert_not_called()
+
+    def test_fires_when_input_tokens_over_threshold(self, tmp_path: Any) -> None:
+        # input_tokens > 85% of 128K window (the test-model context).
+        # Compaction writes a CompactionSummary into a new chapter,
+        # produced by our stubbed create_message → "summary text".
+        from clarity_agent.transcript import (
+            CompactionSummary,
+            Transcript,
+            UserTurn,
+        )
+        from datetime import datetime, timezone
+
+        transcript = Transcript(tmp_path)
+        # Seed the chapter with enough turns that the 70/30 split
+        # has something to summarize.
+        for i in range(10):
+            transcript.write(UserTurn(
+                timestamp=datetime.now(timezone.utc),
+                content=f"turn {i}",
+            ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 120_000  # > 85% of 128K
+
+        backend.maybe_compact_after_chat()
+
+        t = Transcript(tmp_path)
+        assert t.current_chapter == 2
+        new_events = list(t.chapter_events(2))
+        assert isinstance(new_events[0], CompactionSummary)
+        assert new_events[0].summary == "summary text"
+        assert new_events[0].source_chapter == 1
+        # Counter resets after rollover so a second pass through this
+        # method sees a clean slate.
+        assert backend._latest_input_tokens == 0
+
+    def test_fires_when_transcript_size_over_threshold(
+        self, tmp_path: Any,
+    ) -> None:
+        # Rebuild-safety trigger: transcript content exceeds the
+        # threshold even though live input_tokens stays small.  At
+        # 85% of 128K → 108,800 tokens → ~435,200 chars by the
+        # estimator (4 chars per token).
+        from clarity_agent.transcript import (
+            CompactionSummary,
+            Transcript,
+            UserTurn,
+        )
+        from datetime import datetime, timezone
+
+        transcript = Transcript(tmp_path)
+        transcript.write(UserTurn(
+            timestamp=datetime.now(timezone.utc),
+            content="x" * 450_000,
+        ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 5_000  # provider kept it small
+
+        backend.maybe_compact_after_chat()
+
+        t = Transcript(tmp_path)
+        assert t.current_chapter == 2
+        new_events = list(t.chapter_events(2))
+        assert isinstance(new_events[0], CompactionSummary)
+
+    def test_fires_callbacks_around_compaction(self, tmp_path: Any) -> None:
+        # on_compaction_started fires before the slow work,
+        # on_compaction_complete fires after with the summary +
+        # source turn count.  The adapter relies on this ordering
+        # to drive its status / banner UI.
+        from clarity_agent.llm.types import CompactionInfo
+        from clarity_agent.transcript import Transcript, UserTurn
+        from datetime import datetime, timezone
+
+        transcript = Transcript(tmp_path)
+        for i in range(5):
+            transcript.write(UserTurn(
+                timestamp=datetime.now(timezone.utc),
+                content=f"turn {i}",
+            ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 120_000
+
+        events: list[str] = []
+        completion_info: list[CompactionInfo] = []
+        backend.on_compaction_started = lambda: events.append("started")
+        backend.on_compaction_complete = lambda info: (
+            events.append("complete"), completion_info.append(info),
+        )
+
+        backend.maybe_compact_after_chat()
+
+        assert events == ["started", "complete"]
+        assert completion_info[0].summary == "summary text"
+        assert completion_info[0].source_turn_count >= 1
+
+    def test_noop_when_no_transcript_bound(self, tmp_path: Any) -> None:
+        # No transcript → backend silently skips compaction.  The
+        # eval harness uses ClientChatBackend without a transcript
+        # and shouldn't crash even when input_tokens crosses the
+        # nominal threshold.
+        backend = self._make_backend(tmp_path, transcript=None)
+        backend._latest_input_tokens = 120_000
+        # Doesn't raise; doesn't do anything.
+        backend.maybe_compact_after_chat()
+
+
 # ---------------------------------------------------------------------------
 # SdkChatBackend — text-based tool-call helpers
 # ---------------------------------------------------------------------------

@@ -20,7 +20,18 @@ import importlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+# Deferred behind ``TYPE_CHECKING`` to avoid the circular import
+# documented in ``clarity_agent.llm.chat`` — same reason applies here
+# since this module sits in the same package.  ``LLMClient`` and
+# ``ChatBackend`` are also deferred to avoid a top-level import of
+# ``llm.factory`` (which would pull in every provider implementation
+# just to make ``LLMConfig`` importable).
+if TYPE_CHECKING:
+    from clarity_agent.llm.chat import ChatBackend
+    from clarity_agent.llm.client import LLMClient
+    from clarity_agent.transcript import Transcript
 
 
 class LLMConfigError(Exception):
@@ -671,12 +682,8 @@ class LLMConfig:
         clone.tiers = {**self.tiers, "default": model}
         return clone
 
-    def create_client(self) -> Any:
-        """Create a low-level :class:`~clarity_agent.llm.LLMClient`.
-
-        The return type is ``LLMClient``; typed as ``Any`` here to
-        avoid a circular import at module level.
-        """
+    def create_client(self) -> LLMClient:
+        """Create a low-level :class:`~clarity_agent.llm.LLMClient`."""
         from clarity_agent.llm.factory import create_client
         return create_client(self)
 
@@ -685,15 +692,20 @@ class LLMConfig:
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
-    ) -> Any:
+        transcript: Transcript | None = None,
+    ) -> ChatBackend:
         """Create a high-level :class:`~clarity_agent.llm.ChatBackend`.
 
-        The return type is ``ChatBackend``; typed as ``Any`` here to
-        avoid a circular import at module level.
+        ``transcript`` is an optional
+        :class:`clarity_agent.transcript.Transcript` to bind for
+        compaction recording; without one, the backend's compaction
+        machinery is silently disabled (provider signals observed
+        but not recorded; threshold checks don't fire).
         """
         from clarity_agent.llm.factory import create_chat_backend
         return create_chat_backend(
             self,
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
+            transcript=transcript,
         )

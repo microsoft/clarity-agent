@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.llm.client import LLMClient
 from clarity_agent.llm.config import LLMConfig
+
+# Deferred behind ``TYPE_CHECKING`` to avoid the circular import
+# documented in ``clarity_agent.llm.chat`` — same reason applies here
+# since this module sits in the same package.
+if TYPE_CHECKING:
+    from clarity_agent.transcript import Transcript
 
 
 def get_provider_tier_defaults(
@@ -96,6 +103,7 @@ def create_chat_backend(
     *,
     project_dir: Path,
     clarity_agent_dir: Path,
+    transcript: Transcript | None = None,
 ) -> ChatBackend:
     """Create a high-level chat backend for the given configuration.
 
@@ -109,6 +117,9 @@ def create_chat_backend(
             model, and credentials.
         project_dir: Path to the project being analyzed.
         clarity_agent_dir: Path to the clarity agent installation.
+        transcript: Optional :class:`Transcript` to bind for
+            compaction recording.  Without one, the backend's
+            compaction machinery is silently disabled.
 
     Returns:
         A :class:`ChatBackend` instance.
@@ -123,6 +134,7 @@ def create_chat_backend(
         return SdkChatBackend(
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
+            transcript=transcript,
         )
 
     # The github provider uses the Copilot SDK agent runtime.
@@ -138,6 +150,7 @@ def create_chat_backend(
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
             token=token,
+            transcript=transcript,
         )
 
     # All other provider+auth combinations use ClientChatBackend.
@@ -148,4 +161,5 @@ def create_chat_backend(
         project_dir=project_dir,
         clarity_agent_dir=clarity_agent_dir,
         tiers=config.tiers,
+        transcript=transcript,
     )

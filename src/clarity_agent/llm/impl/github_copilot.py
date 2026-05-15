@@ -20,7 +20,13 @@ import threading
 import time
 from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+# Deferred behind ``TYPE_CHECKING`` to break the cycle through
+# ``clarity_agent.transcript._render`` → ``clarity_agent.llm.client``;
+# see the matching comment in ``clarity_agent.llm.chat``.
+if TYPE_CHECKING:
+    from clarity_agent.transcript import Transcript
 
 from copilot import CopilotClient
 from copilot.generated.session_events import SessionEvent, SessionEventType
@@ -163,7 +169,9 @@ class CopilotChatBackend(ChatBackend):
         token: str | None = None,
         idle_timeout_seconds: float | None = None,
         max_rpc_retries: int | None = None,
+        transcript: "Transcript | None" = None,
     ) -> None:
+        super().__init__(transcript=transcript)
         self.project_dir = project_dir
         self.clarity_agent_dir = clarity_agent_dir
         self._token = token
@@ -443,10 +451,9 @@ class CopilotChatBackend(ChatBackend):
                 # Copilot's compaction event carries the full
                 # summary content and a count of messages removed —
                 # no transcript-file parsing needed (unlike the
-                # Claude SDK path).  Surface it via on_compaction so
-                # the orchestrator can record the provider's summary
-                # in our transcript via
-                # ``Transcript.external_compaction_occurred``.
+                # Claude SDK path).  We record the provider's
+                # summary directly on our transcript and fire UI
+                # callbacks around it.
                 #
                 # Skip on failure or when summary content is missing
                 # (defensive — the SDK marks ``success: False`` if
@@ -454,18 +461,17 @@ class CopilotChatBackend(ChatBackend):
                 # to record a bogus summary in that case).
                 success = getattr(event.data, "success", False)
                 summary_content = getattr(event.data, "summary_content", None)
-                if success and summary_content and self.on_compaction:
+                if success and summary_content:
                     messages_removed = getattr(
                         event.data, "messages_removed", None,
                     )
-                    self.on_compaction(CompactionInfo(
-                        summary=summary_content,
-                        source_turn_count=(
-                            int(messages_removed)
-                            if messages_removed is not None
-                            else None
-                        ),
-                    ))
+                    source_turn_count = (
+                        int(messages_removed)
+                        if messages_removed is not None else None
+                    )
+                    self._record_provider_compaction(
+                        summary_content, source_turn_count,
+                    )
 
         unsubscribe = self._session.on(on_event)
         try:
@@ -477,6 +483,30 @@ class CopilotChatBackend(ChatBackend):
             unsubscribe()
 
         return "".join(text_parts)
+
+    def _record_provider_compaction(
+        self, summary: str, source_turn_count: int | None,
+    ) -> None:
+        """Translate Copilot's compaction signal into our transcript.
+
+        Fires the UI started/complete callbacks around the
+        :meth:`Transcript.external_compaction_occurred` write so
+        the orchestrator can render progress + outcome.  Without a
+        transcript bound, the compaction stays purely internal to
+        Copilot.
+        """
+        if self._transcript is None:
+            return
+        if self.on_compaction_started:
+            self.on_compaction_started()
+        result = self._transcript.external_compaction_occurred(
+            summary=summary, source_turn_count=source_turn_count,
+        )
+        if self.on_compaction_complete:
+            self.on_compaction_complete(CompactionInfo(
+                summary=result.summary,
+                source_turn_count=result.source_turn_count,
+            ))
 
     async def _retry_after_kill(self, model: str) -> str:
         """Kill the wedged session, build a new one, replay, retry.

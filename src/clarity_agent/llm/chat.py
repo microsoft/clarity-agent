@@ -21,9 +21,21 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TYPE_CHECKING
+
+# ``Transcript`` import is deferred behind ``TYPE_CHECKING`` to break
+# a real circular dependency: ``clarity_agent.transcript._render``
+# imports from ``clarity_agent.llm.client`` at module top level, so a
+# top-level Transcript import here would loop back through
+# ``clarity_agent.llm.__init__`` while it's mid-load.  The ``from
+# __future__ import annotations`` above turns the ``Transcript``
+# annotation into a string at runtime, so the symbol is only needed
+# for type checkers.
+if TYPE_CHECKING:
+    from clarity_agent.transcript import Transcript
 
 from clarity_agent.llm.types import (
     CostCallback,
@@ -63,9 +75,18 @@ class ChatBackend(ABC):
     # input dict and provider-assigned id (used by the transcript
     # event log).
     on_tool_call: StructuredToolCallback | None = None
-    # Backend-signaled compaction callback.  Fired when the provider
-    # has performed its own context-management compaction.
-    on_compaction: CompactionCallback | None = None
+    # Fires immediately before a compaction's slow work begins —
+    # the orchestrator wires this to a UI status indicator so the
+    # user understands why the next response will take a moment.
+    # No payload: the started/completed pair just delimits the
+    # window for UI purposes.
+    on_compaction_started: Callable[[], None] | None = None
+    # Fires after a compaction has finished and the backend has
+    # already written the result to its transcript.  Payload
+    # describes what was compacted (summary + count) so the
+    # orchestrator can render a persistent system message in the
+    # chat.
+    on_compaction_complete: CompactionCallback | None = None
     on_text_delta: TextDeltaCallback | None = None
     on_cost: CostCallback | None = None
     on_usage: UsageCallback | None = None
@@ -102,6 +123,38 @@ class ChatBackend(ABC):
     behavior even before the user provides an explicit override.
     """
 
+    COMPACTION_THRESHOLD_FRACTION: ClassVar[float] = 0.85
+    """Fraction of the model's context window at which a backend
+    that implements its own threshold-based compaction (e.g.
+    :class:`ClientChatBackend`) fires.  Deliberately high (85%):
+    backends that auto-compact internally keep the live
+    ``input_tokens`` count well under this, so we only fire as
+    the safety net when no compaction is happening anywhere.
+    """
+
+    def __init__(self, *, transcript: Transcript | None = None) -> None:
+        """Initialize the shared backend state.
+
+        ``transcript``: optional binding for compaction recording.
+        Subclasses must pass through their own ``transcript=``
+        kwarg via ``super().__init__`` if they want to expose it.
+        Without a transcript, all backend-side compaction work is
+        silently disabled: provider signals are observed but not
+        recorded, threshold checks don't fire.
+
+        Set at construction (rather than via a later setter) to
+        avoid races where the backend processes events before the
+        transcript binding is in place.
+        """
+        # The transcript the backend writes compaction events to.
+        # ``None`` disables backend-side compaction entirely.
+        self._transcript: Transcript | None = transcript
+        # Latest ``input_tokens`` value reported by the provider on
+        # this conversation.  Each backend updates this internally
+        # when it parses usage info.  Drives the threshold check
+        # in :meth:`maybe_compact_after_chat`.
+        self._latest_input_tokens: int = 0
+
     @property
     def llm_session_id(self) -> str | None:
         """Return the backend's session ID, if any.
@@ -129,6 +182,26 @@ class ChatBackend(ABC):
         if model_or_tier is None:
             model_or_tier = "default"
         return self.TIER_DEFAULTS.get(model_or_tier, model_or_tier)
+
+    def maybe_compact_after_chat(self) -> None:
+        """Hook for backends that implement their own threshold-based
+        compaction.  Called by callers after :meth:`chat` returns.
+
+        Default: no-op.  Backends that handle compaction *during*
+        their chat flow (e.g. :class:`SdkChatBackend` detecting via
+        PreCompact + JSONL inspection, :class:`CopilotChatBackend`
+        observing the ``SESSION_COMPACTION_COMPLETE`` event) don't
+        need to do anything here — they've already written to the
+        transcript before chat() returned.
+
+        :class:`ClientChatBackend` overrides this to run the
+        threshold-driven fallback path: check whether
+        ``_latest_input_tokens`` or transcript size has crossed
+        :attr:`COMPACTION_THRESHOLD_FRACTION` × context window; if
+        so, summarize via the wrapped client's low-level
+        ``create_message`` (avoiding recursion into our own chat
+        path) and call :meth:`Transcript.compact`.
+        """
 
     def context_window_for(self, model_or_tier: str | None = None) -> int:
         """Return the context-window size (in tokens) for a model.
@@ -266,7 +339,9 @@ class ClientChatBackend(ChatBackend):
         project_dir: Path,
         clarity_agent_dir: Path,
         tiers: dict[str, str] | None = None,
+        transcript: Transcript | None = None,
     ) -> None:
+        super().__init__(transcript=transcript)
         self._client = client
         self.project_dir: Path = project_dir
         self.clarity_agent_dir: Path = clarity_agent_dir
@@ -427,6 +502,15 @@ class ClientChatBackend(ChatBackend):
                     self._client.create_message(**kwargs)
                 )
 
+                # Track input_tokens for the threshold check in
+                # :meth:`maybe_compact_after_chat`.  The latest
+                # value reflects the total context size the
+                # provider just processed; later loop iterations
+                # (tool_use rounds) overwrite, leaving the
+                # final-turn value when chat() returns.
+                if response.usage is not None:
+                    self._latest_input_tokens = response.usage.input_tokens
+
                 # Process tool calls if any.
                 tool_calls: list[ToolUseBlock] = response.tool_calls
                 tool_results: list[dict[str, Any]] = []
@@ -472,6 +556,115 @@ class ClientChatBackend(ChatBackend):
         finally:
             if tool_handler is not None:
                 self._client._suppress_tool_output = False
+
+    def maybe_compact_after_chat(self) -> None:
+        """Threshold-driven compaction for stateless API providers.
+
+        Run after :meth:`chat` returns to keep the conversation
+        under the model's context window.  Stateful provider
+        backends (SDK, Copilot) detect their own compaction during
+        the chat call and don't need this hook; this implementation
+        is the safety-net path for providers that send the full
+        history every turn (Anthropic API direct, OpenAI, Azure,
+        Gemini).
+
+        Steps:
+        1. Ask the transcript whether the threshold is crossed
+           (either ``input_tokens`` from this turn's response, or
+           the on-disk transcript content size — the rebuild-safety
+           half).
+        2. If yes: summarize the older 70% via a low-level
+           :meth:`LLMClient.create_message` call (bypasses our own
+           :meth:`chat`, so no recursion, no transcript writes for
+           the summary call itself).
+        3. Roll the chapter and replace
+           :attr:`conversation_history` with the new chapter's
+           messages so subsequent :meth:`chat` calls see only the
+           summary plus the verbatim tail.
+        4. Fire ``on_compaction_started`` / ``on_compaction_complete``
+           callbacks for the orchestrator's UI.
+        """
+        if self._transcript is None or self._loop is None:
+            return
+        threshold = int(
+            self.COMPACTION_THRESHOLD_FRACTION
+            * self.context_window_for(None),
+        )
+
+        if not self._transcript.should_compact(
+            threshold_tokens=threshold,
+            input_tokens=self._latest_input_tokens,
+        ):
+            return
+
+        if self.on_compaction_started:
+            self.on_compaction_started()
+
+        result = self._transcript.compact_with_summarizer(
+            threshold_tokens=threshold,
+            input_tokens=self._latest_input_tokens,
+            summarize_fn=self._summarize_via_create_message,
+            summarize_fraction=0.70,
+        )
+        if result is None:
+            # should_compact returned True but compact_with_summarizer
+            # double-checked and decided no — unusual but possible if
+            # the transcript was modified between the two checks.
+            return
+
+        # Replace conversation_history with the new chapter's
+        # contents (summary + verbatim tail) so the next chat()
+        # call sees only that as context, matching what the SDK /
+        # Copilot backends do internally when they auto-compact.
+        self.conversation_history = self._transcript.anthropic_messages()
+        self._latest_input_tokens = 0
+
+        if self.on_compaction_complete:
+            # Lazy import to avoid pulling in CompactionInfo for
+            # backends that don't compact.
+            from clarity_agent.llm.types import CompactionInfo
+            self.on_compaction_complete(CompactionInfo(
+                summary=result.summary,
+                source_turn_count=result.source_turn_count,
+            ))
+
+    def _summarize_via_create_message(self, events: list[Any]) -> str:
+        """Summarize an event list via the wrapped client's low-level API.
+
+        Bypasses :meth:`chat` deliberately: that path writes to the
+        transcript, manages ``conversation_history``, and fires the
+        full callback chain — none of which we want for the
+        summarization call itself.  ``LLMClient.create_message`` is
+        a single stateless API call with no side effects beyond
+        :attr:`LLMClient.on_usage` / :attr:`LLMClient.on_tool_use`,
+        which the wrapped client will fire — those are noisy during
+        summarization so we suppress them temporarily.
+        """
+        from clarity_agent.transcript._summarize import summarize_chapter
+        if self._loop is None:
+            raise RuntimeError("ClientChatBackend.connect() was not called")
+
+        # Suppress wrapped-client callbacks for the duration so the
+        # summarization call doesn't show up as a fake tool/usage
+        # event on the orchestrator's stream.  Restored in finally.
+        saved_on_tool_use = self._client.on_tool_use
+        saved_on_usage = self._client.on_usage
+        self._client.on_tool_use = None
+        self._client.on_usage = None
+        try:
+            def _call(prompt: str) -> str:
+                response: LLMResponse = self._loop.run_until_complete(
+                    self._client.create_message(
+                        messages=[{"role": "user", "content": prompt}],
+                        model=self.resolve_model(None),
+                        max_tokens=4096,
+                    ),
+                )
+                return response.text
+            return summarize_chapter(events, summarize_fn=_call)
+        finally:
+            self._client.on_tool_use = saved_on_tool_use
+            self._client.on_usage = saved_on_usage
 
     async def arun_tool_loop(
         self,

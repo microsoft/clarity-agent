@@ -36,9 +36,33 @@ def backend(tmp_path: Path) -> SdkChatBackend:
     Constructs without invoking the underlying SDK (the import
     happens in __init__; if claude_agent_sdk isn't available the
     test is skipped).  Project/clarity dirs point at a tmp path.
+
+    No transcript is bound here — tests that need one (everything
+    in :class:`TestDetectAndReportCompaction`) construct a fresh
+    backend with a transcript via ``backend_with_transcript``.
     """
     try:
         return SdkChatBackend(project_dir=tmp_path, clarity_agent_dir=tmp_path)
+    except ImportError:
+        pytest.skip("claude_agent_sdk not installed")
+
+
+@pytest.fixture
+def backend_with_transcript(tmp_path: Path):
+    """An SdkChatBackend bound to a real Transcript.
+
+    Used for tests that exercise the
+    :meth:`_record_provider_compaction` path — without a transcript,
+    the backend no-ops silently (correct behavior, but not what
+    those tests are checking).
+    """
+    try:
+        from clarity_agent.transcript import Transcript
+        transcript = Transcript(tmp_path)
+        return SdkChatBackend(
+            project_dir=tmp_path, clarity_agent_dir=tmp_path,
+            transcript=transcript,
+        )
     except ImportError:
         pytest.skip("claude_agent_sdk not installed")
 
@@ -108,25 +132,44 @@ def _write_transcript(path: Path, entries: list[dict[str, Any]]) -> None:
 
 
 class TestDetectAndReportCompaction:
-    def test_no_pending_path_is_noop(self, backend, tmp_path):
-        # Nothing has signaled compaction → no-op.  Callback never fires.
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
-        backend._detect_and_report_compaction()
-        assert fired == []
+    """Detection happens at the end of _run_query.  When the
+    PreCompact hook captured a transcript path AND the backend has
+    a transcript bound, the new isCompactSummary entries get
+    translated into ``Transcript.external_compaction_occurred``
+    calls plus ``on_compaction_started`` / ``on_compaction_complete``
+    fires for UI.
 
-    def test_missing_transcript_file_is_noop(self, backend, tmp_path):
-        # Path was set by the hook but the file doesn't exist
-        # (shouldn't happen in normal flow, but be defensive).
+    Without a transcript bound, detection runs but no recording
+    happens (correct — provider compaction stays internal).
+    """
+
+    def test_no_pending_path_is_noop(self, backend_with_transcript):
+        # Nothing has signaled compaction → no-op.
+        backend = backend_with_transcript
+        started_calls: list[None] = []
+        backend.on_compaction_started = lambda: started_calls.append(None)
+        backend._detect_and_report_compaction()
+        assert started_calls == []
+        # Transcript got no new chapter.
+        assert backend._transcript.current_chapter is None
+
+    def test_missing_transcript_file_is_noop(self, backend_with_transcript, tmp_path):
+        backend = backend_with_transcript
         backend._pending_compact_transcript_path = tmp_path / "missing.jsonl"
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        started_calls: list[None] = []
+        backend.on_compaction_started = lambda: started_calls.append(None)
         backend._detect_and_report_compaction()
-        assert fired == []
+        assert started_calls == []
 
-    def test_fires_on_compact_summary_entry(self, backend, tmp_path):
-        # The base case: one isCompactSummary entry → one
-        # on_compaction call carrying that summary.
+    def test_records_provider_summary_on_transcript(
+        self, backend_with_transcript, tmp_path,
+    ):
+        # Base case: one isCompactSummary entry → one chapter
+        # rollover with the provider's summary, and the
+        # on_compaction_complete callback fires with the result.
+        from clarity_agent.transcript import CompactionSummary
+        backend = backend_with_transcript
+
         path = tmp_path / "session.jsonl"
         _write_transcript(path, [
             {"type": "user", "uuid": "u1", "message": {"content": "hello"}},
@@ -138,22 +181,32 @@ class TestDetectAndReportCompaction:
             },
         ])
         backend._pending_compact_transcript_path = path
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        started_calls: list[None] = []
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_started = lambda: started_calls.append(None)
+        backend.on_compaction_complete = completed.append
 
         backend._detect_and_report_compaction()
 
-        assert len(fired) == 1
-        assert fired[0].summary == "summary of earlier conversation"
-        # source_turn_count defaults to None — Transcript will derive
-        # it from the 70/30 split.
-        assert fired[0].source_turn_count is None
+        # UI callbacks fired in order.
+        assert started_calls == [None]
+        assert len(completed) == 1
+        assert completed[0].summary == "summary of earlier conversation"
+        # Transcript created chapter 1 (was empty before — the
+        # transcript becomes the archive of the SDK's pre-compaction
+        # state).  The CompactionSummary is the new chapter's first
+        # event.
+        new_chapter = backend._transcript.current_chapter
+        new_events = list(backend._transcript.chapter_events(new_chapter))
+        assert isinstance(new_events[0], CompactionSummary)
+        assert new_events[0].summary == "summary of earlier conversation"
 
-    def test_already_seen_uuids_arent_fired_again(self, backend, tmp_path):
-        # Idempotence: if _detect runs twice (e.g., the user does
-        # several queries before the orchestrator drains the pending
-        # info), the same isCompactSummary entry isn't fired
-        # repeatedly.
+    def test_already_seen_uuids_arent_recorded_again(
+        self, backend_with_transcript, tmp_path,
+    ):
+        # Idempotence: same uuid seen twice → only recorded once.
+        backend = backend_with_transcript
+
         path = tmp_path / "session.jsonl"
         _write_transcript(path, [
             {
@@ -164,70 +217,85 @@ class TestDetectAndReportCompaction:
             },
         ])
         backend._pending_compact_transcript_path = path
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_complete = completed.append
 
         backend._detect_and_report_compaction()
         # Re-set the pending path (simulating a second PreCompact)
-        # and run again — but the same uuid is in seen.
+        # — same uuid is in seen, so no second recording.
         backend._pending_compact_transcript_path = path
         backend._detect_and_report_compaction()
 
-        assert len(fired) == 1  # only fired the first time
+        assert len(completed) == 1
 
-    def test_multiple_new_summaries_each_fire(self, backend, tmp_path):
-        # If the SDK has compacted multiple times since we last
-        # looked, each new isCompactSummary fires its own
-        # on_compaction event.
+    def test_multiple_new_summaries_each_record(
+        self, backend_with_transcript, tmp_path,
+    ):
+        # The SDK doesn't typically emit multiple compactions in a
+        # single query, but if it did, each one with a new uuid
+        # should get its own chapter rollover.
+        from clarity_agent.transcript import CompactionSummary
+        backend = backend_with_transcript
+
         path = tmp_path / "session.jsonl"
         _write_transcript(path, [
             {
-                "type": "user",
-                "uuid": "compact-1",
+                "type": "user", "uuid": "compact-1",
                 "isCompactSummary": True,
                 "message": {"content": "first summary"},
             },
             {"type": "assistant", "uuid": "a1", "message": {"content": "..."}},
             {
-                "type": "user",
-                "uuid": "compact-2",
+                "type": "user", "uuid": "compact-2",
                 "isCompactSummary": True,
                 "message": {"content": "second summary"},
             },
         ])
         backend._pending_compact_transcript_path = path
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_complete = completed.append
 
         backend._detect_and_report_compaction()
 
-        assert len(fired) == 2
-        assert fired[0].summary == "first summary"
-        assert fired[1].summary == "second summary"
+        assert len(completed) == 2
+        assert completed[0].summary == "first summary"
+        assert completed[1].summary == "second summary"
+        # Two new chapters created (transcript was empty before).
+        # Chapters 1 + 2 each carry one of the summaries.
+        chapters = backend._transcript.chapters
+        assert len(chapters) == 2
+        summaries: list[str] = []
+        for ch in chapters:
+            for e in backend._transcript.chapter_events(ch):
+                if isinstance(e, CompactionSummary):
+                    summaries.append(e.summary)
+                    break
+        assert summaries == ["first summary", "second summary"]
 
-    def test_non_compact_entries_ignored(self, backend, tmp_path):
-        # Regular user/assistant entries shouldn't fire anything.
+    def test_non_compact_entries_ignored(
+        self, backend_with_transcript, tmp_path,
+    ):
+        # Regular user/assistant entries don't trigger anything.
+        backend = backend_with_transcript
         path = tmp_path / "session.jsonl"
         _write_transcript(path, [
             {"type": "user", "uuid": "u1", "message": {"content": "hello"}},
             {"type": "assistant", "uuid": "a1", "message": {"content": "hi"}},
-            {"type": "user", "uuid": "u2", "message": {"content": "bye"}},
         ])
         backend._pending_compact_transcript_path = path
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_complete = completed.append
 
         backend._detect_and_report_compaction()
 
-        assert fired == []
+        assert completed == []
 
-    def test_malformed_lines_skipped(self, backend, tmp_path):
-        # Bad JSON lines in the transcript (shouldn't happen but
-        # let's be defensive) don't abort the read.
+    def test_malformed_lines_skipped(self, backend_with_transcript, tmp_path):
+        # Bad JSON lines in the transcript don't abort the read.
+        backend = backend_with_transcript
         path = tmp_path / "session.jsonl"
         good_entry = {
-            "type": "user",
-            "uuid": "compact-1",
+            "type": "user", "uuid": "compact-1",
             "isCompactSummary": True,
             "message": {"content": "the summary"},
         }
@@ -237,16 +305,19 @@ class TestDetectAndReportCompaction:
             encoding="utf-8",
         )
         backend._pending_compact_transcript_path = path
-        fired: list[CompactionInfo] = []
-        backend.on_compaction = fired.append
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_complete = completed.append
 
         backend._detect_and_report_compaction()
 
-        assert len(fired) == 1
-        assert fired[0].summary == "the summary"
+        assert len(completed) == 1
+        assert completed[0].summary == "the summary"
 
-    def test_no_callback_registered_is_safe(self, backend, tmp_path):
-        # If nobody's listening, we just skip silently — no crash.
+    def test_no_transcript_bound_is_safe(self, backend, tmp_path):
+        # Without a transcript, detection runs but doesn't record —
+        # provider compaction stays internal to the SDK.  No
+        # exceptions, no callbacks (since the rollover never
+        # happens, neither does the on_compaction_complete fire).
         path = tmp_path / "session.jsonl"
         _write_transcript(path, [
             {
@@ -256,9 +327,11 @@ class TestDetectAndReportCompaction:
             },
         ])
         backend._pending_compact_transcript_path = path
-        backend.on_compaction = None
-        # No assertion needed — should just not raise.
+        completed: list[CompactionInfo] = []
+        backend.on_compaction_complete = completed.append
+        # Should just not raise.
         backend._detect_and_report_compaction()
+        assert completed == []
 
 
 # ---------------------------------------------------------------------------

@@ -14,9 +14,16 @@ import os
 import re
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from clarity_agent.llm.chat import ChatBackend
+
+# Deferred behind ``TYPE_CHECKING`` to break the cycle through
+# ``clarity_agent.transcript._render`` → ``clarity_agent.llm.client``;
+# see the matching comment in ``clarity_agent.llm.chat``.
+if TYPE_CHECKING:
+    from clarity_agent.transcript import Transcript
+
 from clarity_agent.llm.client import extract_tool_detail, truncate
 from clarity_agent.llm.impl.anthropic import (
     _ANTHROPIC_MODEL_CONTEXT_WINDOWS,
@@ -110,6 +117,7 @@ class SdkChatBackend(ChatBackend):
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
+        transcript: "Transcript | None" = None,
     ) -> None:
         try:
             import claude_agent_sdk
@@ -119,6 +127,7 @@ class SdkChatBackend(ChatBackend):
                 "Install it with: pip install claude-agent-sdk"
             ) from None
 
+        super().__init__(transcript=transcript)
         self._sdk: ModuleType = claude_agent_sdk
         self.project_dir: Path = project_dir
         self.clarity_agent_dir: Path = clarity_agent_dir
@@ -172,8 +181,8 @@ class SdkChatBackend(ChatBackend):
         return {}
 
     def _detect_and_report_compaction(self) -> None:
-        """Read the SDK's JSONL transcript and surface any new
-        compaction summaries via :attr:`on_compaction`.
+        """Read the SDK's JSONL transcript and record any new
+        compaction summaries on our transcript.
 
         Called once at the end of :meth:`_run_query` when the
         PreCompact hook fired during that query.  The SDK has by
@@ -182,11 +191,18 @@ class SdkChatBackend(ChatBackend):
         ``isCompactSummary: true`` entries containing the
         provider's summary of the compacted-away turns.
 
-        UUID-deduplicated against
-        :attr:`_seen_compact_summary_uuids` so the same summary
-        isn't reported twice if the user happens to trigger
-        additional queries before our orchestrator drains the
-        pending compaction signal.
+        For each new entry (UUID-deduplicated against
+        :attr:`_seen_compact_summary_uuids`):
+
+        1. Fire :attr:`on_compaction_started` so the UI shows progress.
+        2. Call :meth:`Transcript.external_compaction_occurred` to
+           write the provider's summary as a chapter rollover.
+        3. Fire :attr:`on_compaction_complete` with the result so
+           the UI renders a persistent system message.
+
+        With no transcript bound, the detection runs but doesn't
+        record anywhere — provider compaction stays internal to
+        the SDK in that case.
         """
         path = self._pending_compact_transcript_path
         if path is None or not path.exists():
@@ -223,8 +239,27 @@ class SdkChatBackend(ChatBackend):
             if not summary:
                 continue
             self._seen_compact_summary_uuids.add(uuid)
-            if self.on_compaction:
-                self.on_compaction(CompactionInfo(summary=summary))
+            self._record_provider_compaction(summary)
+
+    def _record_provider_compaction(self, summary: str) -> None:
+        """Translate a provider-side compaction into our transcript.
+
+        Fires the UI started/complete callbacks around the
+        :meth:`Transcript.external_compaction_occurred` write so
+        the orchestrator can render the progress and outcome.
+        Without a transcript bound, just no-op silently — provider
+        compaction stays purely internal.
+        """
+        if self._transcript is None:
+            return
+        if self.on_compaction_started:
+            self.on_compaction_started()
+        result = self._transcript.external_compaction_occurred(summary=summary)
+        if self.on_compaction_complete:
+            self.on_compaction_complete(CompactionInfo(
+                summary=result.summary,
+                source_turn_count=result.source_turn_count,
+            ))
 
     def _build_system_prompt(self, system_prompt: str | None = None) -> str:
         from clarity_agent.app_paths import protocol_dir as _protocol_dir

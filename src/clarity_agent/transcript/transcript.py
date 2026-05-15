@@ -75,11 +75,13 @@ class CompactionResult:
     """Outcome of a compaction run.
 
     Returned by :meth:`Transcript.compact_with_summarizer` and
-    :meth:`Transcript.external_compaction_occurred` so the
-    orchestrator can signal the UI (and any logging) uniformly
-    regardless of which path produced the summary.
+    :meth:`Transcript.external_compaction_occurred` so the caller
+    has everything it needs to signal the UI uniformly regardless
+    of which path produced the summary.
 
     Attributes:
+        summary: The summary text that was stored on the new
+            chapter's :class:`CompactionSummary` event.
         source_chapter: The chapter that was just archived.
         source_turn_count: How many message-shaped events the
             summary covers.
@@ -87,6 +89,7 @@ class CompactionResult:
             into.  Subsequent writes append here.
     """
 
+    summary: str
     source_chapter: int
     source_turn_count: int
     new_chapter: int
@@ -487,6 +490,7 @@ class Transcript:
             summarize_fraction=summarize_fraction,
         )
         return CompactionResult(
+            summary=summary,
             source_chapter=source_chapter,
             source_turn_count=len(to_summarize),
             new_chapter=self.current_chapter or 0,
@@ -530,6 +534,7 @@ class Transcript:
             summarize_fraction=summarize_fraction,
         )
         return CompactionResult(
+            summary=summary,
             source_chapter=source_chapter,
             source_turn_count=source_turn_count,
             new_chapter=self.current_chapter or 0,
