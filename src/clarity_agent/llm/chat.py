@@ -64,10 +64,7 @@ class ChatBackend(ABC):
     # event log).
     on_tool_call: StructuredToolCallback | None = None
     # Backend-signaled compaction callback.  Fired when the provider
-    # has performed its own context-management compaction.  Phase
-    # 2 v1: callback is wired through to the orchestrator but no
-    # backend currently emits.  Phase 2.5: SDK backend reads its
-    # PreCompact hook + transcript JSONL and translates.
+    # has performed its own context-management compaction.
     on_compaction: CompactionCallback | None = None
     on_text_delta: TextDeltaCallback | None = None
     on_cost: CostCallback | None = None

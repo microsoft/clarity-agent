@@ -31,7 +31,7 @@ from copilot.session import (
 )
 
 from clarity_agent.llm.chat import ChatBackend
-from clarity_agent.llm.types import ToolHandler, ToolUseBlock
+from clarity_agent.llm.types import CompactionInfo, ToolHandler, ToolUseBlock
 
 _GITHUB_TIER_DEFAULTS: dict[str, str] = {
     "default": "claude-sonnet-4.6",
@@ -439,6 +439,33 @@ class CopilotChatBackend(ChatBackend):
                 _emit_phase("thinking")
             elif event.type == SessionEventType.SESSION_COMPACTION_START:
                 _emit_phase("compacting context")
+            elif event.type == SessionEventType.SESSION_COMPACTION_COMPLETE:
+                # Copilot's compaction event carries the full
+                # summary content and a count of messages removed —
+                # no transcript-file parsing needed (unlike the
+                # Claude SDK path).  Surface it via on_compaction so
+                # the orchestrator can record the provider's summary
+                # in our transcript via
+                # ``Transcript.external_compaction_occurred``.
+                #
+                # Skip on failure or when summary content is missing
+                # (defensive — the SDK marks ``success: False`` if
+                # its own compaction LLM call errored; we don't want
+                # to record a bogus summary in that case).
+                success = getattr(event.data, "success", False)
+                summary_content = getattr(event.data, "summary_content", None)
+                if success and summary_content and self.on_compaction:
+                    messages_removed = getattr(
+                        event.data, "messages_removed", None,
+                    )
+                    self.on_compaction(CompactionInfo(
+                        summary=summary_content,
+                        source_turn_count=(
+                            int(messages_removed)
+                            if messages_removed is not None
+                            else None
+                        ),
+                    ))
 
         unsubscribe = self._session.on(on_event)
         try:
