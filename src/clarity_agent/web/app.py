@@ -397,7 +397,7 @@ def create_app(
             for f in sorted(files):
                 if f.startswith("."):
                     continue
-                rel_path = str(rel_root / f) if str(rel_root) != "." else f
+                rel_path = (rel_root / f).as_posix() if str(rel_root) != "." else f
                 tree.append({"path": rel_path, "name": f})
         tree.sort(key=lambda item: _dir_sort_key(item["path"]))
         return {"exists": True, "tree": tree}
