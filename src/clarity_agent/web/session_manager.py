@@ -108,13 +108,19 @@ class WebSessionAdapter:
         if session_id:
             backend.llm_session_id = session_id
 
-        transcript_dir = _protocol_dir(self.project_dir) / "transcripts"
+        # Construct the Transcript that ClaritySession will record
+        # events into.  Full reconstruction-into-rebuild integration
+        # (replacing ``_load_transcript_context``) lands in task
+        # #23; for now this just keeps the writer wired up so events
+        # land in the new chaptered format.
+        from clarity_agent.transcript import Transcript
+        self._project_transcript = Transcript(self.project_dir)
         self._session = ClaritySession(
             self.project_dir,
             self.clarity_agent_dir,
             backend,
             self.llm_config,
-            transcript_dir,
+            transcript=self._project_transcript,
         )
         self._session.__enter__()
 

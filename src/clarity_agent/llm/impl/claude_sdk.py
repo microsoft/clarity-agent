@@ -196,6 +196,19 @@ class SdkChatBackend(ChatBackend):
                             print(f"  [Tool] {block.name} -> {truncate(detail)}")
                             if self.on_tool_use:
                                 self.on_tool_use(block.name, detail)
+                            # Structured tool-call callback for the
+                            # transcript layer — preserves the
+                            # provider-assigned id and full input
+                            # dict that the flattened on_tool_use
+                            # discards.  Both callbacks fire here in
+                            # parallel; consumers subscribe to
+                            # whichever fits their needs.
+                            if self.on_tool_call:
+                                self.on_tool_call(ToolUseBlock(
+                                    id=block.id,
+                                    name=block.name,
+                                    input=block.input,
+                                ))
                 elif isinstance(message, self._sdk.ResultMessage):
                     self._session_id = message.session_id
                     if message.total_cost_usd is not None:
@@ -428,6 +441,11 @@ class SdkChatBackend(ChatBackend):
             # Process tool calls via handler and fire callbacks.
             tool_results: list[dict[str, Any]] = []
             for tc in response.tool_calls:
+                # Structured callback fires regardless of whether a
+                # handler is supplied — transcript consumers want
+                # every tool call recorded.
+                if self.on_tool_call:
+                    self.on_tool_call(tc)
                 if tool_handler is None:
                     detail = extract_tool_detail(tc.name, tc.input)
                     print(f"  [Tool] {tc.name} -> {detail}")
@@ -533,6 +551,10 @@ class SdkChatBackend(ChatBackend):
             )
             content.append(tc)
 
+            # Structured callback fires regardless of handler — same
+            # rationale as the API-path tool loop above.
+            if self.on_tool_call:
+                self.on_tool_call(tc)
             if tool_handler is not None:
                 tool_handler(tc)
             else:

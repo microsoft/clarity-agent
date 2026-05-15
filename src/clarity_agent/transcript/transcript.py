@@ -266,6 +266,27 @@ class Transcript:
         """Path to the ``transcripts/`` directory (may not yet exist)."""
         return _transcripts_dir(self._project_dir)
 
+    def chapter_jsonl_path(self, chapter: int) -> Path:
+        """File path for a chapter's structured event log.
+
+        Stable on-disk filename convention; exposed for code that
+        needs to point external tooling at a specific chapter (e.g.,
+        eval reports linking to the conversation file).  Callers
+        rarely need this — most should iterate via
+        :meth:`chapter_events` or read from
+        :meth:`chapter_md_path`.
+        """
+        return _chapter_jsonl_path(self._project_dir, chapter)
+
+    def chapter_md_path(self, chapter: int) -> Path:
+        """File path for a chapter's human-readable markdown rendering.
+
+        Same purpose as :meth:`chapter_jsonl_path` but for the ``.md``
+        sidecar — useful for opening the rendered conversation in a
+        viewer or linking it from reports.
+        """
+        return _chapter_md_path(self._project_dir, chapter)
+
     # ------------------------------------------------------------------
     # Chapter enumeration
     # ------------------------------------------------------------------

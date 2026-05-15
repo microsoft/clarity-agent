@@ -30,6 +30,7 @@ from clarity_agent.llm.types import (
     LLMResponse,
     StatusCallback,
     TextDeltaCallback,
+    StructuredToolCallback,
     ToolCallback,
     ToolHandler,
     ToolUseBlock,
@@ -55,6 +56,12 @@ class ChatBackend(ABC):
     """
 
     on_tool_use: ToolCallback | None = None
+    # Structured tool-call callback, fired alongside ``on_tool_use``.
+    # See :data:`StructuredToolCallback` — receives the original
+    # :class:`ToolUseBlock` so consumers can record the structured
+    # input dict and provider-assigned id (used by the transcript
+    # event log).
+    on_tool_call: StructuredToolCallback | None = None
     on_text_delta: TextDeltaCallback | None = None
     on_cost: CostCallback | None = None
     on_usage: UsageCallback | None = None
@@ -255,6 +262,26 @@ class ClientChatBackend(ChatBackend):
         self._client.on_tool_use = value
 
     @property  # type: ignore[override]
+    def on_tool_call(self) -> StructuredToolCallback | None:  # type: ignore[override]
+        """Read the structured tool-call callback."""
+        return getattr(self, "_on_tool_call", None)
+
+    @on_tool_call.setter
+    def on_tool_call(self, value: StructuredToolCallback | None) -> None:
+        """Set the structured tool-call callback on backend and wrapped client.
+
+        Mirrors :attr:`on_tool_use` — kept in sync so the same call
+        pattern works regardless of which layer (backend's own tool
+        loop, or the wrapped client's internal path) emits the event.
+        """
+        self._on_tool_call = value
+        # The wrapped client may not have this attribute on older
+        # versions; guard so we don't break existing clients during
+        # the rollout.
+        if hasattr(self._client, "on_tool_call"):
+            self._client.on_tool_call = value
+
+    @property  # type: ignore[override]
     def on_text_delta(self) -> TextDeltaCallback | None:  # type: ignore[override]
         """Read the text delta callback."""
         return self._on_text_delta
@@ -343,6 +370,13 @@ class ClientChatBackend(ChatBackend):
                 tool_calls: list[ToolUseBlock] = response.tool_calls
                 tool_results: list[dict[str, Any]] = []
                 for tc in tool_calls:
+                    # Fire the structured callback first — transcript
+                    # consumers want every tool call recorded, not
+                    # just the ones without a handler.  Independent
+                    # of the legacy ``on_tool_use`` stringified path
+                    # below.
+                    if self.on_tool_call:
+                        self.on_tool_call(tc)
                     result_text: str = "OK"
                     if tool_handler is not None:
                         result_text = tool_handler(tc)

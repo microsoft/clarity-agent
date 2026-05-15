@@ -4,6 +4,19 @@ Clarity session management.
 Contains :class:`ClaritySession`, the core orchestrator for running clarity
 processes interactively. Used by the CLI (``clarity.py``) and the web
 backend (``clarity_agent.web``).
+
+A ClaritySession is a *process run* — one execution of one or more
+protocol processes against a project.  It is NOT a persistent
+conversation; that's the :class:`clarity_agent.transcript.Transcript`'s
+job.  When a transcript is provided, the session records every user
+turn, assistant response, tool call, and process boundary as
+structured events on the transcript's current chapter.  Multiple
+ClaritySessions over the lifetime of a project append to the same
+chapter (with :class:`SessionResume` boundaries marking each new
+attach) — they don't create new chapters; that's the user's explicit
+"Start new chapter" action.
+
+See :mod:`clarity_agent.transcript` and GitHub issue #35.
 """
 
 from __future__ import annotations
@@ -11,15 +24,15 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
-from typing import IO, Any
+from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
 
 from clarity_agent.llm import ChatBackend, LLMConfig
-from clarity_agent.llm.types import ToolHandler
+from clarity_agent.llm.types import ToolHandler, ToolUseBlock
 from clarity_agent.protocol.packet_status import (
     PacketStatusReport,
     check_packet_status,
@@ -27,6 +40,20 @@ from clarity_agent.protocol.packet_status import (
     format_report,
     record_hashes,
 )
+from clarity_agent.transcript import (
+    AssistantText,
+    ChapterStarted,
+    ProcessStarted,
+    SessionResume,
+    ToolUse,
+    Transcript,
+    UserTurn,
+)
+
+
+def _now() -> datetime:
+    """Wall-clock timestamp for transcript events, with timezone."""
+    return datetime.now(timezone.utc)
 
 
 def _git_username(project_dir: Path) -> str | None:
@@ -49,13 +76,22 @@ def _git_username(project_dir: Path) -> str | None:
 
 
 class ClaritySession:
+    """Orchestrator for one CLI / web-session process run.
+
+    Wraps a :class:`ChatBackend` and (optionally) a
+    :class:`Transcript` that captures the conversation as structured
+    events.  See module docstring for ownership notes — the
+    ClaritySession does not own the Transcript's lifecycle; callers
+    construct the Transcript, pass it in, and close it themselves.
+    """
+
     def __init__(
         self,
         project_dir: str | Path,
         clarity_agent_dir: str | Path,
         backend: ChatBackend,
         llm_config: LLMConfig,
-        transcript_dir: Path | None = None,
+        transcript: Transcript | None = None,
     ) -> None:
         self.project_dir: Path = Path(project_dir)
         self.clarity_agent_dir: Path = Path(clarity_agent_dir)
@@ -63,35 +99,58 @@ class ClaritySession:
         self.protocol_dir: Path = _protocol_dir(self.project_dir)
         self.backend: ChatBackend = backend
         self.llm_config: LLMConfig = llm_config
-        self._transcript: IO[str] | None = None
+        self._transcript: Transcript | None = transcript
+        # ``_git_username`` is still referenced by some tooling that
+        # imports this module; keep the helper available even though
+        # the per-session timestamped-filename code path it was
+        # introduced for has been retired in favor of chaptered
+        # transcripts.  Calling it here would only matter if we
+        # wanted to record the username somewhere — defer.
 
-        if transcript_dir is not None:
-            transcript_dir.mkdir(parents=True, exist_ok=True)
-            now = datetime.now()
-            timestamp: str = now.strftime("%Y%m%d-%H%M%S")
-            username = _git_username(self.project_dir)
-            stem = f"{username}-{timestamp}" if username else timestamp
-            transcript_path: Path = transcript_dir / f"{stem}.md"
-            self._transcript = open(transcript_path, "w", encoding="utf-8")
-            backend_name: str = type(backend).__name__
-            self._log("# Transcript\n\n")
-            self._log(f"**Date:** {now.isoformat()}\n")
-            self._log(f"**Project:** {self.project_dir}\n")
-            self._log(f"**Backend:** {backend_name}\n\n---\n\n")
-            print(f"  Transcript: {transcript_path}")
+        if self._transcript is not None:
+            # Record the boundary at which this process run attached
+            # to the transcript.  Empty transcript → write the chapter
+            # header (this is the very first event in chapter 1).
+            # Otherwise → write a SessionResume marking the new
+            # attach, with backend name and SDK session id (if any).
+            backend_name = type(backend).__name__
+            if self._transcript.is_empty:
+                self._transcript.write(ChapterStarted(
+                    timestamp=_now(),
+                    project_dir=str(self.project_dir),
+                    backend=backend_name,
+                ))
+            else:
+                self._transcript.write(SessionResume(
+                    timestamp=_now(),
+                    backend=backend_name,
+                    llm_session_id=backend.llm_session_id,
+                ))
+            # Structured tool-call callback writes ``ToolUse`` events
+            # to the transcript with full fidelity (provider id +
+            # structured input dict).  The legacy ``on_tool_use``
+            # path (display string) is left untouched here — UI
+            # consumers like WebSessionAdapter set their own.
+            backend.on_tool_call = self._record_tool_use
 
-        # Wire up tool-use callback for transcript recording
-        backend.on_tool_use = self._on_tool_use
+    def _record_tool_use(self, block: ToolUseBlock) -> None:
+        """Structured-tool-call callback — append a ``ToolUse`` event.
 
-    def _log(self, text: str) -> None:
-        """Write to transcript file if enabled. Flushes after each write."""
-        if self._transcript:
-            self._transcript.write(text)
-            self._transcript.flush()
-
-    def _on_tool_use(self, tool_name: str, detail: str) -> None:
-        """Callback for tool-use events from the backend."""
-        self._log(f"    [Tool] {tool_name} -> {detail}\n")
+        Wired into ``backend.on_tool_call`` in :meth:`__init__` when
+        a transcript is configured.  Fires from whichever thread the
+        backend uses to process tool blocks (the SDK runs queries on
+        the asyncio loop; the API tool loop runs synchronously in
+        the caller's thread).  The Transcript's writer is
+        thread-safe so the callback site doesn't need to coordinate.
+        """
+        if self._transcript is None:
+            return
+        self._transcript.write(ToolUse(
+            timestamp=_now(),
+            tool_use_id=block.id,
+            name=block.name,
+            input=block.input,
+        ))
 
     def __enter__(self) -> ClaritySession:
         return self
@@ -102,9 +161,14 @@ class ClaritySession:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if self._transcript:
-            self._transcript.close()
-            self._transcript = None
+        # We deliberately do NOT close the Transcript here — the
+        # caller passed it in and owns its lifecycle.  Multiple
+        # ClaritySessions over the lifetime of a project can append
+        # to the same transcript; closing in our __exit__ would force
+        # the next session to reopen the writer (currently a no-op
+        # since Transcript lazily re-opens, but the explicit
+        # separation of ownership is the cleaner contract).
+        return None
 
     def load_behaviors(self) -> str:
         """Load cross-cutting behavioral guidelines from AGENTS.md.
@@ -158,12 +222,21 @@ class ClaritySession:
             tool_handler: Callable that receives a :class:`ToolUseBlock`
                 and returns a result string.
         """
-        self._log(f"**User:** {user_message}\n\n")
+        # Record the user turn before the backend runs.  The
+        # assistant turn (and any tool calls) are recorded as they
+        # happen: tool calls via the structured callback fired by
+        # the backend during streaming; the assistant text in one
+        # event after the response completes.  This mirrors the
+        # legacy ordering (User → tool events → Assistant) and keeps
+        # the markdown matching what users used to see.
+        if self._transcript is not None:
+            self._transcript.write(UserTurn(timestamp=_now(), content=user_message))
         response: str = self.backend.chat(
             user_message, system_prompt, model=model,
             tools=tools, tool_handler=tool_handler,
         )
-        self._log(f"**Assistant:** {response}\n\n---\n\n")
+        if self._transcript is not None:
+            self._transcript.write(AssistantText(timestamp=_now(), content=response))
         return response
 
     def get_packet_status_report(self) -> str | None:
@@ -208,8 +281,6 @@ class ClaritySession:
         print(f"RUNNING {process_name.upper()} PROCESS")
         print(f"{'=' * 80}\n")
 
-        self._log(f"## Process: {process_name}\n\n")
-
         # Resolve the model for this process.  May be a tier name ("deep")
         # or a concrete model string; the backend's resolve_model() handles both.
         model_for_process: str = self._resolve_model(process_name)
@@ -217,7 +288,19 @@ class ClaritySession:
         resolved_model: str = self.backend.resolve_model(model_for_process)
         if tier != "default":
             print(f"  Model: {resolved_model} (tier: {tier})")
-            self._log(f"**Model override:** {resolved_model} (tier: {tier})\n\n")
+
+        # Record the process boundary as a single ``ProcessStarted``
+        # event.  The renderer emits both the ``## Process: name``
+        # heading and the ``**Model override:**`` line (the latter
+        # only for non-default tiers), so this one event captures
+        # everything the legacy two-write code did.
+        if self._transcript is not None:
+            self._transcript.write(ProcessStarted(
+                timestamp=_now(),
+                process_name=process_name,
+                tier=tier,
+                model=resolved_model,
+            ))
 
         # Always include the feedback tool so users can send feedback
         # from any process.

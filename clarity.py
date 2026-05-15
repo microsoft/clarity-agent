@@ -370,11 +370,20 @@ def _cmd_packet(args: argparse.Namespace) -> None:
         )
 
 
-def _transcript_dir(args: argparse.Namespace, project_dir: Path) -> Path | None:
+def _transcript_dir(args: argparse.Namespace, project_dir: Path):
+    """Return a :class:`Transcript` for the project, or ``None`` if disabled.
+
+    Function name kept (rather than the more accurate ``_make_transcript``)
+    only to minimize diff churn — callers pass the result through as
+    the ``transcript`` keyword argument to :class:`ClaritySession`.
+    The returned object encapsulates everything the legacy raw path
+    used to do: directory creation, file naming, structured event
+    persistence.  Issue #35.
+    """
     if getattr(args, "no_transcript", False):
         return None
-    from clarity_agent.app_paths import protocol_dir as _protocol_dir
-    return _protocol_dir(project_dir) / "transcripts"
+    from clarity_agent.transcript import Transcript
+    return Transcript(project_dir)
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from clarity_agent.llm.types import LLMResponse, TextDeltaCallback, ToolCallback, UsageCallback
+from clarity_agent.llm.types import (
+    LLMResponse,
+    StructuredToolCallback,
+    TextDeltaCallback,
+    ToolCallback,
+    UsageCallback,
+)
 
 # ---------------------------------------------------------------------------
 # Tool-detail extraction (shared by LLMClient callbacks and ChatBackend)
@@ -108,8 +114,19 @@ class LLMClient(ABC):
     """Optional callback fired for each tool-use block in a response.
 
     This is *in addition to* the default ``[Tool]`` print.  Use it
-    for things like forwarding events to a web UI or recording a
-    transcript.
+    for things like forwarding events to a web UI.  Receives
+    flattened ``(name, detail)`` strings — use :attr:`on_tool_call`
+    if you need the structured :class:`ToolUseBlock` (id + input
+    dict) for transcript persistence or replay.
+    """
+
+    on_tool_call: StructuredToolCallback | None = None
+    """Optional callback fired with the structured :class:`ToolUseBlock`.
+
+    Fires alongside :attr:`on_tool_use` in :meth:`create_message`.
+    Consumers that need round-trippable tool data (the transcript
+    layer, the message-replay path) subscribe here; UI surfaces
+    that just want a display string keep using :attr:`on_tool_use`.
     """
 
     on_text_delta: TextDeltaCallback | None = None
@@ -170,6 +187,15 @@ class LLMClient(ABC):
                 print(f"  [Tool] {tc.name} -> {truncate(detail)}")
                 if self.on_tool_use:
                     self.on_tool_use(tc.name, detail)
+                # Structured callback for transcript persistence —
+                # preserves the provider-assigned id + structured
+                # input dict that on_tool_use's flattened detail
+                # discards.  All non-SDK backends (Anthropic API,
+                # OpenAI, Azure Inference, ...) go through this
+                # ``create_message`` method, so wiring it once here
+                # covers them all.
+                if self.on_tool_call:
+                    self.on_tool_call(tc)
         if response.usage and self.on_usage:
             self.on_usage(response.usage)
         return response

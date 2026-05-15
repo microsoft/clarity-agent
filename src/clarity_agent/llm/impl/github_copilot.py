@@ -31,7 +31,7 @@ from copilot.session import (
 )
 
 from clarity_agent.llm.chat import ChatBackend
-from clarity_agent.llm.types import ToolHandler
+from clarity_agent.llm.types import ToolHandler, ToolUseBlock
 
 _GITHUB_TIER_DEFAULTS: dict[str, str] = {
     "default": "claude-sonnet-4.6",
@@ -391,6 +391,20 @@ class CopilotChatBackend(ChatBackend):
                 tool_name = getattr(event.data, "tool_name", None) or ""
                 if self.on_tool_use:
                     self.on_tool_use(tool_name, "executing")
+                # Structured callback for the transcript layer.
+                # The Copilot SDK's TOOL_EXECUTION_START event carries
+                # only ``tool_name`` — no id, no input dict — so we
+                # synthesize a degraded :class:`ToolUseBlock`.  The
+                # transcript will record that the tool was invoked
+                # but the input is empty.  Honest about its limit:
+                # the id is prefixed ``copilot_`` so a later replay
+                # path can recognize these as non-round-trippable.
+                if self.on_tool_call:
+                    self.on_tool_call(ToolUseBlock(
+                        id=f"copilot_{tool_name}_{id(event)}",
+                        name=tool_name,
+                        input={},
+                    ))
                 _emit_phase(f"tool:{tool_name}" if tool_name else "executing tool")
             elif event.type == SessionEventType.SESSION_IDLE:
                 done.set()

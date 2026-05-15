@@ -25,7 +25,22 @@ class LLMAuthExpiredError(Exception):
 TextDeltaCallback = Callable[[str], None]
 
 # Callback type for tool-use events: (tool_name, detail) -> None
+#
+# ``detail`` is a short flattened string suitable for human-readable
+# display (UI badges, log lines).  Use :data:`StructuredToolCallback`
+# when you need the structured ``ToolUseBlock`` (id, input dict) — for
+# example, when writing to the transcript event log where fidelity
+# matters.  The two callbacks fire in parallel.
 ToolCallback = Callable[[str, str], None]
+
+# Callback type for structured tool-use events: (tool_use_block,) -> None
+#
+# Receives the full :class:`ToolUseBlock` with its provider-assigned
+# ``id`` and structured ``input`` dict.  Used by the transcript layer
+# to record :class:`clarity_agent.transcript.ToolUse` events with
+# round-trippable fidelity; UI surfaces that only need a display
+# string should keep using :data:`ToolCallback`.
+StructuredToolCallback = Callable[["ToolUseBlock"], None]
 
 # Callback type for cost events: (cost_usd,) -> None
 CostCallback = Callable[[float], None]
