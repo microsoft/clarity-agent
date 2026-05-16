@@ -514,18 +514,25 @@ class ClientChatBackend(ChatBackend):
                 # Process tool calls if any.
                 tool_calls: list[ToolUseBlock] = response.tool_calls
                 tool_results: list[dict[str, Any]] = []
+                # Streaming clients (currently :class:`AnthropicClient`)
+                # fire ``on_tool_call`` / ``on_tool_use`` the instant
+                # each tool block finishes streaming — well before
+                # we get here.  Skip our re-fire in that case so the
+                # UI doesn't see two events for one tool call.
+                callbacks_handled_inline = self._client._callbacks_fired_inline
                 for tc in tool_calls:
-                    # Fire the structured callback first — transcript
-                    # consumers want every tool call recorded, not
-                    # just the ones without a handler.  Independent
-                    # of the legacy ``on_tool_use`` stringified path
-                    # below.
-                    if self.on_tool_call:
-                        self.on_tool_call(tc)
+                    if not callbacks_handled_inline:
+                        # Fire the structured callback first — transcript
+                        # consumers want every tool call recorded, not
+                        # just the ones without a handler.  Independent
+                        # of the legacy ``on_tool_use`` stringified path
+                        # below.
+                        if self.on_tool_call:
+                            self.on_tool_call(tc)
                     result_text: str = "OK"
                     if tool_handler is not None:
                         result_text = tool_handler(tc)
-                    elif self.on_tool_use:
+                    elif self.on_tool_use and not callbacks_handled_inline:
                         from clarity_agent.llm.client import extract_tool_detail
                         detail = extract_tool_detail(tc.name, tc.input)
                         self.on_tool_use(tc.name, detail)

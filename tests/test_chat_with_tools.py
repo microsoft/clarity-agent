@@ -34,6 +34,11 @@ def _mock_client(responses: list[LLMResponse]) -> MagicMock:
     client.TIER_DEFAULTS = {"default": "test-model", "deep": "test-deep", "fast": "test-fast"}
     client.on_tool_use = None
     client._suppress_tool_output = False
+    # Mock client doesn't go through the streaming path, so callbacks
+    # were not fired inline.  Without an explicit ``False`` the
+    # MagicMock attribute would default to a truthy MagicMock object,
+    # making ``ClientChatBackend.chat`` skip its own callback firing.
+    client._callbacks_fired_inline = False
 
     call_count = 0
 

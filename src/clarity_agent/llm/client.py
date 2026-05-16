@@ -148,6 +148,17 @@ class LLMClient(ABC):
     ``on_tool_use`` callback.  Set by :class:`ChatBackend` tool loops
     that provide a handler which does its own output."""
 
+    _callbacks_fired_inline: bool = False
+    """Set by :meth:`_create_message` implementations that fire the
+    tool-use callbacks *during* streaming (currently only
+    :class:`AnthropicClient`).  Tells the post-call paths in both
+    :meth:`create_message` and :class:`ClientChatBackend.chat` to
+    skip their re-firing — without this guard, each tool call would
+    be reported twice: once live mid-stream, again at end-of-round.
+
+    Reset to ``False`` at the start of each :meth:`create_message`
+    invocation so the inline path opts in per-call."""
+
     def resolve_model(self, model_or_tier: str) -> str:
         """Resolve a tier name or model string to a concrete model.
 
@@ -182,6 +193,11 @@ class LLMClient(ABC):
         Returns:
             A normalized :class:`LLMResponse`.
         """
+        # Per-call reset of the inline-fired flag.  Streaming
+        # implementations that fire callbacks mid-response set this
+        # to ``True`` before returning; the post-call loop below
+        # then skips its own firing to avoid duplicates.
+        self._callbacks_fired_inline = False
         response = await self._create_message(
             messages=messages,
             model=model,
@@ -189,7 +205,7 @@ class LLMClient(ABC):
             system=system,
             tools=tools,
         )
-        if not self._suppress_tool_output:
+        if not self._suppress_tool_output and not self._callbacks_fired_inline:
             for tc in response.tool_calls:
                 detail = extract_tool_detail(tc.name, tc.input)
                 print(f"  [Tool] {tc.name} -> {truncate(detail)}")

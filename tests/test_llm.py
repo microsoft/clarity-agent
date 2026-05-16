@@ -246,20 +246,43 @@ class TestAnthropicClient:
         self,
         text_chunks: list[str],
         final_response: MagicMock,
+        tool_blocks: list[MagicMock] | None = None,
     ) -> MagicMock:
         """Build a mock for ``messages.stream()`` (async context manager).
 
         Returns an object that supports ``async with ... as stream``,
-        where ``stream.text_stream`` yields *text_chunks* and
-        ``stream.get_final_message()`` returns *final_response*.
+        where iterating the stream itself yields a sequence of event
+        objects: a ``TextEvent``-shaped object per entry in
+        *text_chunks* (``type="text"``, ``text=chunk``) followed by a
+        ``ContentBlockStopEvent``-shaped object per entry in
+        *tool_blocks* (``type="content_block_stop"``,
+        ``content_block=block``).  ``get_final_message()`` returns
+        *final_response*.
+
+        The production code in :meth:`AnthropicClient._create_message`
+        iterates the stream's event sequence (not ``text_stream``) so
+        it can surface tool-use blocks live.  Tests that only care
+        about text or final-message shape can omit *tool_blocks*.
         """
         stream = MagicMock()
 
-        async def _text_stream():
-            for chunk in text_chunks:
-                yield chunk
+        events: list[MagicMock] = []
+        for chunk in text_chunks:
+            ev = MagicMock()
+            ev.type = "text"
+            ev.text = chunk
+            events.append(ev)
+        for block in tool_blocks or []:
+            ev = MagicMock()
+            ev.type = "content_block_stop"
+            ev.content_block = block
+            events.append(ev)
 
-        stream.text_stream = _text_stream()
+        async def _iter():
+            for ev in events:
+                yield ev
+
+        stream.__aiter__ = lambda self: _iter()
         stream.get_final_message = AsyncMock(return_value=final_response)
 
         ctx = MagicMock()
@@ -343,6 +366,63 @@ class TestAnthropicClient:
             ))
 
         assert deltas == ["Hello", " ", "world"]
+
+    def test_fires_tool_callbacks_inline_during_stream(self) -> None:
+        """Tool-use blocks fire ``on_tool_use`` / ``on_tool_call`` as
+        soon as each block finishes streaming — before
+        ``stream.get_final_message()`` returns.  This is what gives
+        the UI live tool-call updates on tool-heavy turns; without
+        the inline path the events all batch at end-of-response.
+
+        Also asserts the inline-fired flag is set so the base
+        :class:`LLMClient.create_message` post-call loop skips its
+        re-fire (the same callbacks would otherwise be invoked
+        twice per tool block).
+        """
+        tool_block_1 = self._make_tool_block("t1", "search", {"q": "alpha"})
+        tool_block_2 = self._make_tool_block("t2", "fetch", {"url": "/x"})
+        sdk_resp = self._make_anthropic_response(
+            [
+                self._make_text_block("Looking..."),
+                tool_block_1,
+                tool_block_2,
+            ],
+            stop_reason="tool_use",
+        )
+        mock_stream = self._make_stream(
+            ["Looking..."], sdk_resp, tool_blocks=[tool_block_1, tool_block_2],
+        )
+
+        tool_use_events: list[tuple[str, str]] = []
+        tool_call_events: list[ToolUseBlock] = []
+
+        with patch("clarity_agent.llm.impl.anthropic._anthropic_mod") as mock_mod:
+            mock_client = AsyncMock()
+            mock_client.messages.stream = MagicMock(return_value=mock_stream)
+            mock_mod.AsyncAnthropic.return_value = mock_client
+
+            from clarity_agent.llm.impl.anthropic import AnthropicClient
+            client = AnthropicClient(api_key="fake")
+            client.on_tool_use = lambda name, detail: tool_use_events.append(
+                (name, detail),
+            )
+            client.on_tool_call = tool_call_events.append
+
+            asyncio.run(client.create_message(
+                messages=[{"role": "user", "content": "hi"}],
+                model="test-model",
+                tools=[{"name": "search", "description": "", "input_schema": {}}],
+            ))
+
+        # One event per tool block — fired exactly once (not duplicated
+        # by the post-call loop in ``LLMClient.create_message``).
+        assert [name for name, _ in tool_use_events] == ["search", "fetch"]
+        assert [tc.id for tc in tool_call_events] == ["t1", "t2"]
+        assert [tc.input for tc in tool_call_events] == [
+            {"q": "alpha"},
+            {"url": "/x"},
+        ]
+        assert client._callbacks_fired_inline is True
 
     def test_passes_system_and_tools(self) -> None:
         sdk_resp = self._make_anthropic_response([
