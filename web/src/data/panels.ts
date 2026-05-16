@@ -48,7 +48,7 @@
  *     (or Tauri app data dir) and is deferred to a later step.
  */
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
  * The set of top-level panel kinds — one per route in
@@ -315,6 +315,26 @@ export function setSlot<T>(
 }
 
 /**
+ * Internal: write directly by pre-computed key, bypassing
+ * ``PanelId`` construction.  Used by the ``usePanelSlot`` local
+ * fallback to flush a draft into the store when the panel id
+ * becomes available (at that point we already have the key).
+ */
+function _setSlotRaw<T>(key: string, value: T): void {
+  if (slots.get(key) === value) return;
+  slots.set(key, value);
+  try {
+    sessionStorage.setItem(
+      _SESSION_STORAGE_PREFIX + key,
+      JSON.stringify(value),
+    );
+  } catch {
+    // Same as setSlot — quota/unavailable is non-fatal.
+  }
+  notify(key);
+}
+
+/**
  * Subscribe to changes on a panel slot.  Returns an unsubscribe
  * function.  Mostly an implementation primitive for the React
  * hook below; exposed in case non-React code wants to react to
@@ -333,11 +353,10 @@ export function subscribeSlot(
  * setValue]`` shape identical to ``useState``, but the value
  * persists across mount/unmount and across window reloads.
  *
- * ``panelId === null`` disables persistence and returns
- * ``[defaultValue, () => {}]``.  Pass null when the upstream
- * identifier isn't yet available (e.g., during the brief window
- * while ``SessionInfo`` is loading) — the hook will start
- * persisting as soon as a real ``PanelId`` is supplied.
+ * ``panelId === null`` keeps a local working state so callers
+ * (e.g., the chat input) don't go dead while the identifier is
+ * loading.  Once a real ``PanelId`` arrives, the local draft is
+ * transferred into the persistent store automatically.
  */
 export function usePanelSlot<T>(
   panelId: PanelId | null,
@@ -347,13 +366,36 @@ export function usePanelSlot<T>(
   const serialized = panelId === null ? null : serializePanelId(panelId);
   const key = serialized === null ? null : slotKey(serialized, slot);
 
-  const value = useSyncExternalStore(
+  // ---- Local fallback while panelId is null ----
+  // The hook must remain fully functional (typing must work!)
+  // even before the session identifier has loaded.  When the id
+  // arrives, the accumulated local value is flushed into the
+  // persistent store.
+  const [localValue, setLocalValue] = useState<T>(defaultValue);
+  const localRef = useRef(localValue);
+  localRef.current = localValue;
+
+  // Transfer local draft to the persistent store when panelId
+  // becomes available.
+  const prevKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (key !== null && prevKey.current === null) {
+      // panelId just arrived — flush the local draft if the user
+      // typed something while the id was still null.
+      if (localRef.current !== defaultValue) {
+        _setSlotRaw(key, localRef.current);
+      }
+    }
+    prevKey.current = key;
+  }, [key, defaultValue]);
+
+  const storeValue = useSyncExternalStore(
     (cb) => {
       if (key === null) return () => {};
       return subscribe(key, cb);
     },
     () => {
-      if (key === null) return defaultValue;
+      if (key === null) return localValue;
       return slots.has(key) ? (slots.get(key) as T) : defaultValue;
     },
   );
@@ -369,14 +411,17 @@ export function usePanelSlot<T>(
   // string form, stable for the same logical identity.
   const setValue = useCallback(
     (next: T): void => {
-      if (panelId === null) return;
+      if (panelId === null) {
+        setLocalValue(next);
+        return;
+      }
       setSlot(panelId, slot, next);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [serialized, slot],
   );
 
-  return [value, setValue];
+  return [key === null ? localValue : storeValue, setValue];
 }
 
 /**

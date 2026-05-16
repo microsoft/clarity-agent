@@ -313,15 +313,18 @@ describe("usePanelSlot — key isolation", () => {
 });
 
 describe("usePanelSlot — null panelId", () => {
-  it("returns the default value and does not persist", () => {
+  it("maintains local working state without persisting", () => {
     const { result, unmount } = renderHook(() =>
       usePanelSlot(null, "draft", "fallback"),
     );
     expect(result.current[0]).toBe("fallback");
     act(() => result.current[1]("typed during load"));
-    expect(result.current[0]).toBe("fallback");
+    // Local state works — callers (e.g. the chat input) must not
+    // go dead while the panel identifier is loading.
+    expect(result.current[0]).toBe("typed during load");
     unmount();
 
+    // Nothing was persisted to sessionStorage.
     const keys: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
@@ -338,7 +341,14 @@ describe("usePanelSlot — null panelId", () => {
     );
     expect(result.current[0]).toBe("");
 
+    // Type while panelId is still null — local state works.
+    act(() => result.current[1]("typed early"));
+    expect(result.current[0]).toBe("typed early");
+
+    // panelId arrives — local draft is transferred to the store.
     rerender({ id: chatA });
+    expect(result.current[0]).toBe("typed early");
+
     act(() => result.current[1]("now persisting"));
     expect(result.current[0]).toBe("now persisting");
 
