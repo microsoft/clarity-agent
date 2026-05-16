@@ -60,15 +60,20 @@ describe("useChatDraft", () => {
     );
   });
 
-  it("handles null panelId without persisting", () => {
+  it("falls back to local state when panelId is null: typing works, nothing persisted", () => {
+    // Backends like GitHub Copilot don't expose a stable session
+    // id, so ``panelId`` is permanently null.  The hook must still
+    // be a working ``useState``-style tuple — otherwise the
+    // textarea it backs becomes uneditable (focus works, but
+    // keystrokes vanish).  See the comment in ``useChatDraft``.
     const { result, unmount } = renderHook(() => useChatDraft(null));
     expect(result.current[0]).toBe("");
     act(() => result.current[1]("ephemeral"));
-    expect(result.current[0]).toBe("");
+    expect(result.current[0]).toBe("ephemeral");
     unmount();
 
-    // Sanity check the wrapper doesn't accidentally write under
-    // a synthetic "null" key.
+    // Persistence is still scoped to non-null panelIds: a null-id
+    // session should leave no trace in sessionStorage.
     const keys: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
