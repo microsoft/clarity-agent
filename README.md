@@ -25,7 +25,7 @@ You can also join the [Clarity Agent Discord](https://aka.ms/clarity-agent-commu
 
 **Download the desktop app** (no terminal required):
 
-Download the latest `.dmg` (macOS), `.exe` installer (Windows), or `.AppImage` (Linux) from the [GitHub Releases page](https://github.com/microsoft/clarity-agent/releases/latest) and install it directly. No prerequisites.
+Download the latest `.dmg` (macOS) or `.exe` installer (Windows) from the [GitHub Releases page](https://github.com/microsoft/clarity-agent/releases/latest) and install it directly. No prerequisites.
 
 **Or install via script** (adds the `clarity` CLI and embeds Clarity into git repos):
 
