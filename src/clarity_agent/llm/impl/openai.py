@@ -26,6 +26,16 @@ _OPENAI_TIER_DEFAULTS: dict[str, str] = {
     "fast": "gpt-5.4-mini",
 }
 
+# Context-window size in tokens.  Co-located with the tier defaults
+# so this file declares everything about its known models in one
+# place.  Unknown models fall back to ``ChatBackend.DEFAULT_CONTEXT_WINDOW``
+# (or a user override in ``Settings.context_window_overrides``).
+_OPENAI_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    # GPT-5 family carries forward the 128K window from GPT-4o.
+    "gpt-5.4": 128_000,
+    "gpt-5.4-mini": 128_000,
+}
+
 # Map OpenAI finish reasons to canonical stop reasons.
 _FINISH_REASON_MAP: dict[str, str] = {
     "stop": "end_turn",
@@ -101,6 +111,7 @@ class OpenAIClient(LLMClient):
     """
 
     TIER_DEFAULTS = _OPENAI_TIER_DEFAULTS
+    MODEL_CONTEXT_WINDOWS = _OPENAI_MODEL_CONTEXT_WINDOWS
 
     def __init__(self, *, api_key: str) -> None:
         self._client = _openai_mod.AsyncOpenAI(api_key=api_key)

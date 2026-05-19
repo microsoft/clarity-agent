@@ -46,15 +46,16 @@ class TargetSession:
         init_protocol(project_dir)
         self.protocol_dir = _protocol_dir(project_dir)
 
-        # Transcripts land in the standard location.  ClaritySession
-        # creates a timestamped .md file on first chat.
-        transcript_dir = self.protocol_dir / "transcripts"
+        # Transcripts land in the standard ``transcripts/`` directory
+        # under the protocol dir.,
+        from clarity_agent.transcript import Transcript
+        self._transcript = Transcript(project_dir)
         self._session = ClaritySession(
             project_dir,
             clarity_agent_dir,
             backend,
             llm_config,
-            transcript_dir=transcript_dir,
+            transcript=self._transcript,
         )
         self._session.__enter__()
 
@@ -108,14 +109,17 @@ class TargetSession:
 
     @property
     def transcript_file(self) -> Path | None:
-        """Path to the on-disk transcript .md, if ClaritySession wrote one."""
-        transcript = getattr(self._session, "_transcript", None)
-        if transcript is None:
+        """Path to the current chapter's ``.md`` rendering, if any.
+
+        Returns the rendered-markdown sidecar for the most-recent
+        chapter the eval ran against.  Used by eval reporting to
+        surface a clickable link to the conversation.  Returns
+        ``None`` when no transcript was provided (``--no-transcript``)
+        or when the transcript still has no chapters (no writes yet).
+        """
+        if self._transcript is None or self._transcript.is_empty or self._transcript.current_chapter is None:
             return None
-        try:
-            return Path(transcript.name)
-        except (AttributeError, ValueError):
-            return None
+        return self._transcript.chapter_md_path(self._transcript.current_chapter)
 
     @property
     def cost_usd(self) -> float:
@@ -123,8 +127,16 @@ class TargetSession:
         return self._cost_usd
 
     def close(self) -> None:
-        """Release resources held by the underlying ClaritySession."""
+        """Release resources held by the underlying ClaritySession.
+
+        Also closes the owned :class:`Transcript`, since the eval
+        constructs it and is therefore responsible for its
+        lifecycle.  ClaritySession itself never closes a transcript
+        it didn't construct — see issue #35.
+        """
         self._session.__exit__(None, None, None)
+        if self._transcript is not None:
+            self._transcript.close()
 
     def __enter__(self) -> TargetSession:
         return self

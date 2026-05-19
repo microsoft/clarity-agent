@@ -3,7 +3,6 @@ export type WsClientMessage =
   | { type: "chat"; message: string }
   | { type: "start_process"; process: string }
   | { type: "set_model_override"; tier: string }
-  | { type: "new_session" }
   | { type: "stop" };
 
 // WebSocket messages: server → client
@@ -14,10 +13,20 @@ export type WsServerMessage =
   | { type: "usage"; input_tokens: number; output_tokens: number }
   | { type: "response"; content: string }
   | { type: "model_changed"; tier: string; model: string; auto: boolean }
-  | { type: "session_started" }
   | { type: "error"; message: string; category?: string; hint?: string; retryable?: boolean }
   | { type: "warning"; message: string }
-  | { type: "status"; phase: string };
+  | { type: "status"; phase: string }
+  | {
+      type: "compaction_complete";
+      /** True if the provider's own auto-compaction produced the
+       *  summary; false if our threshold-based fallback ran the
+       *  summarization LLM call ourselves. */
+      via_backend: boolean;
+      /** Which chapter was just archived. */
+      source_chapter: number;
+      /** Number of turns folded into the summary. */
+      source_turn_count: number;
+    };
 
 // Chat UI state
 export interface ChatMessage {
@@ -99,7 +108,10 @@ export interface TranscriptEntry {
 // Session
 export interface SessionInfo {
   active: boolean;
-  session_id: string | null;
+  /** Persistent identifier of the conversation thread for this
+   *  project.  Stable across reconnects; null when no thread has
+   *  been established yet. */
+  thread_id: string | null;
   process: string | null;
   project_dir: string;
   project_id?: string;

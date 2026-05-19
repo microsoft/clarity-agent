@@ -19,6 +19,7 @@
  * sessionStorage backing.  This file is intentionally short.
  */
 
+import { useState } from "react";
 import { type PanelId, usePanelSlot } from "../data/panels";
 
 /**
@@ -32,17 +33,46 @@ import { type PanelId, usePanelSlot } from "../data/panels";
 export type DraftPanelId = Extract<PanelId, { type: "chat" }>;
 
 /**
- * Hook: persistent chat-input draft for ``panelId``.  Behaves
- * like ``useState<string>`` for the caller — ``[value, setValue]``
- * — but the value survives mount/unmount and reload.
+ * Hook: chat-input draft for ``panelId``.  Behaves like
+ * ``useState<string>`` for the caller — ``[value, setValue]``.
  *
- * Pass ``null`` while the upstream session identifier isn't yet
- * available (e.g., during the brief window while ``getSession()``
- * is still loading): the hook returns ``["", () => {}]`` and
- * starts persisting once a real ``DraftPanelId`` is supplied.
+ * When ``panelId`` is non-null, the value is backed by the
+ * per-panel sessionStorage slot and survives mount/unmount and
+ * reload.  When ``panelId`` is ``null``, the value is kept in
+ * local component state instead — typing still works, it just
+ * doesn't persist.
+ *
+ * Why fall back to local state rather than returning a no-op
+ * setter: some backends (notably GitHub Copilot) don't expose
+ * a stable session/thread id, so ``panelId`` is permanently
+ * ``null``.  A no-op setter would mean the textarea is
+ * controllable in the React sense (``value`` prop set) but
+ * uneditable from the user's perspective — focus works, but
+ * keystrokes vanish.  Returning a real ``useState`` setter
+ * keeps the input usable; the only thing lost is persistence.
+ *
+ * Edge case worth flagging: if a caller mounts the hook with
+ * ``null``, the user types, and then ``panelId`` becomes
+ * non-null on a later render, the local draft is dropped and
+ * the persistent slot's value (typically "") wins.  In
+ * practice the loading window is short and the textarea is
+ * usually still ``disabled`` during it, so this is rarely
+ * user-visible.  If it ever becomes one, the fix is to copy
+ * ``local`` into the slot on the null→id transition.
  */
 export function useChatDraft(
   panelId: DraftPanelId | null,
 ): [string, (next: string) => void] {
-  return usePanelSlot<string>(panelId, "draft", "");
+  // Both hooks are called on every render to keep hook order
+  // stable, but only one's state is returned.  ``usePanelSlot``
+  // already no-ops its setter and returns the default when
+  // ``panelId`` is null, so the unused branch is cheap.
+  const [local, setLocal] = useState<string>("");
+  const [persistent, setPersistent] = usePanelSlot<string>(
+    panelId,
+    "draft",
+    "",
+  );
+  if (panelId === null) return [local, setLocal];
+  return [persistent, setPersistent];
 }

@@ -1,6 +1,7 @@
 import type {
   ActiveProject,
   AppSettings,
+  ChatMessage,
   ConfigureResult,
   FeedbackPayload,
   FeedbackResult,
@@ -67,6 +68,25 @@ export async function generatePacket(
 
 // Session
 export const getSession = () => fetchJson<SessionInfo>("/api/session");
+
+// Conversation thread
+/**
+ * Roll the current project's conversation thread over to a new chapter.
+ * The current chapter is archived (still browsable via History) and
+ * the next user message starts a fresh SDK conversation with no
+ * carried-over context.  Returns the new chapter number.
+ */
+export const startNewChapter = () =>
+  fetchJson<{ chapter: number }>("/api/thread/new-chapter", { method: "POST" });
+
+/**
+ * Fetch the current chapter's prior turns as chat messages.
+ * Used at mount to populate the chat panel with continuity from
+ * the user's earlier conversation; the empty-list response means
+ * "fresh project or fresh chapter, nothing prior to show."
+ */
+export const getCurrentChapter = () =>
+  fetchJson<{ messages: ChatMessage[] }>("/api/thread/current-chapter");
 
 // Update check
 export const checkForUpdate = () => fetchJson<UpdateCheckInfo>("/api/update-check");

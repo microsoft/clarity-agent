@@ -7,7 +7,11 @@ import {
   useRef,
 } from "react";
 import type { ChatMessage, ProcessMeta, ToolEvent, WsClientMessage, WsServerMessage } from "../types";
-import { getProcesses } from "../api/client";
+import {
+  getCurrentChapter,
+  getProcesses,
+  startNewChapter as apiStartNewChapter,
+} from "../api/client";
 import { useWebSocket } from "./useWebSocket";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +50,13 @@ export interface ChatState {
    *  "tool:read_file").  Displayed transiently, not in chat history.
    *  Cleared on response/error. */
   statusPhase: string | null;
+  /** True once the initial fetch of the current chapter's history
+   *  has resolved (either with prior turns or with an empty list).
+   *  Gates the auto-start effect in ChatPanel so it doesn't fire
+   *  before we know whether prior conversation exists — otherwise
+   *  every page open would re-trigger the slow clarity-agent
+   *  kickoff even on projects that should just resume. */
+  historyLoaded: boolean;
 }
 
 export type ChatAction =
@@ -64,7 +75,23 @@ export type ChatAction =
   | { type: "warning_event"; message: string }
   | { type: "status_event"; phase: string }
   | { type: "dismiss_error" }
-  | { type: "clear" };
+  | { type: "clear" }
+  /** Populate the message list from the current chapter's prior
+   *  turns.  Dispatched once at mount after ``getCurrentChapter``
+   *  resolves; also flips ``historyLoaded`` so the auto-start
+   *  effect can run. */
+  | { type: "load_history"; messages: ChatMessage[] }
+  /** Append a system message marking that compaction occurred,
+   *  so the user has visible context for why earlier turns now
+   *  appear as a summary block.  Also clears the transient
+   *  status phase (the "Summarizing earlier conversation"
+   *  indicator that was set during the LLM call). */
+  | {
+      type: "compaction_complete_event";
+      viaBackend: boolean;
+      sourceChapter: number;
+      sourceTurnCount: number;
+    };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -256,7 +283,50 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         autoModel: state.autoModel,
         error: null,
         statusPhase: null,
+        // ``clear`` is used by both "Start new chapter" (where we
+        // genuinely want a fresh slate) and the streaming reset
+        // paths.  In either case the history-loaded state is
+        // preserved — we've already done the initial fetch on mount,
+        // and re-fetching after a chapter rollover would just return
+        // the new chapter's empty event stream anyway.
+        historyLoaded: state.historyLoaded,
       };
+
+    case "load_history":
+      // Replace the message list outright.  Called once at mount;
+      // ``historyLoaded`` flips true regardless of whether the
+      // payload was empty (empty history is a meaningful "fresh
+      // project, no prior turns" signal — the auto-start effect
+      // needs to fire in that case).
+      return {
+        ...state,
+        messages: action.messages,
+        historyLoaded: true,
+      };
+
+    case "compaction_complete_event": {
+      const turnsText =
+        action.sourceTurnCount === 1 ? "1 turn" : `${action.sourceTurnCount} turns`;
+      const content = action.viaBackend
+        ? `The model summarized its working memory of ${turnsText} from chapter ${action.sourceChapter} to keep within its context window. The full history remains in chapter ${action.sourceChapter} (browsable via History); this chapter starts from the summary.`
+        : `Earlier ${turnsText} were summarized to fit within the model's context window. The full history remains in chapter ${action.sourceChapter} (browsable via History); this chapter starts from the summary.`;
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: crypto.randomUUID(),
+            role: "system",
+            content,
+            timestamp: Date.now(),
+          },
+        ],
+        // The transient "Summarizing earlier conversation" status
+        // was set during the LLM call; clear it now that compaction
+        // is done.
+        statusPhase: null,
+      };
+    }
 
     default:
       return state;
@@ -279,6 +349,7 @@ export const initialState: ChatState = {
   autoModel: true,
   error: null,
   statusPhase: null,
+  historyLoaded: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -304,11 +375,20 @@ export interface UseChatReturn {
   error: ErrorInfo | null;
   /** Ephemeral backend status phase (e.g. "reasoning", "tool:read_file"). */
   statusPhase: string | null;
+  /** True once the chat panel's initial fetch of prior conversation
+   *  has resolved.  Consumers gate auto-actions (process kickoff)
+   *  on this so they don't fire before knowing whether history
+   *  exists. */
+  historyLoaded: boolean;
   sendMessage: (text: string) => void;
   startProcess: (name: string) => void;
   stopGeneration: () => void;
   setModelOverride: (tier: string) => void;
-  newSession: () => void;
+  /** Roll the conversation thread over to a new chapter.
+   *  Archives the current chapter, clears the visible message list,
+   *  and resets the backend SDK session so the next message starts
+   *  a brand-new conversation. */
+  startNewChapter: () => Promise<void>;
   dismissError: () => void;
 }
 
@@ -331,6 +411,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         processMetaRef.current = map;
       })
       .catch(() => {});
+  }, []);
+
+  // Fetch the current chapter's prior turns at mount so the chat
+  // panel shows continuity instead of jumping into the slow
+  // clarity-agent kickoff every time.  On failure (or no active
+  // session yet, which returns an empty list) we still mark
+  // history as loaded — the auto-start effect needs to fire on
+  // fresh projects too, and that signal is "history is loaded
+  // *and* empty."
+  useEffect(() => {
+    getCurrentChapter()
+      .then((r) => dispatch({ type: "load_history", messages: r.messages }))
+      .catch(() => dispatch({ type: "load_history", messages: [] }));
   }, []);
 
   // Dispatch directly from the WebSocket event handler so no messages
@@ -356,14 +449,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       case "model_changed":
         dispatch({ type: "model_changed", tier: msg.tier, model: msg.model, auto: msg.auto });
         break;
-      case "session_started":
-        dispatch({ type: "clear" });
-        break;
       case "warning":
         dispatch({ type: "warning_event", message: msg.message });
         break;
       case "status":
         dispatch({ type: "status_event", phase: msg.phase });
+        break;
+      case "compaction_complete":
+        dispatch({
+          type: "compaction_complete_event",
+          viaBackend: msg.via_backend,
+          sourceChapter: msg.source_chapter,
+          sourceTurnCount: msg.source_turn_count,
+        });
         break;
       case "error":
         dispatch({
@@ -433,9 +531,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     send({ type: "stop" } as WsClientMessage);
   }, [send]);
 
-  const newSession = useCallback(() => {
-    send({ type: "new_session" } as WsClientMessage);
-  }, [send]);
+  const startNewChapter = useCallback(async () => {
+    // POST first so the backend rolls over before the UI clears —
+    // if the API call fails (no active session, network error), the
+    // existing chat stays intact rather than the UI lying about an
+    // operation that didn't happen.
+    await apiStartNewChapter();
+    dispatch({ type: "clear" });
+  }, []);
 
   const dismissError = useCallback(() => {
     dispatch({ type: "dismiss_error" });
@@ -458,11 +561,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     autoModel: state.autoModel,
     error: state.error,
     statusPhase: state.statusPhase,
+    historyLoaded: state.historyLoaded,
     sendMessage,
     startProcess,
     stopGeneration,
     setModelOverride,
-    newSession,
+    startNewChapter,
     dismissError,
   };
 

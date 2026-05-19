@@ -85,6 +85,13 @@ class Settings:
     model_fast: str | None = None
     process_model_overrides: dict[str, str] = field(default_factory=dict)
 
+    # Per-model context-window override (in tokens).  Used when a
+    # model isn't in any backend's built-in ``MODEL_CONTEXT_WINDOWS``
+    # table — e.g., a custom Azure deployment or a model released
+    # after this codebase's tier defaults were last updated.  The
+    # compaction trigger looks here first.  Empty by default.
+    context_window_overrides: dict[str, int] = field(default_factory=dict)
+
     # -- App preferences --
     theme: str = "sage"
     font_scale: int = 100
@@ -127,6 +134,14 @@ class Settings:
                         setattr(settings, attr, data[attr])
                 if "process_model_overrides" in data:
                     settings.process_model_overrides.update(data["process_model_overrides"])
+                if "context_window_overrides" in data:
+                    # Coerce to int — JSON numeric type is fine, but
+                    # hand-edited entries might come through as
+                    # strings; the conversion makes the contract
+                    # explicit either way.
+                    settings.context_window_overrides.update({
+                        k: int(v) for k, v in data["context_window_overrides"].items()
+                    })
                 if "provider_auth_modes" in data:
                     settings.provider_auth_modes.update(data["provider_auth_modes"])
             except (json.JSONDecodeError, OSError):
@@ -234,6 +249,8 @@ class Settings:
                     data[attr] = value
             if self.process_model_overrides:
                 data["process_model_overrides"] = dict(self.process_model_overrides)
+            if self.context_window_overrides:
+                data["context_window_overrides"] = dict(self.context_window_overrides)
             if self.provider_auth_modes:
                 data["provider_auth_modes"] = dict(self.provider_auth_modes)
 

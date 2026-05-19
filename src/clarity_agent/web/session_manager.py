@@ -9,9 +9,9 @@ tool-use events to an :class:`asyncio.Queue` that the WebSocket handler drains.
 from __future__ import annotations
 
 import asyncio
-import uuid
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -20,7 +20,12 @@ from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import ChatBackend, LLMConfig
 from clarity_agent.llm.types import TokenUsage, ToolHandler
 from clarity_agent.session import ClaritySession
-from clarity_agent.web.session_state import load_session_state, save_session_state
+from clarity_agent.transcript import ChapterStarted, Transcript
+from clarity_agent.web.session_state import (
+    clear_session_state,
+    load_session_state,
+    save_session_state,
+)
 
 
 class WebSessionAdapter:
@@ -39,7 +44,6 @@ class WebSessionAdapter:
         *,
         llm_session_id: str | None = None,
     ) -> None:
-        self.session_id: str = uuid.uuid4().hex
         self.project_dir = project_dir
         self.clarity_agent_dir = clarity_agent_dir
         self.llm_config = llm_config
@@ -90,59 +94,152 @@ class WebSessionAdapter:
         self._tool_handler = self._feedback_handler
 
     async def start(self) -> None:
-        """Initialize backend and session."""
+        """Initialize backend and session.
+
+        Transactional: on failure, any state that was already
+        allocated (live backend thread/loop, entered session
+        context) is rolled back via :meth:`_rollback_partial_start`
+        before re-raising.  Callers therefore see "succeeded or
+        nothing happened" semantics and don't need to clean up after
+        an exception themselves — important for the WebSocket entry
+        point in ``web/app.py``, which keeps the socket open after a
+        start failure to surface a classified error_event (see
+        issue #47).  Without the rollback, a half-started backend
+        (notably Copilot, which spawns a daemon thread in
+        :meth:`connect`) would leak per failed connection attempt.
+        """
         self._loop = asyncio.get_running_loop()
 
-        backend = self.llm_config.create_chat_backend(
-            project_dir=self.project_dir,
-            clarity_agent_dir=self.clarity_agent_dir,
-        )
-        backend.connect()
-        self._backend = backend
+        # Build the Transcript first so we can hand it to the backend
+        # at construction time — the backend owns compaction
+        # bookkeeping (threshold checks, provider-signal recording),
+        # so it needs the binding from the start to avoid races
+        # against any first-turn events.  Snapshot emptiness BEFORE
+        # ClaritySession's construction appends its header event
+        # below — that's how we tell "fresh project, nothing to
+        # inject" apart from "existing project with prior
+        # conversation, rebuild context from it."
+        #
+        # The Transcript object itself is lazy — file handles aren't
+        # opened until the first write — so leaving it on the
+        # adapter after a rollback doesn't leak anything.  The
+        # writer, if it was opened by a ClaritySession that managed
+        # to construct before raising, is closed by
+        # ``_rollback_partial_start`` via the session's __exit__.
+        self._project_transcript = Transcript(self.project_dir)
+        transcript_was_empty = self._project_transcript.is_empty
 
-        # Restore a previously persisted SDK session ID so the backend
-        # resumes the conversation instead of starting fresh.
-        session_id = self._initial_llm_session_id or load_session_state(
-            self.project_dir,
-        )
-        if session_id:
-            backend.llm_session_id = session_id
+        try:
+            backend = self.llm_config.create_chat_backend(
+                project_dir=self.project_dir,
+                clarity_agent_dir=self.clarity_agent_dir,
+                transcript=self._project_transcript,
+            )
+            # Stash the backend BEFORE :meth:`connect` so a raise
+            # from connect itself (or any later step) leaves the
+            # rollback path with something to disconnect.  Both
+            # :class:`CopilotChatBackend` and :class:`ClientChatBackend`
+            # implement ``disconnect`` to be idempotent / no-op on a
+            # backend whose connect() never completed, so calling it
+            # speculatively is safe.
+            self._backend = backend
+            backend.connect()
 
-        transcript_dir = _protocol_dir(self.project_dir) / "transcripts"
-        self._session = ClaritySession(
-            self.project_dir,
-            self.clarity_agent_dir,
-            backend,
-            self.llm_config,
-            transcript_dir,
-        )
-        self._session.__enter__()
+            # Restore a previously persisted SDK session ID so the
+            # backend resumes the conversation instead of starting
+            # fresh.
+            session_id = self._initial_llm_session_id or load_session_state(
+                self.project_dir,
+            )
+            if session_id:
+                backend.llm_session_id = session_id
 
-        # ClaritySession.__init__ sets backend.on_tool_use for transcript
-        # logging, overwriting any previous callback.  Chain it with our
-        # WebSocket callback so both the transcript file and the frontend
-        # receive tool-use events.
-        session_tool_cb = backend.on_tool_use
+            self._session = ClaritySession(
+                self.project_dir,
+                self.clarity_agent_dir,
+                backend,
+                self.llm_config,
+                transcript=self._project_transcript,
+            )
+            self._session.__enter__()
 
-        def _chained_tool_use(tool_name: str, detail: str) -> None:
-            if session_tool_cb:
-                session_tool_cb(tool_name, detail)
-            self._on_tool_use(tool_name, detail)
+            # Bridge backend callbacks to the WebSocket event queue.
+            # ClaritySession sets backend.on_tool_call (structured) for
+            # transcript persistence; we set on_tool_use (flattened)
+            # for the UI's real-time display.  The two callbacks fire
+            # in parallel — no chaining needed since they have
+            # different signatures and different consumers.
+            backend.on_tool_use = self._on_tool_use
+            backend.on_text_delta = self._on_text_delta
+            backend.on_cost = self._on_cost
+            backend.on_usage = self._on_usage
+            backend.on_warning = self._on_warning
+            backend.on_status = self._on_status
+            backend.on_compaction_started = self._on_compaction_started
+            backend.on_compaction_complete = self._on_compaction_complete
 
-        backend.on_tool_use = _chained_tool_use
-        backend.on_text_delta = self._on_text_delta
-        backend.on_cost = self._on_cost
-        backend.on_usage = self._on_usage
-        backend.on_warning = self._on_warning
-        backend.on_status = self._on_status
+            # Context-restore path: when the SDK has no session to
+            # resume AND there's prior conversation in the transcript,
+            # synthesize a prior conversation context out of that
+            # transcript and prepend it to the system prompt on the
+            # first chat call (see :meth:`chat`).  When the transcript
+            # was empty before this session attached, there's nothing
+            # meaningful to inject (the just-written ChapterStarted
+            # is just a header), so we skip.  ``context_summary`` reads
+            # transcript files, which can raise — kept inside the
+            # transactional block so a failure here also rolls back.
+            if not backend.llm_session_id and not transcript_was_empty:
+                self._transcript_context = self._project_transcript.context_summary()
+            else:
+                self._transcript_context = None
 
-        # If we have no session to resume, load recent transcripts as context
-        # so the LLM can catch up on prior work.
-        if not backend.llm_session_id:
-            self._transcript_context = self._load_transcript_context()
+            # Install the feedback tool so it's available in all chat
+            # calls.
+            self._setup_feedback_tools()
+        except BaseException:
+            self._rollback_partial_start()
+            raise
 
-        # Install the feedback tool so it's available in all chat calls.
-        self._setup_feedback_tools()
+    def _rollback_partial_start(self) -> None:
+        """Undo whatever portion of :meth:`start` completed.
+
+        Called from :meth:`start`'s except clause after any failure
+        during backend construction, ``connect``, session
+        construction, or post-setup steps.  Each cleanup is wrapped
+        in its own ``try/except`` so a failure in one step still
+        lets the next step run — and so the rollback never replaces
+        the original exception with a cleanup-time one.  Resets
+        instance attributes to their pre-start values so the adapter
+        looks "not started" to any caller that re-checks (e.g. the
+        WS handler that keeps the socket open and may otherwise be
+        tempted to reuse a half-dead adapter).
+        """
+        if self._session is not None:
+            try:
+                self._session.__exit__(None, None, None)
+            except Exception:
+                # __exit__ is currently a no-op but may grow side
+                # effects; swallow rather than mask the real error.
+                pass
+            self._session = None
+        if self._backend is not None:
+            try:
+                self._backend.disconnect()
+            except Exception:
+                # ``disconnect`` already swallows its own failures
+                # (see ``CopilotChatBackend.disconnect``); this
+                # outer guard catches anything that escapes — e.g.
+                # a backend whose ``connect`` raised partway through
+                # leaving an invariant the disconnect path doesn't
+                # expect.
+                pass
+            self._backend = None
+        # ``_project_transcript`` is intentionally NOT cleared: file
+        # handles, if any were opened, were closed by the session's
+        # __exit__ above (the writer is owned by the chapter context
+        # the session entered).  Holding the reference is harmless
+        # and lets diagnostics inspect the partial state.
+        self._transcript_context = None
 
     @property
     def llm_session_id(self) -> str | None:
@@ -150,6 +247,49 @@ class WebSessionAdapter:
         if self._backend is not None:
             return self._backend.llm_session_id
         return self._initial_llm_session_id
+
+    def start_new_chapter(self) -> int:
+        """Roll over the conversation thread to a new chapter.
+
+        The current chapter becomes a read-only archive; the backend's
+        SDK session is cleared so the next user message starts a
+        brand-new conversation with no carried-over context.  The
+        previously-loaded context-restore blob (if any) is discarded
+        for the same reason — the user has explicitly asked for a
+        clean slate.
+
+        Returns the new chapter number.  The new chapter is seeded
+        with a :class:`ChapterStarted` event so it's never "empty"
+        from the consumer's perspective.
+
+        Idempotent in the sense that calling repeatedly produces
+        further new chapters; not idempotent in the sense that each
+        call genuinely rolls over (consequence: the UI should gate
+        this behind a confirmation dialog).
+        """
+        backend_name = (
+            type(self._backend).__name__ if self._backend is not None else "unknown"
+        )
+        new_chapter = self._project_transcript.start_new_chapter()
+        self._project_transcript.write(ChapterStarted(
+            timestamp=datetime.now(UTC),
+            project_dir=str(self.project_dir),
+            backend=backend_name,
+        ))
+
+        # Reset the SDK session so the next turn starts fresh.  Clear
+        # the persisted state too — otherwise the next process start
+        # would resume the now-archived conversation.
+        if self._backend is not None:
+            self._backend.llm_session_id = None
+        clear_session_state(self.project_dir)
+
+        # Drop any pending context-restore blob the start() path may
+        # have loaded — it would inject prior-chapter content into
+        # the brand-new chapter's first message, undoing the rollover.
+        self._transcript_context = None
+
+        return new_chapter
 
     def _on_tool_use(self, tool_name: str, detail: str) -> None:
         """Synchronous callback invoked from the executor thread.
@@ -208,43 +348,38 @@ class WebSessionAdapter:
             },
         )
 
-    _MAX_TRANSCRIPT_CHARS = 50_000  # cap to avoid blowing the context window
+    def _on_compaction_started(self) -> None:
+        """Backend is starting compaction — surface the phase to the UI.
 
-    def _load_transcript_context(self) -> str | None:
-        """Read recent transcripts and return them as LLM context, or None."""
-        transcript_dir = _protocol_dir(self.project_dir) / "transcripts"
-        if not transcript_dir.exists():
-            return None
-        files = sorted(transcript_dir.glob("*.md"), reverse=True)
-        if not files:
-            return None
+        Fires from whichever thread the backend uses (executor for
+        :class:`ClientChatBackend`, the SDK event thread for the
+        Claude/Copilot backends).  Bridges to the asyncio loop via
+        ``call_soon_threadsafe`` for safe queue access.
+        """
+        if self._loop is None:
+            return
+        self._loop.call_soon_threadsafe(
+            self._event_queue.put_nowait,
+            {"type": "status", "phase": "Summarizing earlier conversation"},
+        )
 
-        # Read the most recent transcripts, up to the character budget.
-        parts: list[str] = []
-        chars = 0
-        for f in files:
-            try:
-                content = f.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if chars + len(content) > self._MAX_TRANSCRIPT_CHARS:
-                remaining = self._MAX_TRANSCRIPT_CHARS - chars
-                if remaining > 500:  # only include if meaningful
-                    parts.append(
-                        f"## {f.name} (truncated)\n\n"
-                        f"{content[:remaining]}\n\n[...truncated...]"
-                    )
-                break
-            parts.append(f"## {f.name}\n\n{content}")
-            chars += len(content)
+    def _on_compaction_complete(self, info: Any) -> None:
+        """Backend has finished writing the compaction to the transcript.
 
-        if not parts:
-            return None
-        return (
-            "Below are transcripts from prior sessions on this project. "
-            "Use them to understand the current state of work — what has "
-            "been discussed, decided, and done so far.\n\n"
-            + "\n\n---\n\n".join(parts)
+        Emit the ``compaction_complete`` event so the frontend can
+        render its persistent system message.  No further session
+        cleanup is needed — the backend has already updated its own
+        state (conversation history, SDK session reset, etc.).
+        """
+        if self._loop is None:
+            return
+        self._loop.call_soon_threadsafe(
+            self._event_queue.put_nowait,
+            {
+                "type": "compaction_complete",
+                "summary": info.summary,
+                "source_turn_count": info.source_turn_count,
+            },
         )
 
     def _on_warning(self, message: str) -> None:
@@ -349,6 +484,17 @@ class WebSessionAdapter:
         self._pending_warnings.clear()
 
         await self._event_queue.put({"type": "response", "content": response})
+
+        # Threshold-based compaction (for backends that don't
+        # auto-compact internally).  Runs on the executor since it
+        # may issue a blocking summarization LLM call.  No-op for
+        # SDK / Copilot backends, which compact during the chat call
+        # itself.  Status events are bridged via on_compaction_*.
+        assert self._backend is not None
+        await self._loop.run_in_executor(  # type: ignore[union-attr]
+            self._executor, self._backend.maybe_compact_after_chat,
+        )
+
         return response
 
     async def start_process(self, process_name: str) -> str:

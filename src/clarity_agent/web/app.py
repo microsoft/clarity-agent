@@ -205,29 +205,19 @@ def create_app(
                 "hint": "Complete the setup wizard to configure an LLM provider.",
                 "retryable": False,
             })
-            # Keep the connection open so re-connect after setup works.
+            # Reject everything until setup completes.  The frontend
+            # finishes setup with ``window.location.reload()``, which
+            # drops this socket; the next connection re-evaluates
+            # provider config from scratch.
             try:
                 while True:
-                    data = await ws.receive_json()
-                    if data.get("type") == "new_session":
-                        # After setup, the config will have been reloaded.
-                        current_config = state["llm_config"]
-                        if current_config.provider != "none":
-                            break
-                        await ws.send_json({
-                            "type": "error",
-                            "message": "No LLM provider configured.",
-                            "category": "setup_required",
-                            "hint": "Complete the setup wizard to configure an LLM provider.",
-                            "retryable": False,
-                        })
-                    else:
-                        await ws.send_json({
-                            "type": "error",
-                            "message": "No LLM provider configured. Complete setup first.",
-                            "category": "setup_required",
-                            "retryable": False,
-                        })
+                    await ws.receive_json()
+                    await ws.send_json({
+                        "type": "error",
+                        "message": "No LLM provider configured. Complete setup first.",
+                        "category": "setup_required",
+                        "retryable": False,
+                    })
             except WebSocketDisconnect:
                 return
 
@@ -239,7 +229,32 @@ def create_app(
                 project_dir, clarity_agent_dir, current_config,
                 llm_session_id=llm_session_id,
             )
-            await session.start()
+            try:
+                await session.start()
+            except (RuntimeError, OSError, ValueError) as e:
+                # Backend construction failed before we ever got to a
+                # chat turn — e.g. ``gh`` CLI missing on the github
+                # provider, claude CLI missing on the SDK auth path,
+                # malformed API key.  Without this branch the error
+                # propagates out of ``websocket_chat`` and uvicorn
+                # logs it to stderr while closing the socket with no
+                # message; the FE then reconnects, hits the same
+                # failure, and the user just sees "thinking" dots
+                # forever (issue #47).  Surface it as a classified
+                # error_event and keep the socket open the way the
+                # no-provider path does, so a banner has a chance to
+                # render.  The session ``state["session"]`` stays
+                # ``None`` — once the user resolves the underlying
+                # problem (e.g. installs gh) and reloads, the next
+                # connection retries ``session.start()`` from scratch.
+                error_event = _classify_ws_error(e, current_config.provider)
+                try:
+                    await ws.send_json(error_event)
+                    while True:
+                        await ws.receive_json()
+                        await ws.send_json(error_event)
+                except (WebSocketDisconnect, RuntimeError):
+                    return
             state["session"] = session
 
         session: WebSessionAdapter = state["session"]
@@ -285,9 +300,20 @@ def create_app(
                             session.chat(message, data.get("system_prompt")),
                         )
                         await _drain_events(session, chat_task, ws, stop_event)
-                    except (WebSocketDisconnect, RuntimeError):
+                    except WebSocketDisconnect:
                         return
                     except Exception as e:
+                        # Backend errors (RuntimeError from a CLI
+                        # crash, auth failures, network blips) all
+                        # land here: surface as a classified
+                        # error_event so the user sees what went
+                        # wrong, then ``continue`` the outer loop so
+                        # they can retry without reconnecting.
+                        # ``ws.send_json`` itself can raise
+                        # ``RuntimeError`` / ``WebSocketDisconnect``
+                        # if the socket died between turns — in that
+                        # case there's nothing left to surface to,
+                        # exit cleanly.
                         import traceback
                         tb = traceback.format_exc()
                         print(f"  [Chat error] {e}\n{tb}", flush=True)
@@ -308,9 +334,11 @@ def create_app(
                             session.start_process(process_name),
                         )
                         await _drain_events(session, chat_task, ws, stop_event)
-                    except (WebSocketDisconnect, RuntimeError):
+                    except WebSocketDisconnect:
                         return
                     except Exception as e:
+                        # Same handling as the ``chat`` branch above —
+                        # see the comment there for the rationale.
                         import traceback
                         tb = traceback.format_exc()
                         print(f"  [Process error] {e}\n{tb}", flush=True)
@@ -334,16 +362,6 @@ def create_app(
                         "model": session.active_model,
                         "auto": session.model_override is None,
                     })
-
-                elif msg_type == "new_session":
-                    await session.stop()
-                    current_config = state["llm_config"]
-                    session = WebSessionAdapter(
-                        project_dir, clarity_agent_dir, current_config,
-                    )
-                    await session.start()
-                    state["session"] = session
-                    await ws.send_json({"type": "session_started"})
 
                 else:
                     await ws.send_json({
@@ -584,18 +602,62 @@ def create_app(
         }
 
     # ------------------------------------------------------------------
+    # REST: Conversation thread
+    # ------------------------------------------------------------------
+
+    @app.post("/api/thread/new-chapter")
+    async def new_chapter() -> dict[str, Any]:
+        """Roll the conversation thread over to a new chapter.
+
+        The current chapter becomes a read-only archive; the next
+        user message starts a fresh SDK conversation with no
+        carried-over context.  See :meth:`WebSessionAdapter.start_new_chapter`.
+        """
+        s: WebSessionAdapter | None = state["session"]
+        if s is None:
+            raise HTTPException(
+                status_code=409,
+                detail="No active session to start a new chapter on.",
+            )
+        chapter = s.start_new_chapter()
+        return {"chapter": chapter}
+
+    @app.get("/api/thread/current-chapter")
+    async def current_chapter_messages() -> dict[str, Any]:
+        """Return the current chapter's prior turns as chat messages.
+
+        Used by the frontend at mount to populate the chat panel
+        with the user's prior conversation — so opening a project
+        immediately shows continuity rather than an empty chat that
+        would auto-fire the clarity-agent kickoff.
+
+        Returns ``{"messages": []}`` for fresh projects, projects
+        whose current chapter only contains a header, and projects
+        with no transcripts directory yet — none of those have
+        anything visible to surface.
+        """
+        from clarity_agent.transcript import Transcript
+        return {"messages": Transcript(project_dir).chat_messages()}
+
+    # ------------------------------------------------------------------
     # REST: Session info
     # ------------------------------------------------------------------
 
     @app.get("/api/session")
     async def session_info() -> dict[str, Any]:
-        """Return current session state."""
+        """Return current session state.
+
+        ``thread_id`` is the persistent identifier of the
+        conversation thread for this project — survives reconnects
+        and process restarts.  Currently sourced from the backend's
+        SDK session id; ``None`` when no thread has been established
+        yet.
+        """
         cfg: LLMConfig = state["llm_config"]
         s: WebSessionAdapter | None = state["session"]
         return {
             "active": s is not None,
-            "session_id": s.session_id if s else None,
-            "llm_session_id": s.llm_session_id if s else None,
+            "thread_id": s.llm_session_id if s else None,
             "process": s.current_process if s else None,
             "project_dir": str(project_dir),
             "backend": cfg.provider,

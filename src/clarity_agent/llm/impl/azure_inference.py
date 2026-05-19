@@ -30,6 +30,16 @@ _AZURE_TIER_DEFAULTS: dict[str, str] = {
     "fast": "gpt-5.4-mini",
 }
 
+# Context-window size in tokens.  Azure deployments are typically
+# named to match the OpenAI model family they serve, so the sizes
+# follow the OpenAI map.  Custom deployment names not listed here
+# fall back to ``ChatBackend.DEFAULT_CONTEXT_WINDOW`` or to a user
+# override in ``Settings.context_window_overrides``.
+_AZURE_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    "gpt-5.4": 128_000,
+    "gpt-5.4-mini": 128_000,
+}
+
 # Map Azure finish reasons to canonical stop reasons.
 _FINISH_REASON_MAP: dict[str, str] = {
     "stop": "end_turn",
@@ -121,6 +131,7 @@ class AzureInferenceClient(LLMClient):
     """
 
     TIER_DEFAULTS = _AZURE_TIER_DEFAULTS
+    MODEL_CONTEXT_WINDOWS = _AZURE_MODEL_CONTEXT_WINDOWS
 
     # Models that require max_completion_tokens instead of max_tokens.
     _MODERN_MODELS = {"gpt-5", "gpt-5.2", "gpt-5.3", "gpt-5.4", "gpt-5-mini", "o3", "o3-mini", "o4-mini"}

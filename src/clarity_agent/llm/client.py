@@ -12,7 +12,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from clarity_agent.llm.types import LLMResponse, TextDeltaCallback, ToolCallback, UsageCallback
+from clarity_agent.llm.types import (
+    LLMResponse,
+    StructuredToolCallback,
+    TextDeltaCallback,
+    ToolCallback,
+    UsageCallback,
+)
 
 # ---------------------------------------------------------------------------
 # Tool-detail extraction (shared by LLMClient callbacks and ChatBackend)
@@ -104,12 +110,31 @@ class LLMClient(ABC):
     to :meth:`create_message`.
     """
 
+    MODEL_CONTEXT_WINDOWS: ClassVar[dict[str, int]] = {}
+    """Provider-specific mapping from concrete model strings to their
+    context-window size in tokens.  Co-located with
+    :attr:`TIER_DEFAULTS`; consumed via :meth:`ChatBackend.context_window_for`
+    when the :class:`ClientChatBackend` wrapper forwards from its
+    wrapped client.
+    """
+
     on_tool_use: ToolCallback | None = None
     """Optional callback fired for each tool-use block in a response.
 
     This is *in addition to* the default ``[Tool]`` print.  Use it
-    for things like forwarding events to a web UI or recording a
-    transcript.
+    for things like forwarding events to a web UI.  Receives
+    flattened ``(name, detail)`` strings — use :attr:`on_tool_call`
+    if you need the structured :class:`ToolUseBlock` (id + input
+    dict) for transcript persistence or replay.
+    """
+
+    on_tool_call: StructuredToolCallback | None = None
+    """Optional callback fired with the structured :class:`ToolUseBlock`.
+
+    Fires alongside :attr:`on_tool_use` in :meth:`create_message`.
+    Consumers that need round-trippable tool data (the transcript
+    layer, the message-replay path) subscribe here; UI surfaces
+    that just want a display string keep using :attr:`on_tool_use`.
     """
 
     on_text_delta: TextDeltaCallback | None = None
@@ -122,6 +147,17 @@ class LLMClient(ABC):
     """When True, :meth:`create_message` skips the ``[Tool]`` print and
     ``on_tool_use`` callback.  Set by :class:`ChatBackend` tool loops
     that provide a handler which does its own output."""
+
+    _callbacks_fired_inline: bool = False
+    """Set by :meth:`_create_message` implementations that fire the
+    tool-use callbacks *during* streaming (currently only
+    :class:`AnthropicClient`).  Tells the post-call paths in both
+    :meth:`create_message` and :class:`ClientChatBackend.chat` to
+    skip their re-firing — without this guard, each tool call would
+    be reported twice: once live mid-stream, again at end-of-round.
+
+    Reset to ``False`` at the start of each :meth:`create_message`
+    invocation so the inline path opts in per-call."""
 
     def resolve_model(self, model_or_tier: str) -> str:
         """Resolve a tier name or model string to a concrete model.
@@ -157,6 +193,11 @@ class LLMClient(ABC):
         Returns:
             A normalized :class:`LLMResponse`.
         """
+        # Per-call reset of the inline-fired flag.  Streaming
+        # implementations that fire callbacks mid-response set this
+        # to ``True`` before returning; the post-call loop below
+        # then skips its own firing to avoid duplicates.
+        self._callbacks_fired_inline = False
         response = await self._create_message(
             messages=messages,
             model=model,
@@ -164,12 +205,21 @@ class LLMClient(ABC):
             system=system,
             tools=tools,
         )
-        if not self._suppress_tool_output:
+        if not self._suppress_tool_output and not self._callbacks_fired_inline:
             for tc in response.tool_calls:
                 detail = extract_tool_detail(tc.name, tc.input)
                 print(f"  [Tool] {tc.name} -> {truncate(detail)}")
                 if self.on_tool_use:
                     self.on_tool_use(tc.name, detail)
+                # Structured callback for transcript persistence —
+                # preserves the provider-assigned id + structured
+                # input dict that on_tool_use's flattened detail
+                # discards.  All non-SDK backends (Anthropic API,
+                # OpenAI, Azure Inference, ...) go through this
+                # ``create_message`` method, so wiring it once here
+                # covers them all.
+                if self.on_tool_call:
+                    self.on_tool_call(tc)
         if response.usage and self.on_usage:
             self.on_usage(response.usage)
         return response

@@ -25,7 +25,22 @@ class LLMAuthExpiredError(Exception):
 TextDeltaCallback = Callable[[str], None]
 
 # Callback type for tool-use events: (tool_name, detail) -> None
+#
+# ``detail`` is a short flattened string suitable for human-readable
+# display (UI badges, log lines).  Use :data:`StructuredToolCallback`
+# when you need the structured ``ToolUseBlock`` (id, input dict) — for
+# example, when writing to the transcript event log where fidelity
+# matters.  The two callbacks fire in parallel.
 ToolCallback = Callable[[str, str], None]
+
+# Callback type for structured tool-use events: (tool_use_block,) -> None
+#
+# Receives the full :class:`ToolUseBlock` with its provider-assigned
+# ``id`` and structured ``input`` dict.  Used by the transcript layer
+# to record :class:`clarity_agent.transcript.ToolUse` events with
+# round-trippable fidelity; UI surfaces that only need a display
+# string should keep using :data:`ToolCallback`.
+StructuredToolCallback = Callable[["ToolUseBlock"], None]
 
 # Callback type for cost events: (cost_usd,) -> None
 CostCallback = Callable[[float], None]
@@ -63,6 +78,39 @@ class TokenUsage:
 
 # Callback type for usage events: (usage,) -> None
 UsageCallback = Callable[[TokenUsage], None]
+
+
+@dataclass
+class CompactionInfo:
+    """Backend-provided signal that an internal compaction occurred.
+
+    Fired by a :class:`ChatBackend` when the provider has performed
+    its own context-management compaction (e.g., Claude Agent SDK's
+    auto-compact).  Carries the provider's summary so the orchestrator
+    can record it directly rather than producing its own summary —
+    the provider already paid for the summarization LLM call, and
+    their summary reflects exactly what the model is now operating on.
+
+    Phase 2 v1: the type + callback are wired into the orchestrator,
+    but no backend currently produces these signals.  Phase 2.5 will
+    add SDK-specific detection (PreCompact hook + JSONL transcript
+    inspection for ``isCompactSummary`` entries).
+    """
+
+    summary: str
+    """The provider's summary of the compacted-away portion of the
+    conversation, ready to be stored in a
+    :class:`~clarity_agent.transcript.CompactionSummary` event."""
+
+    source_turn_count: int | None = None
+    """Number of turns the summary represents.  ``None`` when the
+    backend can't easily report a count (e.g., the SDK's JSONL
+    doesn't make this cheap to extract); in that case the
+    transcript layer derives the count from its own 70/30 split."""
+
+
+# Callback type for backend-signaled compaction events.
+CompactionCallback = Callable[[CompactionInfo], None]
 
 
 @dataclass

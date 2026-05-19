@@ -169,7 +169,7 @@ describe("API client", () => {
     it("getSession calls GET /api/session", async () => {
       const data = {
         active: true,
-        session_id: "abc",
+        thread_id: "abc",
         process: null,
         project_dir: "/tmp/test",
         backend: "anthropic",

@@ -26,6 +26,14 @@ _GEMINI_TIER_DEFAULTS: dict[str, str] = {
     "fast": "gemini-3.1-flash-lite-preview",
 }
 
+# Context-window size in tokens.  Gemini's long-context models keep
+# 1M+ tokens; unlikely the compaction trigger ever fires for them
+# in practice, but the entry makes the lookup explicit.
+_GEMINI_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    "gemini-3.1-pro-preview": 1_000_000,
+    "gemini-3.1-flash-lite-preview": 1_000_000,
+}
+
 # Map Gemini finish reasons to canonical stop reasons.
 _FINISH_REASON_MAP: dict[str, str] = {
     "STOP": "end_turn",
@@ -134,6 +142,7 @@ class GeminiClient(LLMClient):
     """
 
     TIER_DEFAULTS = _GEMINI_TIER_DEFAULTS
+    MODEL_CONTEXT_WINDOWS = _GEMINI_MODEL_CONTEXT_WINDOWS
 
     def __init__(self, *, api_key: str) -> None:
         self._client = _genai_mod.Client(api_key=api_key)

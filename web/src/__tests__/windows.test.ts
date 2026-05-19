@@ -22,7 +22,7 @@ import type { PanelId } from "../data/panels";
 const chatA: PanelId = {
   projectId: "/Users/test/proj-a",
   type: "chat",
-  sessionId: "session-1",
+  threadId: "session-1",
 };
 const historyA: PanelId = {
   projectId: "/Users/test/proj-a",

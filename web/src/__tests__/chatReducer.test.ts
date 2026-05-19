@@ -238,6 +238,7 @@ describe("chatReducer", () => {
         autoModel: false,
         error: null,
         statusPhase: null,
+        historyLoaded: true,
       };
       const next = chatReducer(populated, { type: "clear" });
       expect(next.messages).toEqual([]);
@@ -383,6 +384,70 @@ describe("chatReducer", () => {
       expect(finalMsg.content).toBe("Here's my analysis");
       expect(finalMsg.costUsd).toBe(0.015);
       expect(s.pendingTools).toEqual([]);
+    });
+  });
+
+  describe("load_history", () => {
+    it("replaces messages with the payload and flips historyLoaded", () => {
+      // Initial state has empty messages and historyLoaded=false.
+      // The fetch resolves; dispatch fills the list and flips the
+      // flag, unblocking the auto-start gate in ChatPanel.
+      const history = [
+        { id: "h1", role: "user" as const, content: "earlier", timestamp: 100 },
+        { id: "h2", role: "assistant" as const, content: "reply", timestamp: 200 },
+      ];
+      const next = chatReducer(initialState, {
+        type: "load_history",
+        messages: history,
+      });
+      expect(next.messages).toEqual(history);
+      expect(next.historyLoaded).toBe(true);
+    });
+
+    it("flips historyLoaded even when payload is empty", () => {
+      // Empty history is a meaningful "fresh project" signal — the
+      // auto-start needs to fire in that case, which requires
+      // historyLoaded=true.
+      const next = chatReducer(initialState, {
+        type: "load_history",
+        messages: [],
+      });
+      expect(next.messages).toEqual([]);
+      expect(next.historyLoaded).toBe(true);
+    });
+
+    it("doesn't disturb non-message state fields", () => {
+      // The reducer should narrow its blast radius — model state,
+      // session totals, errors etc. should pass through unchanged.
+      const seeded = {
+        ...initialState,
+        activeModel: "claude-sonnet",
+        activeTier: "default",
+        sessionTokens: 12345,
+      };
+      const next = chatReducer(seeded, {
+        type: "load_history",
+        messages: [{ id: "h", role: "user", content: "x", timestamp: 1 }],
+      });
+      expect(next.activeModel).toBe("claude-sonnet");
+      expect(next.activeTier).toBe("default");
+      expect(next.sessionTokens).toBe(12345);
+    });
+  });
+
+  describe("clear preserves historyLoaded", () => {
+    it("clear after history-load keeps historyLoaded=true", () => {
+      // After "Start new chapter" we dispatch ``clear``.  The new
+      // chapter is empty so re-fetching history would return an
+      // empty list anyway — but we shouldn't reset the flag,
+      // otherwise the auto-start would race the second fetch.
+      const populated = chatReducer(initialState, {
+        type: "load_history",
+        messages: [{ id: "h", role: "user", content: "x", timestamp: 1 }],
+      });
+      const cleared = chatReducer(populated, { type: "clear" });
+      expect(cleared.messages).toEqual([]);
+      expect(cleared.historyLoaded).toBe(true);
     });
   });
 });

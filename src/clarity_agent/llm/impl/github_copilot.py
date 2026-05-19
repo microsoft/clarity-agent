@@ -20,7 +20,13 @@ import threading
 import time
 from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# Deferred behind ``TYPE_CHECKING`` to break the cycle through
+# ``clarity_agent.transcript._render`` → ``clarity_agent.llm.client``;
+# see the matching comment in ``clarity_agent.llm.chat``.
+if TYPE_CHECKING:
+    from clarity_agent.transcript import Transcript
 
 from copilot import CopilotClient
 from copilot.generated.session_events import SessionEvent, SessionEventType
@@ -31,12 +37,21 @@ from copilot.session import (
 )
 
 from clarity_agent.llm.chat import ChatBackend
-from clarity_agent.llm.types import ToolHandler
+from clarity_agent.llm.types import CompactionInfo, ToolHandler, ToolUseBlock
 
 _GITHUB_TIER_DEFAULTS: dict[str, str] = {
     "default": "claude-sonnet-4.6",
     "deep": "claude-opus-4.6",
     "fast": "claude-sonnet-4.6",
+}
+
+# Context-window size in tokens.  Copilot serves Claude family
+# models with the standard 200K window; uses ``.`` rather than ``-``
+# in its model names, hence the separate map from the Anthropic
+# table.
+_GITHUB_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    "claude-sonnet-4.6": 200_000,
+    "claude-opus-4.6": 200_000,
 }
 
 # Default number of seconds with NO streaming activity from the peer
@@ -144,6 +159,7 @@ class CopilotChatBackend(ChatBackend):
 
     supports_tools: bool = True
     TIER_DEFAULTS = _GITHUB_TIER_DEFAULTS
+    MODEL_CONTEXT_WINDOWS = _GITHUB_MODEL_CONTEXT_WINDOWS
 
     def __init__(
         self,
@@ -153,7 +169,9 @@ class CopilotChatBackend(ChatBackend):
         token: str | None = None,
         idle_timeout_seconds: float | None = None,
         max_rpc_retries: int | None = None,
+        transcript: Transcript | None = None,
     ) -> None:
+        super().__init__(transcript=transcript)
         self.project_dir = project_dir
         self.clarity_agent_dir = clarity_agent_dir
         self._token = token
@@ -391,6 +409,20 @@ class CopilotChatBackend(ChatBackend):
                 tool_name = getattr(event.data, "tool_name", None) or ""
                 if self.on_tool_use:
                     self.on_tool_use(tool_name, "executing")
+                # Structured callback for the transcript layer.
+                # The Copilot SDK's TOOL_EXECUTION_START event carries
+                # only ``tool_name`` — no id, no input dict — so we
+                # synthesize a degraded :class:`ToolUseBlock`.  The
+                # transcript will record that the tool was invoked
+                # but the input is empty.  Honest about its limit:
+                # the id is prefixed ``copilot_`` so a later replay
+                # path can recognize these as non-round-trippable.
+                if self.on_tool_call:
+                    self.on_tool_call(ToolUseBlock(
+                        id=f"copilot_{tool_name}_{id(event)}",
+                        name=tool_name,
+                        input={},
+                    ))
                 _emit_phase(f"tool:{tool_name}" if tool_name else "executing tool")
             elif event.type == SessionEventType.SESSION_IDLE:
                 done.set()
@@ -415,6 +447,31 @@ class CopilotChatBackend(ChatBackend):
                 _emit_phase("thinking")
             elif event.type == SessionEventType.SESSION_COMPACTION_START:
                 _emit_phase("compacting context")
+            elif event.type == SessionEventType.SESSION_COMPACTION_COMPLETE:
+                # Copilot's compaction event carries the full
+                # summary content and a count of messages removed —
+                # no transcript-file parsing needed (unlike the
+                # Claude SDK path).  We record the provider's
+                # summary directly on our transcript and fire UI
+                # callbacks around it.
+                #
+                # Skip on failure or when summary content is missing
+                # (defensive — the SDK marks ``success: False`` if
+                # its own compaction LLM call errored; we don't want
+                # to record a bogus summary in that case).
+                success = getattr(event.data, "success", False)
+                summary_content = getattr(event.data, "summary_content", None)
+                if success and summary_content:
+                    messages_removed = getattr(
+                        event.data, "messages_removed", None,
+                    )
+                    source_turn_count = (
+                        int(messages_removed)
+                        if messages_removed is not None else None
+                    )
+                    self._record_provider_compaction(
+                        summary_content, source_turn_count,
+                    )
 
         unsubscribe = self._session.on(on_event)
         try:
@@ -426,6 +483,30 @@ class CopilotChatBackend(ChatBackend):
             unsubscribe()
 
         return "".join(text_parts)
+
+    def _record_provider_compaction(
+        self, summary: str, source_turn_count: int | None,
+    ) -> None:
+        """Translate Copilot's compaction signal into our transcript.
+
+        Fires the UI started/complete callbacks around the
+        :meth:`Transcript.external_compaction_occurred` write so
+        the orchestrator can render progress + outcome.  Without a
+        transcript bound, the compaction stays purely internal to
+        Copilot.
+        """
+        if self._transcript is None:
+            return
+        if self.on_compaction_started:
+            self.on_compaction_started()
+        result = self._transcript.external_compaction_occurred(
+            summary=summary, source_turn_count=source_turn_count,
+        )
+        if self.on_compaction_complete:
+            self.on_compaction_complete(CompactionInfo(
+                summary=result.summary,
+                source_turn_count=result.source_turn_count,
+            ))
 
     async def _retry_after_kill(self, model: str) -> str:
         """Kill the wedged session, build a new one, replay, retry.

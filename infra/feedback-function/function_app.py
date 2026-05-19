@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import azure.functions as func  # type: ignore[import-not-found]
 from azure.identity import DefaultAzureCredential
@@ -62,7 +62,7 @@ def submit_feedback(req: func.HttpRequest) -> func.HttpResponse:
         logger.error("FEEDBACK_STORAGE_ACCOUNT not configured")
         return func.HttpResponse("Server misconfigured", status_code=500)
 
-    timestamp: str = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp: str = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     short_id: str = uuid.uuid4().hex[:8]
     blob_name: str = f"feedback-{timestamp}-{short_id}.md"
 

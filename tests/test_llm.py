@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -245,20 +246,43 @@ class TestAnthropicClient:
         self,
         text_chunks: list[str],
         final_response: MagicMock,
+        tool_blocks: list[MagicMock] | None = None,
     ) -> MagicMock:
         """Build a mock for ``messages.stream()`` (async context manager).
 
         Returns an object that supports ``async with ... as stream``,
-        where ``stream.text_stream`` yields *text_chunks* and
-        ``stream.get_final_message()`` returns *final_response*.
+        where iterating the stream itself yields a sequence of event
+        objects: a ``TextEvent``-shaped object per entry in
+        *text_chunks* (``type="text"``, ``text=chunk``) followed by a
+        ``ContentBlockStopEvent``-shaped object per entry in
+        *tool_blocks* (``type="content_block_stop"``,
+        ``content_block=block``).  ``get_final_message()`` returns
+        *final_response*.
+
+        The production code in :meth:`AnthropicClient._create_message`
+        iterates the stream's event sequence (not ``text_stream``) so
+        it can surface tool-use blocks live.  Tests that only care
+        about text or final-message shape can omit *tool_blocks*.
         """
         stream = MagicMock()
 
-        async def _text_stream():
-            for chunk in text_chunks:
-                yield chunk
+        events: list[MagicMock] = []
+        for chunk in text_chunks:
+            ev = MagicMock()
+            ev.type = "text"
+            ev.text = chunk
+            events.append(ev)
+        for block in tool_blocks or []:
+            ev = MagicMock()
+            ev.type = "content_block_stop"
+            ev.content_block = block
+            events.append(ev)
 
-        stream.text_stream = _text_stream()
+        async def _iter():
+            for ev in events:
+                yield ev
+
+        stream.__aiter__ = lambda self: _iter()
         stream.get_final_message = AsyncMock(return_value=final_response)
 
         ctx = MagicMock()
@@ -342,6 +366,63 @@ class TestAnthropicClient:
             ))
 
         assert deltas == ["Hello", " ", "world"]
+
+    def test_fires_tool_callbacks_inline_during_stream(self) -> None:
+        """Tool-use blocks fire ``on_tool_use`` / ``on_tool_call`` as
+        soon as each block finishes streaming — before
+        ``stream.get_final_message()`` returns.  This is what gives
+        the UI live tool-call updates on tool-heavy turns; without
+        the inline path the events all batch at end-of-response.
+
+        Also asserts the inline-fired flag is set so the base
+        :class:`LLMClient.create_message` post-call loop skips its
+        re-fire (the same callbacks would otherwise be invoked
+        twice per tool block).
+        """
+        tool_block_1 = self._make_tool_block("t1", "search", {"q": "alpha"})
+        tool_block_2 = self._make_tool_block("t2", "fetch", {"url": "/x"})
+        sdk_resp = self._make_anthropic_response(
+            [
+                self._make_text_block("Looking..."),
+                tool_block_1,
+                tool_block_2,
+            ],
+            stop_reason="tool_use",
+        )
+        mock_stream = self._make_stream(
+            ["Looking..."], sdk_resp, tool_blocks=[tool_block_1, tool_block_2],
+        )
+
+        tool_use_events: list[tuple[str, str]] = []
+        tool_call_events: list[ToolUseBlock] = []
+
+        with patch("clarity_agent.llm.impl.anthropic._anthropic_mod") as mock_mod:
+            mock_client = AsyncMock()
+            mock_client.messages.stream = MagicMock(return_value=mock_stream)
+            mock_mod.AsyncAnthropic.return_value = mock_client
+
+            from clarity_agent.llm.impl.anthropic import AnthropicClient
+            client = AnthropicClient(api_key="fake")
+            client.on_tool_use = lambda name, detail: tool_use_events.append(
+                (name, detail),
+            )
+            client.on_tool_call = tool_call_events.append
+
+            asyncio.run(client.create_message(
+                messages=[{"role": "user", "content": "hi"}],
+                model="test-model",
+                tools=[{"name": "search", "description": "", "input_schema": {}}],
+            ))
+
+        # One event per tool block — fired exactly once (not duplicated
+        # by the post-call loop in ``LLMClient.create_message``).
+        assert [name for name, _ in tool_use_events] == ["search", "fetch"]
+        assert [tc.id for tc in tool_call_events] == ["t1", "t2"]
+        assert [tc.input for tc in tool_call_events] == [
+            {"q": "alpha"},
+            {"url": "/x"},
+        ]
+        assert client._callbacks_fired_inline is True
 
     def test_passes_system_and_tools(self) -> None:
         sdk_resp = self._make_anthropic_response([
@@ -1345,6 +1426,172 @@ class TestClientChatBackend:
         result = backend.run_tool_loop(user_message="test")
 
         assert result.text == "Done."
+
+
+class TestClientChatBackendCompaction:
+    """ClientChatBackend owns its own threshold-based compaction.
+
+    These tests exercise :meth:`ClientChatBackend.maybe_compact_after_chat`
+    directly — the place where the decision logic and transcript
+    mechanics live after the issue #35 refactor.  The adapter-level
+    bridge (``WebSessionAdapter._on_compaction_*``) is covered
+    separately in test_web_session_resume.py::TestCompactionBridge.
+    """
+
+    def _make_backend(self, tmp_path: Any, *, transcript=None) -> ClientChatBackend:
+        """Build a ClientChatBackend wired to a transcript.  The mock
+        client's ``create_message`` returns ``"summary text"`` so
+        the summarizer call produces a deterministic result.
+        """
+        from clarity_agent.llm.types import TokenUsage
+        client = AsyncMock()
+        client.TIER_DEFAULTS = {"default": "test-model"}
+        client.MODEL_CONTEXT_WINDOWS = {"test-model": 128_000}
+        client.create_message = AsyncMock(
+            return_value=LLMResponse(
+                content=[TextBlock(text="summary text")],
+                usage=TokenUsage(input_tokens=0, output_tokens=0),
+            ),
+        )
+        client.on_tool_use = None
+        client.on_usage = None
+        backend = ClientChatBackend(
+            client,
+            project_dir=tmp_path,
+            clarity_agent_dir=tmp_path,
+            transcript=transcript,
+        )
+        backend.connect()
+        return backend
+
+    def test_no_fire_when_under_threshold(self, tmp_path: Any) -> None:
+        # Small transcript, small input_tokens → no compaction.
+        # The wrapped client should never be asked to summarize.
+        from datetime import datetime
+
+        from clarity_agent.transcript import Transcript, UserTurn
+
+        transcript = Transcript(tmp_path)
+        transcript.write(UserTurn(
+            timestamp=datetime.now(UTC),
+            content="tiny",
+        ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 1_000
+
+        backend.maybe_compact_after_chat()
+
+        # Still on chapter 1 — no rollover.
+        assert Transcript(tmp_path).current_chapter == 1
+        # And the client wasn't called to produce a summary.
+        backend._client.create_message.assert_not_called()
+
+    def test_fires_when_input_tokens_over_threshold(self, tmp_path: Any) -> None:
+        # input_tokens > 85% of 128K window (the test-model context).
+        # Compaction writes a CompactionSummary into a new chapter,
+        # produced by our stubbed create_message → "summary text".
+        from datetime import datetime
+
+        from clarity_agent.transcript import (
+            CompactionSummary,
+            Transcript,
+            UserTurn,
+        )
+
+        transcript = Transcript(tmp_path)
+        # Seed the chapter with enough turns that the 70/30 split
+        # has something to summarize.
+        for i in range(10):
+            transcript.write(UserTurn(
+                timestamp=datetime.now(UTC),
+                content=f"turn {i}",
+            ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 120_000  # > 85% of 128K
+
+        backend.maybe_compact_after_chat()
+
+        t = Transcript(tmp_path)
+        assert t.current_chapter == 2
+        new_events = list(t.chapter_events(2))
+        assert isinstance(new_events[0], CompactionSummary)
+        assert new_events[0].summary == "summary text"
+        assert new_events[0].source_chapter == 1
+        # Counter resets after rollover so a second pass through this
+        # method sees a clean slate.
+        assert backend._latest_input_tokens == 0
+
+    def test_fires_when_transcript_size_over_threshold(
+        self, tmp_path: Any,
+    ) -> None:
+        # Rebuild-safety trigger: transcript content exceeds the
+        # threshold even though live input_tokens stays small.  At
+        # 85% of 128K → 108,800 tokens → ~435,200 chars by the
+        # estimator (4 chars per token).
+        from datetime import datetime
+
+        from clarity_agent.transcript import (
+            CompactionSummary,
+            Transcript,
+            UserTurn,
+        )
+
+        transcript = Transcript(tmp_path)
+        transcript.write(UserTurn(
+            timestamp=datetime.now(UTC),
+            content="x" * 450_000,
+        ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 5_000  # provider kept it small
+
+        backend.maybe_compact_after_chat()
+
+        t = Transcript(tmp_path)
+        assert t.current_chapter == 2
+        new_events = list(t.chapter_events(2))
+        assert isinstance(new_events[0], CompactionSummary)
+
+    def test_fires_callbacks_around_compaction(self, tmp_path: Any) -> None:
+        # on_compaction_started fires before the slow work,
+        # on_compaction_complete fires after with the summary +
+        # source turn count.  The adapter relies on this ordering
+        # to drive its status / banner UI.
+        from datetime import datetime
+
+        from clarity_agent.llm.types import CompactionInfo
+        from clarity_agent.transcript import Transcript, UserTurn
+
+        transcript = Transcript(tmp_path)
+        for i in range(5):
+            transcript.write(UserTurn(
+                timestamp=datetime.now(UTC),
+                content=f"turn {i}",
+            ))
+        backend = self._make_backend(tmp_path, transcript=transcript)
+        backend._latest_input_tokens = 120_000
+
+        events: list[str] = []
+        completion_info: list[CompactionInfo] = []
+        backend.on_compaction_started = lambda: events.append("started")
+        backend.on_compaction_complete = lambda info: (
+            events.append("complete"), completion_info.append(info),
+        )
+
+        backend.maybe_compact_after_chat()
+
+        assert events == ["started", "complete"]
+        assert completion_info[0].summary == "summary text"
+        assert completion_info[0].source_turn_count >= 1
+
+    def test_noop_when_no_transcript_bound(self, tmp_path: Any) -> None:
+        # No transcript → backend silently skips compaction.  The
+        # eval harness uses ClientChatBackend without a transcript
+        # and shouldn't crash even when input_tokens crosses the
+        # nominal threshold.
+        backend = self._make_backend(tmp_path, transcript=None)
+        backend._latest_input_tokens = 120_000
+        # Doesn't raise; doesn't do anything.
+        backend.maybe_compact_after_chat()
 
 
 # ---------------------------------------------------------------------------

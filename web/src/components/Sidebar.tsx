@@ -105,7 +105,7 @@ function buildNavGroups(prefix: string): NavGroup[] {
  * The canonical ``projectId`` (an absolute path) comes from
  * ``SessionInfo.project_id`` when the backend provides it,
  * falling back to ``project_dir``.  Chat panels additionally
- * require the active ``session_id`` for the discriminated-union
+ * require the active ``thread_id`` for the discriminated-union
  * to construct.
  */
 function buildPanelIdFor(
@@ -117,8 +117,8 @@ function buildPanelIdFor(
   if (!projectId) return null;
   switch (panelType) {
     case "chat":
-      if (!session.session_id) return null;
-      return { projectId, type: "chat", sessionId: session.session_id };
+      if (!session.thread_id) return null;
+      return { projectId, type: "chat", threadId: session.thread_id };
     case "history":
     case "protocol":
     case "packet":

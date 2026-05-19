@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getProtocolTree, getSession } from "../api/client";
@@ -29,10 +29,11 @@ export default function ChatPanel() {
     connected,
     error,
     statusPhase,
+    historyLoaded,
     sendMessage,
     startProcess,
     stopGeneration,
-    newSession,
+    startNewChapter,
     dismissError,
   } = useChat();
 
@@ -56,16 +57,27 @@ export default function ChatPanel() {
     getSession().then(setSessionInfo).catch(() => {});
   }, []);
 
-  // Auto-start the clarity-agent process on first connection (only if protocol exists)
+  // Auto-start the clarity-agent process — but only when this is
+  // genuinely a fresh start.  The ``historyLoaded`` guard is the
+  // key new piece: if the user has prior conversation in the
+  // current chapter, the load_history fetch will populate
+  // ``messages`` and the ``messages.length === 0`` check below
+  // becomes false, so we skip the slow kickoff and let them resume.
+  // Without ``historyLoaded`` we'd race the fetch and fire the
+  // kickoff on every page open.
   useEffect(() => {
-    if (connected && !autoStarted.current && messages.length === 0 && !streaming) {
-      if (protocolExists !== false) {
-        // Protocol exists or unknown — auto-start as before
-        autoStarted.current = true;
-        startProcess("clarity-agent");
-      }
+    if (
+      historyLoaded
+      && connected
+      && !autoStarted.current
+      && messages.length === 0
+      && !streaming
+      && protocolExists !== false
+    ) {
+      autoStarted.current = true;
+      startProcess("clarity-agent");
     }
-  }, [connected, messages.length, streaming, startProcess, protocolExists]);
+  }, [historyLoaded, connected, messages.length, streaming, startProcess, protocolExists]);
 
   // Track whether the user is scrolled to the bottom. Only auto-scroll
   // when they're "stuck" to the bottom — if they've scrolled up to read
@@ -77,8 +89,24 @@ export default function ChatPanel() {
     stickToBottom.current = distanceFromBottom < 80;
   };
 
-  // Auto-scroll on new content, but only if the user is stuck to the bottom.
+  // Pin to the bottom on mount or when history first arrives —
+  // before the browser paints, with no animation — so the user
+  // doesn't see the top of the conversation flash by before the
+  // smooth-scroll catches up.  Runs once per mount (re-mounts on
+  // tab-switch back to Session get a fresh ref and re-pin).
+  const initialScrollDone = useRef(false);
+  const hasContent = messages.length > 0;
+  useLayoutEffect(() => {
+    if (initialScrollDone.current || !hasContent) return;
+    initialScrollDone.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+  }, [hasContent]);
+
+  // Live updates — streaming text, new turns after the initial
+  // load — get smooth scroll, only when the user is stuck to the
+  // bottom (so reading earlier turns isn't disrupted).
   useEffect(() => {
+    if (!initialScrollDone.current) return;
     if (stickToBottom.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
@@ -126,17 +154,31 @@ export default function ChatPanel() {
           )}
           <button
             onClick={() => {
+              // Friction proportional to consequence: archiving the
+              // current chapter is reversible (the old chapter stays
+              // browsable in History), but the active conversation
+              // does end.  A simple confirm() is unambiguous and
+              // matches the destructiveness-tier the user agreed to.
+              const ok = window.confirm(
+                "Start a new chapter?\n\n" +
+                "The current conversation will be archived (you can " +
+                "still read it in History), and the next message will " +
+                "start a fresh conversation with no carried-over context.",
+              );
+              if (!ok) return;
+              // Allow the auto-start effect to re-fire the
+              // clarity-agent process kickoff on the new chapter.
               autoStarted.current = false;
-              newSession();
+              void startNewChapter();
             }}
             disabled={streaming}
-            aria-label="Start a new session"
+            aria-label="Start a new chapter in this conversation thread"
             className="text-xs px-3.5 py-1.5 border border-border-strong rounded-lg
               text-body-label hover:bg-surface-dim hover:border-accent/30
               disabled:opacity-40 disabled:cursor-not-allowed
               transition-all duration-200"
           >
-            New Session
+            New Chapter
           </button>
         </div>
       </div>
@@ -172,7 +214,7 @@ export default function ChatPanel() {
               {sessionInfo.project_dir.split("/").filter(Boolean).pop() || "Clarity"}
             </div>
             <div className="text-xs text-gray-500">
-              Session: {sessionInfo.session_id || "—"}
+              Thread: {sessionInfo.thread_id || "—"}
               {" · "}
               {new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
             </div>
@@ -320,12 +362,12 @@ export default function ChatPanel() {
           // stays ephemeral during the brief loading window
           // instead of binding to a placeholder id.
           panelId={
-            sessionInfo && sessionInfo.session_id
+            sessionInfo && sessionInfo.thread_id
               ? {
                   projectId:
                     sessionInfo.project_id ?? sessionInfo.project_dir,
                   type: "chat",
-                  sessionId: sessionInfo.session_id,
+                  threadId: sessionInfo.thread_id,
                 }
               : null
           }
