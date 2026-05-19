@@ -30,15 +30,20 @@ The current implementation is a **full-implementation product** with three entry
 | `brainstorm_runner.py` | Thinker orchestration: general thinker inline, specialists on demand |
 | `thinker_registry.py` | Discovers and selects thinkers based on metadata and prerequisites |
 | `mailbox.py` | Async result collection for thinker operations |
-| `llm/` | Provider-agnostic LLM abstraction (Anthropic, OpenAI, Azure) |
-| `session.py` | Session coordination and transcript recording |
+| `llm/` | Provider-agnostic LLM abstraction (Anthropic, OpenAI, Azure, GitHub Copilot, Google Gemini) |
+| `session.py` | Session coordination and event dispatch |
+| `transcript/` | Event-based session recording, reconstruction, and rendering across multi-session chapters |
+| `mcp/` | MCP server exposing eight infrastructure tools via stdio, SSE, and HTTP transport |
 | `packet/` | Review packet generation (Markdown, DOCX) |
+| `feedback.py` | User response ratings and feedback storage |
 
-**Three entry points (products):**
+**Five entry points (products):**
 
 - **Coding agent integration (AGENTS.md)** — an `AGENTS.md` file in a project root instructs AI coding agents to engage clarity at inflection points: when the user asks to think, and proactively when the agent recognizes a choice that would be expensive to reverse. The coding agent session itself becomes the clarity conversation.
-- **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
+- **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, staleness monitoring, transcript viewing, and packet generation.
 - **CLI** — initialization, packet status checking, session management.
+- **Desktop application** — a Tauri-packaged native app wrapping the web UI; installable as a standalone app on macOS, Linux, and Windows.
+- **MCP server** — exposes eight infrastructure tools (staleness checking, document read/write, decision and failure recording, process guide injection) via MCP stdio, SSE, and HTTP transport; works with any MCP-capable AI environment without embedding the codebase.
 
 ### What It Does Well
 
@@ -49,10 +54,9 @@ The system produces genuinely useful structured thinking for software projects. 
 The current system was designed for a narrower scope than the updated problem statement and requirements describe:
 
 - **No explicit intellectual corpus (Layer 1).** The principles behind the process guides are implicit — baked into the guides themselves and scattered across design notes. There's no canonical source of truth from which the guides are derived, which makes it hard to verify consistency, extend to new domains, or create alternative expressions.
-- **One expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure.
-- **Infrastructure is not portable.** The Python tools are invoked directly by process guides (`python -m clarity_agent.protocol.packet_status ...`). They aren't exposed as MCP tools or REST services, which limits portability to other AI environments.
+- **One expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure. The light expression is designed to address this but not yet written.
 - **Greenfield assumption.** The system assumes you're starting a new project. There's no structured support for re-deriving clarity about an existing, partially-built system (FR11).
-- **Limited product surface.** Three entry points, all in the full-implementation path. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
+- **No light-implementation path.** Five entry points exist, all in the full-implementation path. There's still no path for the general AI user or the citizen developer operating in a bare conversation without tool access.
 
 ---
 
@@ -104,15 +108,16 @@ Context-specific shells that bring the capability to users where they are. Produ
 - Coding agent integration (AGENTS.md)
 - Web application
 - CLI
+- Desktop application (Tauri-packaged)
+- MCP server (stdio/SSE/HTTP)
 
-**New products, in priority order** (see [Decision 01](../decisions/decision-01-product-priority.md)):
+**Remaining products, in priority order** (see [Decision 01](../decisions/decision-01-product-priority.md)):
 
-1. **MCP-enhanced general AI (hybrid).** General-purpose AI tools that support MCP get a light Layer 2 expression *plus* Layer 3 infrastructure — structured file writes, staleness tracking, packet generation — via an MCP tool server. Shortest path from current state (MCP exposure is already near-term work). Validates Layer 3 portability.
-2. **General-purpose AI integration (light).** The light Layer 2 expression loaded into a Claude Project, custom GPT, or similar. Highest reach, lowest friction — but blocked on Layer 1 formalization → light expression.
-3. **IDE integration.** Extensions for VS Code or other development environments. Once MCP works, VS Code support may be lower effort than expected (VS Code already supports MCP).
+1. **MCP-enhanced general AI (hybrid).** MCP infrastructure now exists. Remaining work is the light Layer 2 expression — a condensed guide loaded as context — which, combined with the MCP server, delivers the full experience in a general-purpose AI environment.
+2. **General-purpose AI integration (light).** The light Layer 2 expression loaded into a Claude Project, custom GPT, or similar. Highest reach, lowest friction — blocked on Layer 1 formalization → light expression.
+3. **IDE integration.** Extensions for VS Code or other development environments. MCP support means VS Code integration may be lower effort than expected (VS Code already supports MCP).
 4. **Hosted web service.** Multi-tenant, no installation, projects in the cloud. Deferred — high effort, high risk, well-understood engineering.
-5. **Standalone desktop application.** Dedicated thinking environment. Deferred — niche audience.
-6. **Deep model integration.** The clarity agent's thinking patterns built directly into AI models or platforms. Distant horizon.
+5. **Deep model integration.** The clarity agent's thinking patterns built directly into AI models or platforms. Distant horizon.
 
 ### How the System Thinks
 

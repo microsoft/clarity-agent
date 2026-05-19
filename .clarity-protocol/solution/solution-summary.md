@@ -34,7 +34,7 @@ The problem has three hard parts: clarity requires iteration but most processes 
 
 **Two Layer 2 expressions, independently derived from Layer 1.** The full and light guides are not a port of each other — they are independently crafted for their environments. This prevents the full expression's tool-access assumptions from leaking into the light guide. The cost is that each must be updated when Layer 1 changes; the benefit is that each is genuinely suited to its context.
 
-**MCP as the infrastructure portability interface.** The current system invokes Python infrastructure via shell commands from process guides — which works in Claude Code but nowhere else. The target exposes the same infrastructure as MCP tools, making it available to any MCP-capable AI without embedding the codebase.
+**MCP as the infrastructure portability interface.** The system exposes infrastructure as MCP tools via `mcp/server.py` (eight tools, stdio/SSE/HTTP transport), making it available to any MCP-capable AI environment without embedding the codebase. Shell-access environments (Claude Code, CLI) can also invoke Python infrastructure directly — both paths coexist.
 
 **Process guides as the logic layer.** Behavior is encoded in markdown, not Python. The system can be read, evaluated, and improved without running it — and works with any capable LLM. The cost is that guides aren't type-checked or tested as code; the benefit is that the logic is human-auditable and easy to adjust.
 

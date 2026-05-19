@@ -28,14 +28,14 @@
 
 ### Architecture Overview
 
-The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. A **Web UI** and **CLI** are both thin entry points into the same session infrastructure. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
+The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. A **Web UI**, **CLI**, **Desktop App** (Tauri), and **MCP Server** are all entry points into the same session infrastructure. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
 
 ```
 User ──► Entry Point ──► Session ──► LLM Provider
          (Web/CLI/        │  ▲         │
-          Snippet)    reads│  │responses│
-                     guides│  └─────────┘
-                          │
+          Desktop/     reads│  │responses│
+          MCP/         guides│  └─────────┘
+          Snippet)         │
                           ▼
                      .clarity-protocol/
                           │
@@ -110,6 +110,15 @@ FastAPI serves the React SPA and a WebSocket endpoint for chat. A `WebSessionAda
 
 #### Web Frontend (`web/`)
 React 18 + TypeScript + Vite + Tailwind. Chat history is managed via a reducer in `useChat.tsx`. WebSocket for real-time events; REST for static protocol data (file tree, staleness reports, transcripts). Build output served statically by FastAPI.
+
+#### Desktop Application (`src-tauri/`)
+A Tauri-packaged native app that wraps the web UI and runs the FastAPI server in-process. Distributable as a standalone macOS, Linux, or Windows application. Uses PyInstaller to bundle the Python runtime; the Tauri shell provides the native window and OS integration.
+
+#### MCP Server (`mcp/server.py`)
+Exposes eight infrastructure tools via the Model Context Protocol for use by any MCP-capable AI environment. Tools cover the full session lifecycle: `run_clarity` returns a state assessment with the appropriate process guide inlined so the agent can act immediately; `get_packet_status` checks staleness after implementation work; `check_decision` surfaces conflicts with existing decisions before the agent proceeds; `read_protocol_document` and `write_protocol_document` handle document I/O (writes auto-record content hashes, keeping the staleness tracker current); `record_decision`, `record_failure`, and `record_suggestion` provide structured recording without requiring the agent to know file paths. Supports stdio (default, for coding agents), SSE, and HTTP transports. Path traversal protection scopes all operations to the project directory.
+
+#### Transcript System (`transcript/`)
+Event-based recording of session activity. Six event types — `UserTurn`, `AssistantText`, `ToolUse`, `ProcessStarted`, `SessionResume`, `ChapterStarted` — are logged as structured records per session. Sessions are grouped into chapters; a `SessionResume` boundary marks each new conversation within a chapter. Supports reconstruction, markdown rendering, and summarization. Written to `.clarity-protocol/transcripts/`.
 
 ---
 
@@ -231,7 +240,8 @@ Tool-use events stream to the web frontend in real time. Session transcripts wri
 | Prompt injection via project documents | High | Protocol Documents, Brainstorm Runner, LLM Providers | Accept as inherent risk; avoid untrusted content in protocol files |
 | Data exfiltration to LLM providers | High | LLM Abstraction Layer, LLM Providers | Review what's in protocol docs; use self-hosted LLMs for confidential projects |
 | API key exposure | Critical | API Keys (.env), LLM Abstraction Layer | Keep `.env` out of version control; use environment injection |
-| Unauthorized web access (no auth) | High | Web Server | Bind to localhost only; add reverse proxy with auth for multi-user |
+| Unauthorized web access (no auth) | High | Web Server, Desktop App | Bind to localhost only; add reverse proxy with auth for multi-user |
+| MCP tool abuse (unauthorized caller) | Medium | MCP Server | stdio transport requires local process access; SSE/HTTP deployments should add caller authentication |
 | Staleness suppression via config.json tampering | Medium | Config + State, Packet Status Checker | Low practical risk; requires deliberate access |
 | Malicious custom thinker guide | Medium | Thinker Guides, Thinker Registry, Brainstorm Runner | Don't load custom thinkers from untrusted directories |
 | Runaway LLM cost | Medium | LLM Abstraction Layer, Brainstorm Runner | Cost callbacks provide observability; wire to budget enforcer |
@@ -246,6 +256,8 @@ flowchart TB
     subgraph low_trust["Low Trust — No Auth"]
         WebServer["Web Server\nFastAPI + React SPA"]
         CLI["CLI Tool"]
+        Desktop["Desktop App\nTauri + PyInstaller"]
+        MCPServer["MCP Server\nstdio / SSE / HTTP"]
         Snippet["Clarity Snippet\nCoding Agent Integration"]
     end
 
@@ -269,9 +281,13 @@ flowchart TB
 
     User -->|"chat messages"| WebServer
     User -->|"commands"| CLI
+    User -->|"native app"| Desktop
+    User -->|"MCP tool calls"| MCPServer
     User -->|"coding agent session"| Snippet
     WebServer -->|"messages"| Session
     CLI -->|"messages"| Session
+    Desktop -->|"messages"| Session
+    MCPServer -->|"tool invocations"| Session
     Snippet -->|"follows guides"| ProcessGuides
     Session -->|"reads guides"| ProcessGuides
     Session -->|"read / write docs"| ProtocolDocs
@@ -360,20 +376,17 @@ The staleness tracking infrastructure (Layer 3) could potentially be extended to
 
 ### Layer 3: MCP as the Portability Interface
 
-The key architectural change from the as-built system: infrastructure exposed via **MCP** rather than invoked directly as Python commands by the process guides.
+**Status: implemented.** The MCP server (`mcp/server.py`) exposes eight infrastructure tools via stdio, SSE, and HTTP transport. Both access paths coexist: process guides running in shell-access environments (Claude Code, CLI) invoke Python infrastructure directly; any MCP-capable AI environment can call the same operations as MCP tools.
 
-**What changes:**
+**Access path comparison:**
 
-The current process guides contain instructions like `python -m clarity_agent.protocol.packet_status . --record goal/problem.md`. These work when the AI has shell access (coding agent, CLI) but not in other contexts. With MCP exposure, the same operations become tool calls that any MCP-capable AI environment can invoke:
-
-| Current (direct invocation) | Target (MCP tool) |
+| Direct invocation (shell-access environments) | MCP tool (any MCP-capable AI) |
 |---|---|
-| `python -m clarity_agent.protocol.packet_status .` | `check_staleness()` |
-| `python -m clarity_agent.protocol.packet_status . --record goal/problem.md` | `record_document("goal/problem.md")` |
-| `python -m clarity_agent.protocol.initialize .` | `initialize_protocol()` |
-| Brainstorm runner invoked via session | `run_thinker("general")`, `run_thinker("security")` |
-| Manual file writes with guessed paths | `record_failure(title, description, ...)` |
-| Packet generation via CLI | `generate_packet(format="docx")` |
+| `python -m clarity_agent.protocol.packet_status .` | `run_clarity()` or `get_packet_status()` |
+| `python -m clarity_agent.protocol.packet_status . --record goal/problem.md` | `write_protocol_document()` (auto-records hash) |
+| `python -m clarity_agent.protocol.initialize .` | `run_clarity()` on a new project (guide is inlined) |
+| Manual file writes with guessed paths | `record_decision()`, `record_failure()`, `record_suggestion()` |
+| Packet generation via CLI or web | (packet generation not yet exposed as an MCP tool) |
 
 **MCP server architecture:**
 
@@ -382,28 +395,31 @@ MCP Client (any AI tool)
     │
     ▼
 MCP Server (clarity-agent)
-    ├── Staleness tools: check_staleness, record_document
-    ├── Protocol tools: initialize_protocol, read_document
-    ├── Brainstorm tools: run_thinker, record_failure, record_suggestion
-    ├── Packet tools: generate_packet
-    └── State tools: get_status, list_open_questions
+    ├── run_clarity — state assessment + inlined process guide
+    ├── get_packet_status — staleness report
+    ├── check_decision — conflict detection against existing decisions
+    ├── read_protocol_document — document retrieval
+    ├── write_protocol_document — document write + auto-hash recording
+    ├── record_decision — structured decision capture
+    ├── record_failure — failure/risk recording
+    └── record_suggestion — document update suggestion
     │
     ▼
 .clarity-protocol/ (filesystem)
 ```
 
-The MCP server wraps the existing Python infrastructure — the same `packet_status.py`, `brainstorm_runner.py`, `mailbox.py` modules — with MCP tool interfaces. No reimplementation of core logic; just a new exposure layer.
+The MCP server wraps the existing Python infrastructure — `packet_status.py`, `mailbox.py`, and related modules — with MCP tool interfaces. No reimplementation of core logic; a new exposure layer.
 
-**REST adapter:** For platforms that support HTTP tool calls but not MCP (e.g., OpenAI Actions), a thin REST layer wraps the same MCP tools. One implementation of core logic, two exposure protocols.
+**REST adapter:** Not yet implemented. Planned for platforms that support HTTP tool calls but not MCP (e.g., OpenAI Actions).
 
 **Environment compatibility matrix:**
 
 | Environment | Layer 2 | Layer 3 access | Experience |
 |---|---|---|---|
-| Claude Code / coding agents (via snippet) | Full | Direct (shell) or MCP | Full experience |
-| Web app / CLI | Full | Direct | Full experience |
-| MCP-capable general AI (claude.ai, etc.) | Light or Full | MCP | Full infrastructure via tools |
-| REST-capable general AI (ChatGPT Actions) | Light | REST adapter | Full infrastructure via HTTP |
+| Claude Code / coding agents (via snippet) | Full | Direct (shell) | Full experience |
+| Web app / CLI / Desktop | Full | Direct | Full experience |
+| MCP-capable AI (coding agents, IDE, general AI) | Full or Light | MCP | Full infrastructure via tools |
+| REST-capable general AI (ChatGPT Actions) | Light | REST adapter (not yet built) | Full infrastructure via HTTP (planned) |
 | Bare conversation (no tools) | Light | None | Conversational only; no persistence |
 
 ### Layer 4: Product Architecture
@@ -412,16 +428,18 @@ All products share the protocol format as the interoperability point. A user's `
 
 **Full-implementation products** embed or connect to the Layer 3 infrastructure. Architecture varies by product:
 
-- **Coding agent integration** — a snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters. Instructs the agent to proactively check protocol context before making consequential choices (not just when the user asks), and to maintain protocol freshness after implementation. Zero infrastructure of its own; the coding agent's shell access provides Layer 3 via direct invocation. Migration to MCP tools would let the snippet work with coding agents that support MCP but not shell access.
-- **Web app** — runs Layer 3 infrastructure in-process. Could additionally expose it as an MCP server for other tools to connect to.
-- **Hosted web service** — runs Layer 3 server-side with multi-tenant isolation. New architectural concerns: user authentication, project isolation, storage backend (filesystem may not be appropriate at scale), and cost management per tenant.
-- **IDE integration** — connects to a local MCP server running Layer 3 infrastructure.
+- **Coding agent integration** — a snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters. Instructs the agent to proactively check protocol context before making consequential choices (not just when the user asks), and to maintain protocol freshness after implementation. Zero infrastructure of its own; the coding agent's shell access provides Layer 3 via direct invocation, or MCP tools where MCP is available.
+- **Web app** — runs Layer 3 infrastructure in-process. Serves the React SPA with WebSocket-based real-time chat, protocol browsing, staleness monitoring, transcript viewing, and packet generation.
+- **Desktop app** — Tauri-packaged native application wrapping the web UI. Bundles the Python runtime via PyInstaller; distributable on macOS, Linux, and Windows without a separate install step.
+- **MCP server** — exposes Layer 3 infrastructure as MCP tools (implemented; see Layer 3 section). Coding agents, IDE extensions, and general-purpose AI tools can connect to it via stdio, SSE, or HTTP.
+- **Hosted web service** — runs Layer 3 server-side with multi-tenant isolation. New architectural concerns: user authentication, project isolation, storage backend (filesystem may not be appropriate at scale), and cost management per tenant. Not yet built.
+- **IDE integration** — connects to a local MCP server running Layer 3 infrastructure. Not yet built; VS Code MCP support reduces the expected effort.
 
-**Light-implementation products** distribute Layer 2 (light) and rely on the host AI environment for the conversation:
+**Light-implementation products** distribute Layer 2 (light) and rely on the host AI environment for the conversation. The light expression (Layer 2 light) is not yet written; these products are planned:
 
 - **Claude Project** — Layer 2 loaded as project knowledge. No infrastructure, no tools, purely conversational.
 - **Custom GPT** — Layer 2 loaded as instructions. Could optionally connect to Layer 3 via Actions (REST adapter).
-- **MCP-enhanced general AI** — a hybrid: Layer 2 (light) for the conversational guidance, Layer 3 via MCP for infrastructure. Gets most of the full experience in a general AI context.
+- **MCP-enhanced general AI** — a hybrid: Layer 2 (light) for the conversational guidance, Layer 3 via the existing MCP server for infrastructure. Gets the full experience in a general AI context. Unblocked on the infrastructure side; blocked on the light expression.
 
 ---
 
