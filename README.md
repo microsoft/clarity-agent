@@ -110,13 +110,17 @@ A `.clarity-protocol/` directory:
 .clarity-protocol/
 ├── summary.md              # Brief summary of what this project is
 ├── notes.md                # Principles and cross-cutting observations
+├── observations.md         # Patterns and coverage notes from analysis
 ├── goal/
 │   ├── problem.md          # What you're trying to achieve and why
 │   ├── stakeholders.md     # Who cares about the outcome
-│   └── requirements.md     # Criteria any solution must satisfy
+│   ├── requirements.md     # Criteria any solution must satisfy
+│   ├── open-questions.md   # Unknowns that could change the approach
+│   └── resolved-questions.md # Questions answered, with findings
 ├── solution/
 │   ├── solution.md         # What you plan to build
-│   └── architecture.md     # How you plan to build it
+│   ├── architecture.md     # How you plan to build it
+│   └── solution-summary.md # Concise overview for stakeholders
 ├── failures/
 │   └── failures.md         # Failure modes, chains, and management plans
 ├── decisions/
@@ -145,9 +149,9 @@ See [Responsible AI FAQ](AIFAQ.md) for detailed information about intended uses,
 ## CLI Reference
 
 ```text
-clarity                            Launch desktop app
-clarity app                        Same, explicit
+clarity                            Launch web UI (default)
 clarity web [project_dir]          Headless web server
+clarity app                        Launch desktop app
 clarity cli [project_dir]          Interactive terminal session
 clarity process NAME [project_dir] Run a single process by name
 clarity packet [project_dir]       Generate a review packet
