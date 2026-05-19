@@ -14,7 +14,7 @@ The shipped implementation focuses on software engineering, where the resulting 
 
 ### What Exists Today
 
-The current implementation is a **full-implementation product** with three entry points, built on a set of process guides backed by Python infrastructure.
+The current implementation is a **full-implementation product** with five entry points, built on a set of process guides backed by Python infrastructure.
 
 **Process guides** (`processes/`) are markdown documents that direct how an AI should conduct a structured conversation. They encode what to ask, when to push back, what to write down, and when to move on. An AI agent loaded with a process guide can follow it to conduct a clarity session — the guides are the logic; everything else is mechanics.
 
