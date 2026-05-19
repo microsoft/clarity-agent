@@ -229,7 +229,32 @@ def create_app(
                 project_dir, clarity_agent_dir, current_config,
                 llm_session_id=llm_session_id,
             )
-            await session.start()
+            try:
+                await session.start()
+            except (RuntimeError, OSError, ValueError) as e:
+                # Backend construction failed before we ever got to a
+                # chat turn — e.g. ``gh`` CLI missing on the github
+                # provider, claude CLI missing on the SDK auth path,
+                # malformed API key.  Without this branch the error
+                # propagates out of ``websocket_chat`` and uvicorn
+                # logs it to stderr while closing the socket with no
+                # message; the FE then reconnects, hits the same
+                # failure, and the user just sees "thinking" dots
+                # forever (issue #47).  Surface it as a classified
+                # error_event and keep the socket open the way the
+                # no-provider path does, so a banner has a chance to
+                # render.  The session ``state["session"]`` stays
+                # ``None`` — once the user resolves the underlying
+                # problem (e.g. installs gh) and reloads, the next
+                # connection retries ``session.start()`` from scratch.
+                error_event = _classify_ws_error(e, current_config.provider)
+                try:
+                    await ws.send_json(error_event)
+                    while True:
+                        await ws.receive_json()
+                        await ws.send_json(error_event)
+                except (WebSocketDisconnect, RuntimeError):
+                    return
             state["session"] = session
 
         session: WebSessionAdapter = state["session"]
@@ -275,9 +300,20 @@ def create_app(
                             session.chat(message, data.get("system_prompt")),
                         )
                         await _drain_events(session, chat_task, ws, stop_event)
-                    except (WebSocketDisconnect, RuntimeError):
+                    except WebSocketDisconnect:
                         return
                     except Exception as e:
+                        # Backend errors (RuntimeError from a CLI
+                        # crash, auth failures, network blips) all
+                        # land here: surface as a classified
+                        # error_event so the user sees what went
+                        # wrong, then ``continue`` the outer loop so
+                        # they can retry without reconnecting.
+                        # ``ws.send_json`` itself can raise
+                        # ``RuntimeError`` / ``WebSocketDisconnect``
+                        # if the socket died between turns — in that
+                        # case there's nothing left to surface to,
+                        # exit cleanly.
                         import traceback
                         tb = traceback.format_exc()
                         print(f"  [Chat error] {e}\n{tb}", flush=True)
@@ -298,9 +334,11 @@ def create_app(
                             session.start_process(process_name),
                         )
                         await _drain_events(session, chat_task, ws, stop_event)
-                    except (WebSocketDisconnect, RuntimeError):
+                    except WebSocketDisconnect:
                         return
                     except Exception as e:
+                        # Same handling as the ``chat`` branch above —
+                        # see the comment there for the rationale.
                         import traceback
                         tb = traceback.format_exc()
                         print(f"  [Process error] {e}\n{tb}", flush=True)
