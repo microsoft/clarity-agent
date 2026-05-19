@@ -5,7 +5,7 @@
 **Decided by:** Project author
 
 **Update (2026-05-18):** Two products from the original priority list have since been implemented:
-- **MCP server** (was priority 1): Implemented in `mcp/server.py` — eight tools, stdio/SSE/HTTP transport. MCP infrastructure is now the foundation; remaining work for the hybrid use case is the light Layer 2 expression.
+- **MCP server** (was priority 1): Implemented under `src/clarity_agent/mcp/server.py` (run via `python -m clarity_agent.mcp`) — eight tools, stdio/SSE/HTTP transport. MCP infrastructure is now the foundation; remaining work for the hybrid use case is the light Layer 2 expression.
 - **Standalone desktop application** (was priority 5, deferred): Implemented as a Tauri-packaged native app, contrary to the original "niche audience / defer" assessment.
 
 The active priority list now starts with MCP-enhanced general AI (hybrid) and general-purpose AI integration (light), both blocked on the light expression rather than infrastructure.
