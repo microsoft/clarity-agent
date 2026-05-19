@@ -29,7 +29,7 @@ cd clarity-agent
 uv sync --all-extras
 ```
 
-Prerequisites: **Python 3.10+**, **Node.js 18+** (for frontend development only), **git**, and credentials for at least one supported LLM backend (see "LLM backends" below).
+Prerequisites: **uv** (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or see [uv docs](https://docs.astral.sh/uv/getting-started/installation/)), **Node.js 18+** (for frontend development only), **git**, and credentials for at least one supported LLM backend (see "LLM backends" below). uv manages Python itself — no separate Python install required.
 
 ```bash
 # Authenticate (see "LLM backends" below for all options)
@@ -117,7 +117,7 @@ The web UI (`--web` flag) is a FastAPI server that exposes the same `ClaritySess
 
 ### LLM backends are pluggable
 
-The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Four providers are supported:
+The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Six providers are supported:
 
 | Provider | `--provider` flag | API key env var | Notes |
 | --- | --- | --- | --- |
@@ -125,6 +125,8 @@ The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two in
 | **Azure AI Inference** | `azure` | `AZURE_AI_API_KEY` | Also requires `--endpoint` or `AZURE_AI_ENDPOINT`. |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | Tool definitions translated from Anthropic format. |
 | **Claude SDK** | `claude-sdk` (default) | None — uses `claude login` | Uses the Claude CLI for authentication. |
+| **GitHub Copilot** | `github-copilot` | None — uses `gh auth login` | Uses the GitHub CLI for authentication. |
+| **Google Gemini** | `gemini` | `GEMINI_API_KEY` | API key from [Google AI Studio](https://aistudio.google.com/apikey). |
 
 Select a provider with `--provider`:
 
@@ -132,9 +134,11 @@ Select a provider with `--provider`:
 ./clarity ./my-project --provider anthropic
 ./clarity ./my-project --provider openai --model gpt-4o
 ./clarity ./my-project --provider azure --endpoint https://your-deployment.inference.ai.azure.com
+./clarity ./my-project --provider github-copilot
+./clarity ./my-project --provider gemini
 ```
 
-The default model for all providers is `claude-sonnet-4-5-20250929`; override with `--model`.
+Each provider uses its own default model (resolved at runtime from the provider's available models). Override with `--model` to pin a specific model.
 
 **Architecture:** `LLMConfig` (in `llm/config.py`) resolves provider, API key, model, and endpoint from CLI flags and environment variables. `create_chat_backend()` (in `llm/factory.py`) instantiates the correct backend. `ClaritySession` accepts any `ChatBackend` and doesn't know which provider is behind it.
 
@@ -214,7 +218,7 @@ The "standard library." Called by process guides and by clarity CLI.
 | `llm/chat.py` | `ChatBackend` abstract interface for multi-turn LLM conversations with tool use. |
 | `llm/client.py` | `LLMClient` abstract interface for low-level completions. |
 | `llm/types.py` | Shared type definitions (tool schemas, message types). |
-| `llm/impl/` | Provider implementations: `anthropic.py`, `claude_sdk.py`, `openai.py`, `azure_inference.py`. |
+| `llm/impl/` | Provider implementations: `anthropic.py`, `claude_sdk.py`, `openai.py`, `azure_inference.py`, `github_copilot.py`, `gemini.py`. |
 | `packet/` | Review packet generation — assembles protocol content into Markdown or Word documents. |
 | `web/app.py` | FastAPI application — WebSocket chat endpoint and REST API for protocol data. |
 | `web/session_manager.py` | Bridges sync `ClaritySession` to async WebSocket via `ThreadPoolExecutor`. |

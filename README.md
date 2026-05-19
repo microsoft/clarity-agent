@@ -21,13 +21,19 @@ Read more about the philosophy behind clarity agent [in this blog post](https://
 
 ### Install
 
-**macOS / Linux:**
+**Download the desktop app** (no terminal required):
+
+Download the latest `.dmg` (macOS), `.exe` installer (Windows), or `.AppImage` (Linux) from the [GitHub Releases page](https://github.com/microsoft/clarity-agent/releases/latest) and install it directly. No prerequisites.
+
+**Or install via script** (adds the `clarity` CLI and embeds Clarity into git repos):
+
+*macOS / Linux:*
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/microsoft/clarity-agent/main/scripts/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+*Windows (PowerShell):*
 
 ```powershell
 irm https://raw.githubusercontent.com/microsoft/clarity-agent/main/scripts/install.ps1 | iex
@@ -46,9 +52,11 @@ bash scripts/install.sh        # macOS / Linux
 
 ### Launch and connect an LLM
 
-**macOS:** Open `~/Applications/Clarity.app`
+**macOS:** Open `~/Applications/Clarity.app` (downloaded installer) or `Clarity.app` from wherever you installed it.
 
-**Linux / Windows:** Run `clarity` from your terminal or Start Menu.
+**Windows:** Run the installed app from the Start Menu, or run `clarity` from your terminal if you used the script installer.
+
+**Linux:** Run the `.AppImage` directly, or run `clarity` from your terminal if you used the script installer.
 
 On first launch, the setup wizard walks you through connecting an LLM provider.
 
