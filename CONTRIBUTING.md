@@ -117,28 +117,28 @@ The web UI (`--web` flag) is a FastAPI server that exposes the same `ClaritySess
 
 ### LLM backends are pluggable
 
-The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Six providers are supported:
+The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Five providers are supported:
 
 | Provider | `--provider` flag | API key env var | Notes |
 | --- | --- | --- | --- |
-| **Anthropic API** | `anthropic` | `ANTHROPIC_API_KEY` | Direct API access with tool use. |
+| **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | Default auth uses `claude login` (`--auth-mode claude_sdk`); use `--auth-mode api_key` for direct API access. |
 | **Azure AI Inference** | `azure` | `AZURE_AI_API_KEY` | Also requires `--endpoint` or `AZURE_AI_ENDPOINT`. |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | Tool definitions translated from Anthropic format. |
-| **Claude SDK** | `claude-sdk` (default) | None — uses `claude login` | Uses the Claude CLI for authentication. |
-| **GitHub Copilot** | `github-copilot` | None — uses `gh auth login` | Uses the GitHub CLI for authentication. |
+| **GitHub Copilot** | `github` | `GITHUB_TOKEN` | Also supports zero-config via `gh auth login` (`--auth-mode gh_cli`). |
 | **Google Gemini** | `gemini` | `GEMINI_API_KEY` | API key from [Google AI Studio](https://aistudio.google.com/apikey). |
 
 Select a provider with `--provider`:
 
 ```bash
 ./clarity ./my-project --provider anthropic
+./clarity ./my-project --provider anthropic --auth-mode api_key  # use API key instead of claude login
 ./clarity ./my-project --provider openai --model gpt-4o
 ./clarity ./my-project --provider azure --endpoint https://your-deployment.inference.ai.azure.com
-./clarity ./my-project --provider github-copilot
+./clarity ./my-project --provider github
 ./clarity ./my-project --provider gemini
 ```
 
-Each provider uses its own configured default model, with the final selection resolved from provider defaults plus any settings, environment, or CLI overrides. Use `--model` to pin a specific model.
+Each provider resolves its default model from provider-specific tier defaults (defined as `*_TIER_DEFAULTS` in `llm/impl/`), which can be overridden via settings, environment variables, or the `--model` flag.
 
 **Architecture:** `LLMConfig` (in `llm/config.py`) resolves provider, API key, model, and endpoint from CLI flags and environment variables. `create_chat_backend()` (in `llm/factory.py`) instantiates the correct backend. `ClaritySession` accepts any `ChatBackend` and doesn't know which provider is behind it.
 
