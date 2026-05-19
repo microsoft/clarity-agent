@@ -138,7 +138,7 @@ Select a provider with `--provider`:
 ./clarity ./my-project --provider gemini
 ```
 
-Each provider uses its own default model (resolved at runtime from the provider's available models). Override with `--model` to pin a specific model.
+Each provider uses its own configured default model, with the final selection resolved from provider defaults plus any settings, environment, or CLI overrides. Use `--model` to pin a specific model.
 
 **Architecture:** `LLMConfig` (in `llm/config.py`) resolves provider, API key, model, and endpoint from CLI flags and environment variables. `create_chat_backend()` (in `llm/factory.py`) instantiates the correct backend. `ClaritySession` accepts any `ChatBackend` and doesn't know which provider is behind it.
 
