@@ -306,6 +306,109 @@ class TestStartNewChapter:
         )
 
 
+class TestStartTransactional:
+    """``start()`` rolls back partial state on failure.
+
+    Regression coverage for the PR #49 reviewer concern: if
+    ``start()`` raises *after* the backend has been connected (e.g.
+    Copilot's daemon thread has been spawned), the half-initialized
+    backend must not leak — otherwise the WS handler that catches
+    the error and keeps the socket open accumulates a thread per
+    failed attempt.  ``start`` is contract-bound to be transactional:
+    succeed cleanly or roll back to the pre-start state.
+    """
+
+    def test_rollback_disconnects_backend_when_post_connect_step_fails(
+        self, project, monkeypatch,
+    ):
+        # Make a step *after* ``backend.connect()`` fail — pick
+        # ``ClaritySession.__init__`` since it runs after connect
+        # and is easy to monkeypatch.  The stub backend records
+        # whether disconnect was called, which is the leak we're
+        # guarding against.
+        cfg = _StubLLMConfig()
+        adapter = WebSessionAdapter(project, project, cfg)
+
+        disconnect_calls: list[None] = []
+
+        def _track_disconnect(self: _StubBackend) -> None:
+            disconnect_calls.append(None)
+
+        monkeypatch.setattr(_StubBackend, "disconnect", _track_disconnect, raising=False)
+        monkeypatch.setattr(
+            "clarity_agent.web.session_manager.ClaritySession.__init__",
+            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            asyncio.run(adapter.start())
+
+        # Backend was connected (factory returned it, ``start`` stored
+        # it) — the rollback must have called disconnect.
+        assert disconnect_calls == [None]
+        # Adapter is back to its pre-start state — no stale backend
+        # reference that a re-check could mistake for a live session.
+        assert adapter._backend is None
+        assert adapter._session is None
+
+    def test_rollback_when_connect_itself_raises(self, project, monkeypatch):
+        # ``connect()`` raising is the SDK / Copilot scenario where the
+        # CLI is missing.  The backend was assigned to ``self._backend``
+        # *before* connect was called (so the rollback has something
+        # to find), but disconnect must still be safe to call on a
+        # backend whose connect failed.  Verify the rollback runs
+        # without itself raising — the real disconnect implementations
+        # are already guarded to no-op on a never-connected backend.
+        cfg = _StubLLMConfig()
+        adapter = WebSessionAdapter(project, project, cfg)
+
+        disconnect_calls: list[None] = []
+
+        def _failing_connect(self: _StubBackend) -> None:
+            raise RuntimeError("CLI not installed")
+
+        def _track_disconnect(self: _StubBackend) -> None:
+            disconnect_calls.append(None)
+
+        monkeypatch.setattr(_StubBackend, "connect", _failing_connect, raising=False)
+        monkeypatch.setattr(_StubBackend, "disconnect", _track_disconnect, raising=False)
+
+        with pytest.raises(RuntimeError, match="CLI not installed"):
+            asyncio.run(adapter.start())
+
+        # The backend was stashed pre-connect, so rollback can find
+        # and disconnect it.  Without the pre-connect assignment the
+        # backend would leak.
+        assert disconnect_calls == [None]
+        assert adapter._backend is None
+
+    def test_rollback_when_factory_itself_raises_does_not_call_disconnect(
+        self, project, monkeypatch,
+    ):
+        # Failure in ``create_chat_backend`` itself (the most common
+        # #47 case — gh CLI missing) happens before any backend has
+        # been built, so there's nothing to disconnect.  Verify the
+        # rollback handles this case without trying to call disconnect
+        # on ``None``.
+        cfg = _StubLLMConfig()
+        adapter = WebSessionAdapter(project, project, cfg)
+
+        def _failing_factory(self: _StubLLMConfig, **kw: object) -> _StubBackend:
+            raise RuntimeError("gh not installed")
+
+        monkeypatch.setattr(
+            _StubLLMConfig, "create_chat_backend", _failing_factory,
+        )
+
+        with pytest.raises(RuntimeError, match="gh not installed"):
+            asyncio.run(adapter.start())
+
+        # No backend ever existed, so nothing to clean up.  The
+        # rollback should have left ``_backend`` as ``None`` without
+        # raising a NoneType.disconnect AttributeError.
+        assert adapter._backend is None
+
+
 class TestCompactionBridge:
     """Adapter forwards backend compaction callbacks to the WebSocket
     event queue.  The decision to compact and the transcript
