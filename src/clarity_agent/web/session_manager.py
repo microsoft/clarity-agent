@@ -94,7 +94,20 @@ class WebSessionAdapter:
         self._tool_handler = self._feedback_handler
 
     async def start(self) -> None:
-        """Initialize backend and session."""
+        """Initialize backend and session.
+
+        Transactional: on failure, any state that was already
+        allocated (live backend thread/loop, entered session
+        context) is rolled back via :meth:`_rollback_partial_start`
+        before re-raising.  Callers therefore see "succeeded or
+        nothing happened" semantics and don't need to clean up after
+        an exception themselves — important for the WebSocket entry
+        point in ``web/app.py``, which keeps the socket open after a
+        start failure to surface a classified error_event (see
+        issue #47).  Without the rollback, a half-started backend
+        (notably Copilot, which spawns a daemon thread in
+        :meth:`connect`) would leak per failed connection attempt.
+        """
         self._loop = asyncio.get_running_loop()
 
         # Build the Transcript first so we can hand it to the backend
@@ -106,63 +119,127 @@ class WebSessionAdapter:
         # below — that's how we tell "fresh project, nothing to
         # inject" apart from "existing project with prior
         # conversation, rebuild context from it."
+        #
+        # The Transcript object itself is lazy — file handles aren't
+        # opened until the first write — so leaving it on the
+        # adapter after a rollback doesn't leak anything.  The
+        # writer, if it was opened by a ClaritySession that managed
+        # to construct before raising, is closed by
+        # ``_rollback_partial_start`` via the session's __exit__.
         self._project_transcript = Transcript(self.project_dir)
         transcript_was_empty = self._project_transcript.is_empty
 
-        backend = self.llm_config.create_chat_backend(
-            project_dir=self.project_dir,
-            clarity_agent_dir=self.clarity_agent_dir,
-            transcript=self._project_transcript,
-        )
-        backend.connect()
-        self._backend = backend
+        try:
+            backend = self.llm_config.create_chat_backend(
+                project_dir=self.project_dir,
+                clarity_agent_dir=self.clarity_agent_dir,
+                transcript=self._project_transcript,
+            )
+            # Stash the backend BEFORE :meth:`connect` so a raise
+            # from connect itself (or any later step) leaves the
+            # rollback path with something to disconnect.  Both
+            # :class:`CopilotChatBackend` and :class:`ClientChatBackend`
+            # implement ``disconnect`` to be idempotent / no-op on a
+            # backend whose connect() never completed, so calling it
+            # speculatively is safe.
+            self._backend = backend
+            backend.connect()
 
-        # Restore a previously persisted SDK session ID so the backend
-        # resumes the conversation instead of starting fresh.
-        session_id = self._initial_llm_session_id or load_session_state(
-            self.project_dir,
-        )
-        if session_id:
-            backend.llm_session_id = session_id
+            # Restore a previously persisted SDK session ID so the
+            # backend resumes the conversation instead of starting
+            # fresh.
+            session_id = self._initial_llm_session_id or load_session_state(
+                self.project_dir,
+            )
+            if session_id:
+                backend.llm_session_id = session_id
 
-        self._session = ClaritySession(
-            self.project_dir,
-            self.clarity_agent_dir,
-            backend,
-            self.llm_config,
-            transcript=self._project_transcript,
-        )
-        self._session.__enter__()
+            self._session = ClaritySession(
+                self.project_dir,
+                self.clarity_agent_dir,
+                backend,
+                self.llm_config,
+                transcript=self._project_transcript,
+            )
+            self._session.__enter__()
 
-        # Bridge backend callbacks to the WebSocket event queue.
-        # ClaritySession sets backend.on_tool_call (structured) for
-        # transcript persistence; we set on_tool_use (flattened) for
-        # the UI's real-time display.  The two callbacks fire in
-        # parallel — no chaining needed since they have different
-        # signatures and different consumers.
-        backend.on_tool_use = self._on_tool_use
-        backend.on_text_delta = self._on_text_delta
-        backend.on_cost = self._on_cost
-        backend.on_usage = self._on_usage
-        backend.on_warning = self._on_warning
-        backend.on_status = self._on_status
-        backend.on_compaction_started = self._on_compaction_started
-        backend.on_compaction_complete = self._on_compaction_complete
+            # Bridge backend callbacks to the WebSocket event queue.
+            # ClaritySession sets backend.on_tool_call (structured) for
+            # transcript persistence; we set on_tool_use (flattened)
+            # for the UI's real-time display.  The two callbacks fire
+            # in parallel — no chaining needed since they have
+            # different signatures and different consumers.
+            backend.on_tool_use = self._on_tool_use
+            backend.on_text_delta = self._on_text_delta
+            backend.on_cost = self._on_cost
+            backend.on_usage = self._on_usage
+            backend.on_warning = self._on_warning
+            backend.on_status = self._on_status
+            backend.on_compaction_started = self._on_compaction_started
+            backend.on_compaction_complete = self._on_compaction_complete
 
-        # Context-restore path: when the SDK has no session to resume
-        # AND there's prior conversation in the transcript, synthesize
-        # a prior conversation context out of that transcript and prepend
-        # it to the system prompt on the first chat call (see :meth:`chat`).
-        # When the transcript was empty before this session attached,
-        # there's nothing meaningful to inject (the just-written
-        # ChapterStarted is just a header), so we skip.
-        if not backend.llm_session_id and not transcript_was_empty:
-            self._transcript_context = self._project_transcript.context_summary()
-        else:
-            self._transcript_context = None
+            # Context-restore path: when the SDK has no session to
+            # resume AND there's prior conversation in the transcript,
+            # synthesize a prior conversation context out of that
+            # transcript and prepend it to the system prompt on the
+            # first chat call (see :meth:`chat`).  When the transcript
+            # was empty before this session attached, there's nothing
+            # meaningful to inject (the just-written ChapterStarted
+            # is just a header), so we skip.  ``context_summary`` reads
+            # transcript files, which can raise — kept inside the
+            # transactional block so a failure here also rolls back.
+            if not backend.llm_session_id and not transcript_was_empty:
+                self._transcript_context = self._project_transcript.context_summary()
+            else:
+                self._transcript_context = None
 
-        # Install the feedback tool so it's available in all chat calls.
-        self._setup_feedback_tools()
+            # Install the feedback tool so it's available in all chat
+            # calls.
+            self._setup_feedback_tools()
+        except BaseException:
+            self._rollback_partial_start()
+            raise
+
+    def _rollback_partial_start(self) -> None:
+        """Undo whatever portion of :meth:`start` completed.
+
+        Called from :meth:`start`'s except clause after any failure
+        during backend construction, ``connect``, session
+        construction, or post-setup steps.  Each cleanup is wrapped
+        in its own ``try/except`` so a failure in one step still
+        lets the next step run — and so the rollback never replaces
+        the original exception with a cleanup-time one.  Resets
+        instance attributes to their pre-start values so the adapter
+        looks "not started" to any caller that re-checks (e.g. the
+        WS handler that keeps the socket open and may otherwise be
+        tempted to reuse a half-dead adapter).
+        """
+        if self._session is not None:
+            try:
+                self._session.__exit__(None, None, None)
+            except Exception:
+                # __exit__ is currently a no-op but may grow side
+                # effects; swallow rather than mask the real error.
+                pass
+            self._session = None
+        if self._backend is not None:
+            try:
+                self._backend.disconnect()
+            except Exception:
+                # ``disconnect`` already swallows its own failures
+                # (see ``CopilotChatBackend.disconnect``); this
+                # outer guard catches anything that escapes — e.g.
+                # a backend whose ``connect`` raised partway through
+                # leaving an invariant the disconnect path doesn't
+                # expect.
+                pass
+            self._backend = None
+        # ``_project_transcript`` is intentionally NOT cleared: file
+        # handles, if any were opened, were closed by the session's
+        # __exit__ above (the writer is owned by the chapter context
+        # the session entered).  Holding the reference is harmless
+        # and lets diagnostics inspect the partial state.
+        self._transcript_context = None
 
     @property
     def llm_session_id(self) -> str | None:
