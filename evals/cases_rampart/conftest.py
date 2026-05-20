@@ -2,7 +2,7 @@
 
 Currently provides ``eval_config`` (loads ``evals/config.yaml`` with
 hard-fail on missing config or credentials) and ``clarity_adapter``
-(a ready-to-use ``ClaritySessionAdapter`` against the configured
+(a ready-to-use ``ClarityAgentAdapter`` against the configured
 target).  ``advisory`` / ``refusal_acceptable`` / smoke-gate /
 fingerprint-cache equivalents are not yet ported.
 
@@ -20,7 +20,7 @@ import pytest
 
 from evals.framework.config import EvalConfig, missing_credentials
 from evals.rampart_adapter import (
-    ClaritySessionAdapter,
+    ClarityAgentAdapter,
     build_target_backend,
     load_eval_config,
 )
@@ -73,8 +73,8 @@ def eval_config() -> EvalConfig:
 def clarity_adapter(
     eval_config: EvalConfig,
     tmp_path_factory: pytest.TempPathFactory,
-) -> Iterator[ClaritySessionAdapter]:
-    """A ``ClaritySessionAdapter`` configured against ``_target``.
+) -> Iterator[ClarityAgentAdapter]:
+    """A ``ClarityAgentAdapter`` configured against ``_target``.
 
     Each test gets its own tempdir factory so per-session project
     dirs don't collide.  Pytest cleans the tempdirs up at the end of
@@ -89,7 +89,7 @@ def clarity_adapter(
     def project_dir_factory() -> Path:
         return tmp_path_factory.mktemp("clarity-rampart-")
 
-    adapter = ClaritySessionAdapter(
+    adapter = ClarityAgentAdapter(
         clarity_agent_dir=repo_root,
         backend_factory=factory,
         llm_config=llm_config,

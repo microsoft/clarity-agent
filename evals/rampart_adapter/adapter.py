@@ -1,4 +1,4 @@
-"""``ClaritySessionAdapter`` — RAMPART AgentAdapter wrapping ClaritySession.
+"""``ClarityAgentAdapter`` — RAMPART AgentAdapter wrapping ClaritySession.
 
 Bridges RAMPART's async ``Session`` protocol to clarity-agent's sync
 ``ClaritySession.chat()`` via ``asyncio.to_thread``.  Owns the
@@ -94,7 +94,7 @@ class _ProtocolDirSnapshot:
         return effects
 
 
-class ClaritySessionSession:
+class ClarityAgentSession:
     """RAMPART :class:`Session` wrapping a single ``ClaritySession``.
 
     Async context manager.  ``send_async`` blocks the calling task on a
@@ -159,13 +159,13 @@ class ClaritySessionSession:
     async def send_async(self, request: Request) -> Response:
         if self._inner is None:
             raise RuntimeError(
-                "ClaritySessionSession used outside its async-context.  "
+                "ClarityAgentSession used outside its async-context.  "
                 "Wrap the call in `async with adapter.create_session_async() "
                 "as session: ...`."
             )
         if request.prompt is None:
             raise ValueError(
-                "ClaritySessionSession requires Request.prompt.  Inline "
+                "ClarityAgentSession requires Request.prompt.  Inline "
                 "attachments aren't wired into the adapter yet — the "
                 "current bridge is text-only."
             )
@@ -284,7 +284,7 @@ class ClaritySessionSession:
         return self._cost_usd
 
 
-class ClaritySessionAdapter:
+class ClarityAgentAdapter:
     """RAMPART :class:`AgentAdapter` for clarity-agent.
 
     Manufactures fresh sessions on demand.  Each session gets its own
@@ -319,7 +319,7 @@ class ClaritySessionAdapter:
         # writes by snapshot diff.  Both are reliable in-process.
         return ObservabilityLevel.TOOL_AND_SIDE_EFFECTS
 
-    async def create_session_async(self) -> ClaritySessionSession:
+    async def create_session_async(self) -> ClarityAgentSession:
         # Each session gets its own project_dir and ChatBackend, but
         # sessions still share process-global state (env vars, cwd).
         # That's fine for ``-n`` worker-level parallelism (xdist runs
@@ -327,7 +327,7 @@ class ClaritySessionAdapter:
         # in-process asyncio-level parallelism that mutates env vars.
         project_dir = self._project_dir_factory()
         backend = self._backend_factory(project_dir)
-        return ClaritySessionSession(
+        return ClarityAgentSession(
             project_dir=project_dir,
             clarity_agent_dir=self._clarity_agent_dir,
             backend=backend,

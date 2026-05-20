@@ -10,8 +10,8 @@ around ``evals.framework.config`` for loading ``evals/config.yaml``.
 from __future__ import annotations
 
 from evals.rampart_adapter.adapter import (
-    ClaritySessionAdapter,
-    ClaritySessionSession,
+    ClarityAgentAdapter,
+    ClarityAgentSession,
 )
 from evals.rampart_adapter.config import (
     build_target_backend,
@@ -21,8 +21,8 @@ from evals.rampart_adapter.manifest import CLARITY_AGENT_MANIFEST
 
 __all__ = [
     "CLARITY_AGENT_MANIFEST",
-    "ClaritySessionAdapter",
-    "ClaritySessionSession",
+    "ClarityAgentAdapter",
+    "ClarityAgentSession",
     "build_target_backend",
     "load_eval_config",
 ]

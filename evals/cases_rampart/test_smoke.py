@@ -4,7 +4,7 @@ Proves:
 
   - the ``rampart`` package installs and imports
   - ``CLARITY_AGENT_MANIFEST`` is a valid ``AppManifest``
-  - ``ClaritySessionAdapter.create_session_async`` returns a working
+  - ``ClarityAgentAdapter.create_session_async`` returns a working
     ``Session`` whose async context-manager + ``send_async`` flow
     makes a real round-trip through ``ClaritySession.chat``
   - tool-call observation and side-effect snapshotting don't crash
@@ -34,7 +34,7 @@ from rampart import (
 
 from evals.rampart_adapter import (
     CLARITY_AGENT_MANIFEST,
-    ClaritySessionAdapter,
+    ClarityAgentAdapter,
 )
 
 
@@ -47,7 +47,7 @@ def test_manifest_well_formed() -> None:
 
 
 def test_adapter_observability_profile(
-    clarity_adapter: ClaritySessionAdapter,
+    clarity_adapter: ClarityAgentAdapter,
 ) -> None:
     """The adapter declares full observability — tool calls + side
     effects."""
@@ -60,7 +60,7 @@ def test_adapter_observability_profile(
 
 @pytest.mark.asyncio
 async def test_smoke_send_async_round_trip(
-    clarity_adapter: ClaritySessionAdapter,
+    clarity_adapter: ClarityAgentAdapter,
 ) -> None:
     """A single ``send_async`` produces a non-empty response.
 
