@@ -121,7 +121,10 @@ class ClarityAgentSession:
         self._inner: ClaritySession | None = None
         self._transcript: Transcript | None = None
 
-        self._pending_tool_calls: list[ToolCall] = []
+        # Cumulative cost across turns.  Only mutated on the async task
+        # thread (in ``send_async`` after the ``to_thread`` chat call
+        # returns), never from the backend's callback thread — see the
+        # per-turn closure pattern below.
         self._cost_usd: float = 0.0
 
     # --- async context management -----------------------------------
@@ -140,7 +143,6 @@ class ClarityAgentSession:
             transcript=self._transcript,
         )
         self._inner.__enter__()
-        self._install_observers()
         return self
 
     async def __aexit__(
@@ -149,10 +151,21 @@ class ClarityAgentSession:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if self._inner is not None:
-            self._inner.__exit__(exc_type, exc_val, exc_tb)
-        if self._transcript is not None:
-            self._transcript.close()
+        # Order: tear down ClaritySession first (it may still want the
+        # backend), then disconnect the backend (the factory created
+        # it for us; ClaritySession.__exit__ is a no-op so nobody else
+        # will), then close the transcript.  Each step is best-effort
+        # so a failure in one doesn't mask the others.
+        try:
+            if self._inner is not None:
+                self._inner.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            try:
+                self._backend.disconnect()
+            except Exception:
+                pass
+            if self._transcript is not None:
+                self._transcript.close()
 
     # --- RAMPART Session protocol ----------------------------------
 
@@ -170,18 +183,63 @@ class ClarityAgentSession:
                 "current bridge is text-only."
             )
 
-        # Snapshot protocol-dir + reset per-turn buffers BEFORE prompting.
+        # Snapshot protocol-dir + install per-turn observers BEFORE
+        # prompting.  Observer state is captured in a closure local to
+        # this turn so the worker thread that fires the callbacks
+        # never touches instance attributes — eliminates the cross-
+        # thread race that a shared ``self._pending_tool_calls`` list
+        # would have when ``-n`` parallelism or future free-threaded
+        # Python removes the GIL's implicit synchronization.
         protocol_root = _protocol_dir(self._project_dir)
         before = _ProtocolDirSnapshot.take(protocol_root)
-        self._pending_tool_calls = []
-        cost_before = self._cost_usd
 
-        text = await asyncio.to_thread(self._chat, request.prompt)
+        turn_tool_calls: list[ToolCall] = []
+        turn_costs: list[float] = []
+        # Chain on top of whatever the backend already has wired (e.g.
+        # ``ClaritySession.__init__`` installs an ``on_tool_call`` that
+        # writes ``ToolUse`` events to the transcript when one is
+        # provided).  Capture the previous handlers now and forward to
+        # them so we don't drop transcript writes.
+        #
+        # Caveat: the Claude Agent SDK backend invokes ai_actions via
+        # Bash rather than native tool-use, so ``on_tool_call`` won't
+        # fire there and ``Response.tool_calls`` will be empty even
+        # when the agent ran an action.  Evaluators that need cross-
+        # backend tool observation should also inspect
+        # ``Response.side_effects`` (the ``.clarity-protocol/`` diff).
+        prev_tool_call = self._backend.on_tool_call
+        prev_cost = self._backend.on_cost
+
+        def _record_tool_call(block: ToolUseBlock) -> None:
+            turn_tool_calls.append(ToolCall(
+                name=block.name,
+                arguments=dict(block.input) if block.input else {},
+            ))
+            if prev_tool_call is not None:
+                prev_tool_call(block)
+
+        def _record_cost(cost_usd: float) -> None:
+            turn_costs.append(cost_usd)
+            if prev_cost is not None:
+                prev_cost(cost_usd)
+
+        self._backend.on_tool_call = _record_tool_call
+        self._backend.on_cost = _record_cost
+
+        try:
+            text = await asyncio.to_thread(self._chat, request.prompt)
+        finally:
+            # Restore the previous observers regardless of outcome so
+            # they don't outlive this turn or leak across sessions
+            # sharing a backend.
+            self._backend.on_tool_call = prev_tool_call
+            self._backend.on_cost = prev_cost
 
         after = _ProtocolDirSnapshot.take(protocol_root)
         side_effects = before.diff(after)
-        tool_calls = list(self._pending_tool_calls)
-        turn_cost = self._cost_usd - cost_before
+        tool_calls = list(turn_tool_calls)
+        turn_cost = sum(turn_costs)
+        self._cost_usd += turn_cost
 
         return Response(
             text=text,
@@ -239,35 +297,6 @@ class ClarityAgentSession:
         if status_report:
             prompt += f"\n\nPacket status analysis:\n\n{status_report}"
         return prompt
-
-    def _install_observers(self) -> None:
-        """Hook backend callbacks for tool-call + cost observation.
-
-        Caveat: the Claude Agent SDK backend invokes ai_actions via
-        Bash rather than native tool-use, so ``on_tool_call`` won't
-        fire there and ``Response.tool_calls`` will be empty even
-        when the agent ran an action.  Evaluators that need
-        cross-backend tool observation should also inspect
-        ``Response.side_effects`` (the ``.clarity-protocol/`` diff).
-        """
-        prev_tool_call = self._backend.on_tool_call
-        prev_cost = self._backend.on_cost
-
-        def _record_tool_call(block: ToolUseBlock) -> None:
-            self._pending_tool_calls.append(ToolCall(
-                name=block.name,
-                arguments=dict(block.input) if block.input else {},
-            ))
-            if prev_tool_call is not None:
-                prev_tool_call(block)
-
-        def _record_cost(cost_usd: float) -> None:
-            self._cost_usd += cost_usd
-            if prev_cost is not None:
-                prev_cost(cost_usd)
-
-        self._backend.on_tool_call = _record_tool_call
-        self._backend.on_cost = _record_cost
 
     # --- evaluator-friendly accessors --------------------------------
 
