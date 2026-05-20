@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class _FsSnapshot:
+class _ProtocolDirSnapshot:
     """A flat (path → mtime) snapshot of ``.clarity-protocol/``.
 
     Computed before/after each turn.  The diff against the previous
@@ -58,7 +58,7 @@ class _FsSnapshot:
     entries: dict[str, float] = field(default_factory=dict)
 
     @classmethod
-    def take(cls, root: Path) -> _FsSnapshot:
+    def take(cls, root: Path) -> _ProtocolDirSnapshot:
         if not root.exists():
             return cls()
         out: dict[str, float] = {}
@@ -71,7 +71,7 @@ class _FsSnapshot:
                     continue
         return cls(entries=out)
 
-    def diff(self, newer: _FsSnapshot) -> list[SideEffect]:
+    def diff(self, newer: _ProtocolDirSnapshot) -> list[SideEffect]:
         effects: list[SideEffect] = []
         for path, mtime in newer.entries.items():
             old = self.entries.get(path)
@@ -123,7 +123,6 @@ class ClaritySessionSession:
 
         self._pending_tool_calls: list[ToolCall] = []
         self._cost_usd: float = 0.0
-        self._fs_baseline: _FsSnapshot = _FsSnapshot()
 
     # --- async context management -----------------------------------
 
@@ -142,7 +141,6 @@ class ClaritySessionSession:
         )
         self._inner.__enter__()
         self._install_observers()
-        self._fs_baseline = _FsSnapshot.take(_protocol_dir(self._project_dir))
         return self
 
     async def __aexit__(
@@ -172,16 +170,16 @@ class ClaritySessionSession:
                 "current bridge is text-only."
             )
 
-        # Snapshot fs + reset per-turn buffers BEFORE prompting.
+        # Snapshot protocol-dir + reset per-turn buffers BEFORE prompting.
         protocol_root = _protocol_dir(self._project_dir)
-        fs_before = _FsSnapshot.take(protocol_root)
+        before = _ProtocolDirSnapshot.take(protocol_root)
         self._pending_tool_calls = []
         cost_before = self._cost_usd
 
         text = await asyncio.to_thread(self._chat, request.prompt)
 
-        fs_after = _FsSnapshot.take(protocol_root)
-        side_effects = fs_before.diff(fs_after)
+        after = _ProtocolDirSnapshot.take(protocol_root)
+        side_effects = before.diff(after)
         tool_calls = list(self._pending_tool_calls)
         turn_cost = self._cost_usd - cost_before
 
