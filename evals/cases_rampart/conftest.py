@@ -1,13 +1,14 @@
 """Pytest fixtures for RAMPART-driven eval cases.
 
-Phase 1 scope: just enough fixtures to wire the smoke test.  No
-``advisory`` / ``refusal_acceptable`` / smoke-gate / fingerprint-
-cache support yet — those land in Phase 2.
+Currently provides ``eval_config`` (loads ``evals/config.yaml`` with
+hard-fail on missing config or credentials) and ``clarity_adapter``
+(a ready-to-use ``ClaritySessionAdapter`` against the configured
+target).  ``advisory`` / ``refusal_acceptable`` / smoke-gate /
+fingerprint-cache equivalents are not yet ported.
 
 The parent ``evals/conftest.py`` is loaded automatically and supplies
 its own session-level hooks.  Those hooks only react to ``evals/cases/``
-node IDs (legacy path), so they pass through harmlessly for
-``evals/cases_rampart/`` runs.
+node IDs (legacy path), so they pass through harmlessly here.
 """
 
 from __future__ import annotations

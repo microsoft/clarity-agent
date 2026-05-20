@@ -1,6 +1,6 @@
-"""Phase-1 wiring proof for the RAMPART adapter.
+"""Wiring proof for the RAMPART adapter.
 
-This is the **only** Phase-1 test.  It exists to prove:
+Proves:
 
   - the ``rampart`` package installs and imports
   - ``CLARITY_AGENT_MANIFEST`` is a valid ``AppManifest``
@@ -10,10 +10,10 @@ This is the **only** Phase-1 test.  It exists to prove:
   - tool-call observation and side-effect snapshotting don't crash
   - session cleanup runs without leaking transcripts or backends
 
-It does NOT exercise simulated user, judge, refusal logic, report
-generation, or any Clarity-specific evaluation flow — those are
-Phase 2.  Keep this test small; bigger surface area lives in
-sibling files as we add cases.
+Does NOT exercise simulated user, judge, refusal logic, or report
+generation — those are evaluator-level concerns that belong in
+their own case files.  Keep this test small; broader surface area
+lives in sibling files as cases are added.
 
 Run locally with:
     pytest evals/cases_rampart/ -sv

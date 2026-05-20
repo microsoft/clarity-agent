@@ -3,13 +3,13 @@
 The legacy framework's ``evals.framework.config`` already knows how
 to parse ``evals/config.yaml`` into a structured :class:`EvalConfig`
 and how to turn a role spec into a ``ChatBackend`` + ``LLMConfig``.
-We reuse it here rather than reimplementing the same machinery on
-the RAMPART side — the YAML is data, not behavior, and re-parsing
-it twice would be a bug factory once people start editing roles.
+We reuse it here rather than reimplementing the same machinery —
+the YAML is data, not behavior, and re-parsing it twice would be a
+bug factory once people start editing roles.
 
-When ``evals/framework/`` is finally deleted in Phase 5, this module
-either inlines whatever bits it still needs or moves to a
-RAMPART-side equivalent.
+When ``evals/framework/`` is eventually deleted, this module either
+inlines whatever bits it still needs or moves to a RAMPART-side
+equivalent.
 """
 
 from __future__ import annotations

@@ -168,8 +168,8 @@ class ClaritySessionSession:
         if request.prompt is None:
             raise ValueError(
                 "ClaritySessionSession requires Request.prompt.  Inline "
-                "attachments aren't wired into the adapter yet — Phase 1 "
-                "scope is text-only conversation."
+                "attachments aren't wired into the adapter yet — the "
+                "current bridge is text-only."
             )
 
         # Snapshot fs + reset per-turn buffers BEFORE prompting.
@@ -243,7 +243,15 @@ class ClaritySessionSession:
         return prompt
 
     def _install_observers(self) -> None:
-        """Hook backend callbacks for tool-call + cost observation."""
+        """Hook backend callbacks for tool-call + cost observation.
+
+        Caveat: the Claude Agent SDK backend invokes ai_actions via
+        Bash rather than native tool-use, so ``on_tool_call`` won't
+        fire there and ``Response.tool_calls`` will be empty even
+        when the agent ran an action.  Evaluators that need
+        cross-backend tool observation should also inspect
+        ``Response.side_effects`` (the ``.clarity-protocol/`` diff).
+        """
         prev_tool_call = self._backend.on_tool_call
         prev_cost = self._backend.on_cost
 
@@ -314,6 +322,11 @@ class ClaritySessionAdapter:
         return ObservabilityLevel.TOOL_AND_SIDE_EFFECTS
 
     async def create_session_async(self) -> ClaritySessionSession:
+        # Each session gets its own project_dir and ChatBackend, but
+        # sessions still share process-global state (env vars, cwd).
+        # That's fine for ``-n`` worker-level parallelism (xdist runs
+        # each worker in its own process) but isn't safe for
+        # in-process asyncio-level parallelism that mutates env vars.
         project_dir = self._project_dir_factory()
         backend = self._backend_factory(project_dir)
         return ClaritySessionSession(
