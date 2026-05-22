@@ -150,14 +150,25 @@ def create_app(
 
     def _classify_ws_error(error: Exception, provider: str) -> dict[str, Any]:
         """Build a classified error message for the WebSocket client."""
-        from clarity_agent.setup.doctor import _classify_error
+        from clarity_agent.setup.doctor import (
+            _classify_error,
+            _is_claude_tool_config_error,
+        )
         hint = _classify_error(error, provider)
         msg = str(error)
         # Strip the misleading SDK boilerplate when there's nothing on stderr.
         msg = msg.replace("\nError output: Check stderr output for details", "")
         # Determine category and retryability
         msg_lower = msg.lower()
-        if "exit code" in msg_lower or "command failed" in msg_lower:
+        # Claude tool-definition rejection first: it's not retryable
+        # (the same malformed tool ships on every request until the user
+        # removes the server), and ``_classify_error`` has already
+        # produced the ``claude mcp`` remediation hint.  Checked ahead of
+        # the generic buckets so a stray "400" / keyword match can't
+        # misroute it.
+        if _is_claude_tool_config_error(error):
+            category, retryable = "mcp_config", False
+        elif "exit code" in msg_lower or "command failed" in msg_lower:
             # CLI crash — check for auth hints before classifying generically.
             category, retryable = "backend_crash", True
             if "auth" in msg_lower or "authentication" in msg_lower:

@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -703,6 +704,27 @@ def check_llm_provider(agent_dir: Path) -> CheckResult:
 def _classify_error(error: Exception, provider: str) -> str:
     """Return a targeted fix hint for common backend errors."""
     msg = str(error).lower()
+    # Per-tool config rejection is checked first: it's the most
+    # confusing failure for users, because the offending tool belongs
+    # to one of *their* configured MCP servers — not to Clarity — yet
+    # the raw error points only at an opaque ``tools.<n>`` index.  We
+    # don't try to restate the specific schema problem (there are many
+    # ways a tool definition can be invalid); the raw error already
+    # carries that, and the surrounding ``message`` field shows it.
+    # Our job is just to send the user to the right remediation.
+    # See :func:`_is_claude_tool_config_error`.
+    if _is_claude_tool_config_error(error):
+        return (
+            "The Anthropic API rejected one of the tool definitions in "
+            "the request (see the error above for the specific tool index "
+            "and problem). Clarity registers no custom tools here, so this "
+            "almost always comes from a tool exposed by an MCP server in "
+            "your Claude configuration — and it breaks *every* Claude "
+            "request, the `claude` CLI and Clarity alike, until it's "
+            "fixed. Run `claude mcp list` to see your configured servers, "
+            "then `claude mcp remove <servername>` to disable the "
+            "malfunctioning one."
+        )
     if "auth" in msg or "api key" in msg or "401" in msg or "403" in msg:
         return f"Your API key for {provider} may be invalid or expired."
     if "connection" in msg or "timeout" in msg or "resolve" in msg:
@@ -718,6 +740,41 @@ def _is_auth_error(error: Exception) -> bool:
     """Return True if *error* looks like an authentication failure."""
     msg = str(error).lower()
     return any(s in msg for s in ("auth", "api key", "401", "403"))
+
+
+# A 4xx status immediately followed by a ``tools.<index>.`` path is the
+# Anthropic (Claude) API's format for "tool definition number N is
+# invalid" — regardless of *which* field is wrong
+# (``custom_input_schema``, ``name``, ``input_schema.properties…``,
+# etc.).  The 4xx makes it a client-side error (the request is
+# malformed), and the ``tools.<n>.`` scope makes it specifically a bad
+# tool definition.  Matching the structure rather than any one error
+# phrasing catches every variant of "your tool config is broken" with
+# a single rule.  This is the *Claude* error shape specifically; other
+# providers (OpenAI, Gemini, …) report tool problems with different
+# wording and won't match — hence the ``claude`` qualifier on the
+# helper below.
+_CLAUDE_TOOL_CONFIG_ERROR_RE = re.compile(r"4\d{2}\s+tools\.\d+\.")
+
+
+def _is_claude_tool_config_error(error: Exception) -> bool:
+    """Return True if *error* is the Claude/Anthropic API rejecting a
+    specific tool definition (a ``4xx tools.<index>.<field>`` error).
+
+    The offending tool is almost always supplied by a user-configured
+    MCP server (on the ``claude_sdk`` backend Clarity registers no
+    custom tools of its own), so matching this structure lets
+    :func:`_classify_error` point the user at ``claude mcp`` rather than
+    at their API key.  Example::
+
+        400 tools.195.custom_input_schema: input_schema does not
+        support oneOf, allOf, or anyOf at top level
+
+    Named for the Claude backend deliberately: this is the Anthropic
+    API's error shape.  Other backends surface tool-definition problems
+    differently and would need their own detector + remediation.
+    """
+    return bool(_CLAUDE_TOOL_CONFIG_ERROR_RE.search(str(error)))
 
 
 def _make_update_key_fn(

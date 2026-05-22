@@ -12,6 +12,8 @@ import pytest
 from clarity_agent.setup.doctor import (
     CheckResult,
     Status,
+    _classify_error,
+    _is_claude_tool_config_error,
     check_backend_health,
     check_clarity_command,
     check_installation_type,
@@ -22,6 +24,79 @@ from clarity_agent.setup.doctor import (
     check_repo_freshness,
     run_all_checks,
 )
+
+
+# ---------------------------------------------------------------------------
+# Error classification — Claude per-tool definition rejection
+# ---------------------------------------------------------------------------
+
+# A representative message; the schema-union variant is just one of
+# several ways the Anthropic API can reject a tool definition.  Users
+# hit these with a malfunctioning MCP server configured in their Claude
+# environment.
+_CLAUDE_TOOL_ERROR = (
+    "API Error: 400 tools.195.custom_input_schema: input_schema does "
+    "not support oneOf, allOf, or anyOf at top level"
+)
+
+
+class TestClaudeToolConfigError:
+    def test_detects_canonical_schema_union_message(self) -> None:
+        assert _is_claude_tool_config_error(RuntimeError(_CLAUDE_TOOL_ERROR))
+
+    def test_detects_other_tool_field_rejections(self) -> None:
+        # The detector keys on the ``4xx tools.<n>.`` structure, not on
+        # the specific schema problem — so a rejection of any field on a
+        # tool definition (name, description, a nested schema path) is
+        # caught with the same rule.
+        assert _is_claude_tool_config_error(
+            RuntimeError("400 tools.3.name: must match ^[a-zA-Z0-9_-]+$"),
+        )
+        assert _is_claude_tool_config_error(
+            RuntimeError(
+                "API Error: 422 tools.12.input_schema.properties.x: "
+                "unknown format",
+            ),
+        )
+
+    def test_ignores_unrelated_errors(self) -> None:
+        # Auth failures, generic 400s, and network errors must NOT be
+        # misclassified — otherwise we'd send users chasing MCP servers
+        # for an API-key or connectivity problem.
+        assert not _is_claude_tool_config_error(RuntimeError("401 unauthorized"))
+        assert not _is_claude_tool_config_error(RuntimeError("400 bad request"))
+        assert not _is_claude_tool_config_error(
+            RuntimeError("connection timeout"),
+        )
+
+    def test_ignores_tool_word_without_index_structure(self) -> None:
+        # A 4xx that merely mentions "tools" but isn't the per-tool
+        # ``tools.<n>.`` validation format must not trip the detector —
+        # the structure is the whole signal.
+        assert not _is_claude_tool_config_error(
+            RuntimeError("400 too many tools provided"),
+        )
+        # Schema vocabulary without the ``tools.<n>.`` scope (e.g. a
+        # message that happens to mention anyOf) also must not match —
+        # we deliberately key on structure, not keywords.
+        assert not _is_claude_tool_config_error(
+            RuntimeError("input_schema must not contain anyOf"),
+        )
+
+    def test_classify_error_returns_mcp_remediation_hint(self) -> None:
+        hint = _classify_error(RuntimeError(_CLAUDE_TOOL_ERROR), "anthropic")
+        # The hint must point at the concrete remediation commands and
+        # make clear the breakage is environment-wide, not Clarity-only.
+        assert "claude mcp list" in hint
+        assert "claude mcp remove" in hint
+        assert "MCP server" in hint
+
+    def test_classify_error_takes_precedence_over_generic_400(self) -> None:
+        # The message contains "400" but must resolve to the tool-config
+        # hint, not the API-key hint (the auth branch keys on 401/403,
+        # but this guards against future reordering).
+        hint = _classify_error(RuntimeError(_CLAUDE_TOOL_ERROR), "anthropic")
+        assert "API key" not in hint
 
 # ---------------------------------------------------------------------------
 # check_installation_type
