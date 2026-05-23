@@ -315,8 +315,14 @@ def clone_or_update(target: Path, clone_url: str) -> StepResult:
     return StepResult(Outcome.OK, f"Cloned clarity agent into {CLARITY_DIR}")
 
 
-def update_gitignore(target: Path) -> list[StepResult]:
-    """Ensure .clarity-agent/ and clarity wrappers are in .gitignore."""
+def update_gitignore(layout: "ProjectLayout") -> list[StepResult]:  # noqa: F821
+    """Ensure ``.clarity-agent/`` and clarity wrappers are in ``.gitignore``.
+
+    Reads the protocol-dir name from *layout* rather than re-deriving
+    it via ``app_paths.protocol_dir`` — single source of truth for
+    layout-dependent paths.
+    """
+    target = layout.project_dir
     gitignore = target / ".gitignore"
     existing: list[str] = []
     if gitignore.exists():
@@ -324,8 +330,7 @@ def update_gitignore(target: Path) -> list[StepResult]:
 
     results: list[StepResult] = []
     additions: list[str] = []
-    from clarity_agent.app_paths import protocol_dir
-    proto_name = protocol_dir(target).name
+    proto_name = layout.protocol_dir_name()
     entries = [f"/{CLARITY_DIR}", "/clarity", "/clarity.ps1", "/clarity.bat",
                f"/{proto_name}/transcripts/"]
     for entry in entries:
@@ -586,42 +591,35 @@ def create_wrapper(
     return StepResult(Outcome.OK, f"Wrapper(s) created: {', '.join(results_desc)}")
 
 
-def insert_agent_snippet(target: Path, agent_dir: Path) -> StepResult:
-    """Insert the Clarity snippet into the project's agent config file.
+def insert_agent_snippet(layout: "ProjectLayout") -> StepResult:  # noqa: F821
+    """Insert (or refresh) the Clarity block in ``layout.agents_md``.
 
-    Delegates to :mod:`clarity_agent.setup.snippet` (stdlib-only) for
-    template rendering, target detection, and idempotent insertion.
+    Thin wrapper around
+    :func:`~clarity_agent.setup.snippet.ensure_agents_md`, which
+    handles every existing-state combination — create / append /
+    rewrite-stale-block / no-op — idempotently.  The orchestrator
+    builds *layout* once and threads it through every step, so this
+    function takes no responsibility for layout construction.
 
-    This import is safe because ``snippet`` only uses stdlib modules and
-    this step runs after pip install in the orchestrator.
+    The imports are safe because both ``layout`` and ``snippet`` are
+    stdlib-only and this step runs after pip install.
     """
     from clarity_agent.setup.snippet import (
-        find_target,
-        has_snippet,
-        insert_snippet,
-        render_snippet,
+        EnsureStatus,
+        ensure_agents_md,
         snippet_path,
     )
 
     if not snippet_path().exists():
         return StepResult(Outcome.SKIP, "Snippet template not found")
 
-    # Determine the processes path (relative for embedded installs).
-    if agent_dir.name == CLARITY_DIR:
-        processes_dir = f"{CLARITY_DIR}/processes"
-    else:
-        processes_dir = (agent_dir / "processes").as_posix()
-
-    snippet = render_snippet(processes_dir)
-    config_file = find_target(target)
-
-    if has_snippet(config_file):
-        return StepResult(Outcome.OK, f"Snippet already in {config_file.name}")
-
-    action = insert_snippet(config_file, snippet)
-    if action == "created":
-        return StepResult(Outcome.OK, f"Created {config_file.name} with clarity snippet")
-    return StepResult(Outcome.OK, f"Snippet {action} to {config_file.name}")
+    status = ensure_agents_md(layout)
+    name = layout.agents_md.name
+    if status is EnsureStatus.CREATED:
+        return StepResult(Outcome.OK, f"Created {name} with clarity snippet")
+    if status is EnsureStatus.UPDATED:
+        return StepResult(Outcome.OK, f"Refreshed clarity snippet in {name}")
+    return StepResult(Outcome.OK, f"Clarity snippet already current in {name}")
 
 
 def run_tests(target: Path, venv_dir: Path) -> list[StepResult]:
@@ -750,9 +748,30 @@ def run_install(
         if r.outcome == Outcome.FAIL:
             return results
 
+    # -- Build the canonical ProjectLayout (embedded only) ---------------
+    # Single source of truth for every layout-dependent path the
+    # remaining steps need.  Constructed here (rather than detected
+    # via :func:`detect_layout`) because the protocol dir hasn't
+    # been created yet on a fresh embedded install — detection
+    # would return None.
+    embedded_layout: "ProjectLayout | None" = None  # noqa: F821
+    if mode == InstallMode.EMBEDDED:
+        from clarity_agent.setup.layout import (
+            PROTOCOL_DIR_DOT,
+            Mode,
+            ProjectLayout,
+        )
+        embedded_layout = ProjectLayout(
+            mode=Mode.EMBEDDED,
+            project_dir=config.target,
+            clarity_agent_dir=config.agent_dir,
+            protocol_dir=config.target / PROTOCOL_DIR_DOT,
+        )
+
     # -- Gitignore (embedded only) ---------------------------------------
     if config.needs_gitignore:
-        _record_all(update_gitignore(target))
+        assert embedded_layout is not None  # needs_gitignore ⇔ EMBEDDED
+        _record_all(update_gitignore(embedded_layout))
 
     # -- Venv ------------------------------------------------------------
     r = create_venv(config.venv_dir)
@@ -782,7 +801,8 @@ def run_install(
 
     # -- Agent config snippet (embedded only) ----------------------------
     if mode == InstallMode.EMBEDDED:
-        _record(insert_agent_snippet(config.target, config.agent_dir))
+        assert embedded_layout is not None
+        _record(insert_agent_snippet(embedded_layout))
 
     # -- Tests (dev only) ------------------------------------------------
     if config.run_tests and not skip_tests:

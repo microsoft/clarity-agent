@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from clarity_agent.setup.layout import EMBEDDED_AGENT_SUBDIR
 from clarity_agent.setup.installer import (
     Outcome,
     StepResult,
@@ -191,7 +192,7 @@ def _detect_pip_spec(agent_dir: Path) -> tuple[Path, Path, str]:
     if embedded_venv.exists():
         # Could be either mode — check for the project-root venv pattern.
         parent_venv = parent / ".venv"
-        if parent_venv.exists() and agent_dir.name == ".clarity-agent":
+        if parent_venv.exists() and agent_dir.name == EMBEDDED_AGENT_SUBDIR:
             # Embedded mode: pip cwd is the project root.
             return parent_venv, parent, "./.clarity-agent[cli,web,brainstorm,docx,openai,azure]"
 

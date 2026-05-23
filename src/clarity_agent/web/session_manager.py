@@ -129,6 +129,19 @@ class WebSessionAdapter:
         self._project_transcript = Transcript(self.project_dir)
         transcript_was_empty = self._project_transcript.is_empty
 
+        # Reconcile the project's AGENTS.md against the current
+        # :class:`ProjectLayout` before the LLM has a chance to read
+        # it.  Detection is read-only — if no layout is present yet
+        # (neither ``.clarity-protocol/`` nor ``Clarity Protocol/``
+        # nor ``.clarity-agent/``), we skip the reconcile rather than
+        # implicitly creating one: per-mode setup belongs in the
+        # explicit entry points (``clarity install --embedded`` for
+        # git repos, the desktop "new project" flow for userspace),
+        # not in every session-open.  Failures here log but don't
+        # block the session — a stale AGENTS.md is preferable to a
+        # failed session start.
+        self._ensure_agents_md_best_effort()
+
         try:
             backend = self.llm_config.create_chat_backend(
                 project_dir=self.project_dir,
@@ -240,6 +253,43 @@ class WebSessionAdapter:
         # the session entered).  Holding the reference is harmless
         # and lets diagnostics inspect the partial state.
         self._transcript_context = None
+
+    def _ensure_agents_md_best_effort(self) -> None:
+        """Reconcile ``project_dir/AGENTS.md`` against the current
+        layout before backend construction, so the LLM sees the
+        current rendering on its first turn.
+
+        Defense-in-depth: in production the same call also runs at
+        the top of :func:`~clarity_agent.web.app.create_app`, which
+        fires once per sidecar startup (i.e. per "open this
+        directory" event) — that's the primary place.  This hook
+        covers callers that construct an adapter directly without
+        going through ``create_app`` (notably tests, but also any
+        future programmatic embedding).  Both paths are idempotent
+        (no write when nothing's changed), so double-execution is
+        cheap.
+
+        Delegates to :func:`~clarity_agent.setup.snippet.ensure_for_project`,
+        which centralises the dogfooding skip, the no-layout
+        short-circuit, and OSError swallowing — see that function's
+        docstring for the policy.  This wrapper only adds the
+        startup-log line for non-no-op outcomes so contributors can
+        see what happened on each session open.
+        """
+        from clarity_agent.setup.snippet import (
+            EnsureStatus,
+            ensure_for_project,
+        )
+
+        status = ensure_for_project(
+            self.project_dir, self.clarity_agent_dir,
+        )
+        if status is not None and status is not EnsureStatus.UNCHANGED:
+            print(
+                f"  [agents.md] {status.value}: "
+                f"{self.project_dir / 'AGENTS.md'}",
+                flush=True,
+            )
 
     @property
     def llm_session_id(self) -> str | None:

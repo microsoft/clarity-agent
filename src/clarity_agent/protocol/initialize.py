@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-Initialize a .clarity-protocol/ directory for a project.
+Initialize a protocol directory for a project.
 
 Creates the directory structure, config.json, and template files.
-Optionally inserts the Clarity snippet into the project's agent config
-file (CLAUDE.md, AGENTS.md, etc.).
+Optionally refreshes the Clarity block in the project's ``AGENTS.md``
+via :func:`~clarity_agent.setup.snippet.ensure_agents_md`.
 
-Can be used standalone (CLI) or imported as a module by the clarity CLI (``clarity.py``).
+The protocol directory's name (``.clarity-protocol/`` for embedded
+git-repo projects, ``Clarity Protocol/`` for userspace ones) is
+resolved per-project by :func:`clarity_agent.app_paths.protocol_dir`.
+
+Can be used standalone (CLI) or imported as a module by the clarity
+CLI (``clarity.py``).
 """
 
 from __future__ import annotations
@@ -135,16 +140,17 @@ def init_protocol(
     project_dir: Path,
     clarity_agent_dir: Path | None = None,
 ) -> Path:
-    """Initialize a .clarity-protocol/ directory in project_dir.
+    """Initialize the protocol directory in *project_dir*.
 
     Creates the directory structure, config.json, and template files.
-    If clarity_agent_dir is provided, also inserts the Clarity snippet
-    into the project's agent config file (CLAUDE.md, AGENTS.md, etc.).
+    If *clarity_agent_dir* is provided, also refreshes the Clarity
+    block in the project's ``AGENTS.md`` via
+    :func:`~clarity_agent.setup.snippet.ensure_agents_md`.
 
-    Skips files that already exist (safe to run on a partially-initialized
-    project).
+    Skips files that already exist (safe to run on a
+    partially-initialized project).
 
-    Returns the path to the .clarity-protocol/ directory.
+    Returns the path to the protocol directory.
     """
     from clarity_agent.app_paths import protocol_dir as _protocol_dir
     protocol_dir: Path = _protocol_dir(project_dir)
@@ -168,26 +174,34 @@ def init_protocol(
             full_path.write_text(content, encoding="utf-8")
             created.append(rel_path)
 
-    # Insert Clarity snippet into agent config file
+    # Refresh the Clarity block in the project's AGENTS.md.  Embedded
+    # mode if the user has explicitly installed clarity-agent into
+    # this repo (``.clarity-agent/`` present); userspace otherwise.
+    # Either way, ``ensure_agents_md`` is idempotent and only writes
+    # if the rendered content actually differs from what's on disk.
     if clarity_agent_dir is not None:
+        from ..setup.layout import (
+            EMBEDDED_AGENT_SUBDIR,
+            Mode,
+            ProjectLayout,
+        )
         from ..setup.snippet import (
-            find_target,
-            has_snippet,
-            insert_snippet,
-            render_snippet,
+            EnsureStatus,
+            ensure_agents_md,
             snippet_path,
         )
         if snippet_path().exists():
-            # Use relative path for embedded installs, absolute otherwise.
-            if (project_dir / ".clarity-agent").exists():
-                processes_dir = ".clarity-agent/processes"
-            else:
-                processes_dir = (clarity_agent_dir / "processes").as_posix()
-            snippet = render_snippet(processes_dir)
-            target = find_target(project_dir)
-            if not has_snippet(target):
-                action = insert_snippet(target, snippet)
-                created.append(f"{target.name} ({action})")
+            embedded_agent = project_dir / EMBEDDED_AGENT_SUBDIR
+            is_embedded = embedded_agent.is_dir()
+            layout = ProjectLayout(
+                mode=Mode.EMBEDDED if is_embedded else Mode.USERSPACE,
+                project_dir=project_dir,
+                clarity_agent_dir=embedded_agent if is_embedded else clarity_agent_dir,
+                protocol_dir=protocol_dir,
+            )
+            status = ensure_agents_md(layout)
+            if status is not EnsureStatus.UNCHANGED:
+                created.append(f"{layout.agents_md.name} ({status.value})")
 
     # Create mailbox infrastructure and the suggestion box.
     (protocol_dir / "mailboxes").mkdir(parents=True, exist_ok=True)

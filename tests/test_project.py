@@ -7,12 +7,28 @@ from pathlib import Path
 
 import pytest
 
-from clarity_agent.setup.installer import Outcome
+from clarity_agent.setup.installer import CLARITY_DIR, Outcome
+from clarity_agent.setup.layout import (
+    PROTOCOL_DIR_DOT,
+    Mode,
+    ProjectLayout,
+)
 from clarity_agent.setup.project import (
     create_project_wrapper,
     create_protocol_dir,
     run_project_embed,
 )
+
+
+def _layout(target: Path, agent: Path | None = None) -> ProjectLayout:
+    """EMBEDDED-mode layout for *target* — matches what
+    ``run_project_embed`` builds at the top of its orchestrator."""
+    return ProjectLayout(
+        mode=Mode.EMBEDDED,
+        project_dir=target,
+        clarity_agent_dir=agent if agent is not None else target / CLARITY_DIR,
+        protocol_dir=target / PROTOCOL_DIR_DOT,
+    )
 
 # ---------------------------------------------------------------------------
 # create_protocol_dir
@@ -21,13 +37,13 @@ from clarity_agent.setup.project import (
 class TestCreateProtocolDir:
     def test_creates_directory(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()
-        r = create_protocol_dir(tmp_path)
+        r = create_protocol_dir(_layout(tmp_path))
         assert r.outcome == Outcome.OK
         assert (tmp_path / ".clarity-protocol").is_dir()
 
     def test_idempotent(self, tmp_path: Path) -> None:
         (tmp_path / ".clarity-protocol").mkdir()
-        r = create_protocol_dir(tmp_path)
+        r = create_protocol_dir(_layout(tmp_path))
         assert r.outcome == Outcome.OK
         assert "already" in r.message
 
@@ -39,7 +55,7 @@ class TestCreateProtocolDir:
 class TestCreateProjectWrapper:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only")
     def test_unix_wrapper_is_executable(self, tmp_path: Path) -> None:
-        r = create_project_wrapper(tmp_path, tmp_path)
+        r = create_project_wrapper(_layout(tmp_path, tmp_path))
         assert r.outcome == Outcome.OK
         wrapper = tmp_path / "clarity"
         assert wrapper.exists()
@@ -50,7 +66,7 @@ class TestCreateProjectWrapper:
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only")
     def test_windows_wrappers_created(self, tmp_path: Path) -> None:
-        r = create_project_wrapper(tmp_path, tmp_path)
+        r = create_project_wrapper(_layout(tmp_path, tmp_path))
         assert r.outcome == Outcome.OK
         assert (tmp_path / "clarity.ps1").exists()
         assert (tmp_path / "clarity.bat").exists()

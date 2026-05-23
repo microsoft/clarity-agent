@@ -42,8 +42,18 @@ class TestCheckInstallationType:
         assert len(results) == 1
         assert results[0].status == Status.WARN
 
-    def test_embedded_with_snippet(self, tmp_path: Path) -> None:
-        from clarity_agent.setup.snippet import BEGIN_DELIMITER, END_DELIMITER
+    def test_embedded_with_current_snippet(self, tmp_path: Path) -> None:
+        # Set up an embedded project, then run the canonical
+        # ensure_agents_md against it to lay down a freshly-rendered
+        # block.  The doctor must report PASS with the "current
+        # clarity snippet" phrasing — i.e. it distinguishes "present"
+        # from "present and in sync".
+        from clarity_agent.setup.layout import (
+            PROTOCOL_DIR_DOT,
+            Mode,
+            ProjectLayout,
+        )
+        from clarity_agent.setup.snippet import ensure_agents_md
 
         host = tmp_path / "myproject"
         host.mkdir()
@@ -51,31 +61,63 @@ class TestCheckInstallationType:
         agent = host / ".clarity-agent"
         agent.mkdir()
         (agent / ".git").mkdir()
-        (host / "CLAUDE.md").write_text(
-            f"# Config\n{BEGIN_DELIMITER}\nclarity\n{END_DELIMITER}\n"
+        layout = ProjectLayout(
+            mode=Mode.EMBEDDED,
+            project_dir=host,
+            clarity_agent_dir=agent,
+            protocol_dir=host / PROTOCOL_DIR_DOT,
         )
+        ensure_agents_md(layout)
 
         results = check_installation_type(agent)
         assert len(results) == 2
         assert results[0].status == Status.PASS
         assert "In-repo" in results[0].message
         assert results[1].status == Status.PASS
-        assert "snippet" in results[1].message
+        assert "current clarity snippet" in results[1].message
 
-    def test_embedded_legacy_clarity_reference(self, tmp_path: Path) -> None:
-        """Old-style AGENTS.md that mentions clarity still passes."""
+    def test_embedded_stale_snippet_warns_with_refresh_fix(
+        self, tmp_path: Path,
+    ) -> None:
+        # AGENTS.md already has a clarity block, but its meta is
+        # stale relative to the current layout.  The doctor should
+        # WARN and offer a fix_fn that refreshes it via
+        # ensure_agents_md.
+        from clarity_agent.setup.layout import (
+            PROTOCOL_DIR_DOT,
+            Mode,
+            ProjectLayout,
+        )
+        from clarity_agent.setup.snippet import ensure_agents_md
+
         host = tmp_path / "myproject"
         host.mkdir()
         (host / ".git").mkdir()
         agent = host / ".clarity-agent"
         agent.mkdir()
         (agent / ".git").mkdir()
-        (host / "AGENTS.md").write_text("# AGENTS\nUses clarity protocol\n")
+        layout = ProjectLayout(
+            mode=Mode.EMBEDDED,
+            project_dir=host,
+            clarity_agent_dir=agent,
+            protocol_dir=host / PROTOCOL_DIR_DOT,
+        )
+        ensure_agents_md(layout)
+        # Tamper with the meta header to simulate drift.
+        agents_md = host / "AGENTS.md"
+        agents_md.write_text(
+            agents_md.read_text().replace(
+                "schema_version: 1", "schema_version: 999",
+            ),
+        )
 
         results = check_installation_type(agent)
-        assert len(results) == 2
-        assert results[1].status == Status.PASS
-        assert "legacy" in results[1].message
+        assert results[1].status == Status.WARN
+        assert "stale" in results[1].message
+        assert results[1].fix_fn is not None
+        # The fix_fn must restore the current rendering.
+        assert results[1].fix_fn() is True
+        assert "schema_version: 1" in agents_md.read_text()
 
     def test_embedded_no_clarity_reference(self, tmp_path: Path) -> None:
         host = tmp_path / "myproject"

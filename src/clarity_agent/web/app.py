@@ -126,6 +126,27 @@ def create_app(
         theme: UI color theme name.
         env_path: Path to ``.env`` file for the setup wizard.
     """
+    # Reconcile ``project_dir/AGENTS.md`` against the current layout
+    # at app-construction time — i.e. exactly once per sidecar
+    # startup, which is exactly once per "open this directory" event
+    # in the desktop / launcher model.  Doing it here (rather than
+    # waiting for the first WebSocket chat connection) means AGENTS.md
+    # is current before *any* endpoint — WS or REST — runs against it.
+    # The helper is idempotent; in the common case (already current)
+    # the cost is one file read + comparison and no write.  The
+    # ``WebSessionAdapter.start`` hook is kept as defense-in-depth
+    # for direct-construction paths (tests, etc.).
+    from clarity_agent.setup.snippet import (
+        EnsureStatus,
+        ensure_for_project,
+    )
+    _ensure_status = ensure_for_project(project_dir, clarity_agent_dir)
+    if _ensure_status is not None and _ensure_status is not EnsureStatus.UNCHANGED:
+        print(
+            f"  [agents.md] {_ensure_status.value}: "
+            f"{project_dir / 'AGENTS.md'}",
+            flush=True,
+        )
 
     def _classify_ws_error(error: Exception, provider: str) -> dict[str, Any]:
         """Build a classified error message for the WebSocket client."""

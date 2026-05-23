@@ -327,10 +327,49 @@ class TestListThinkers:
 
 
 class TestReadBehaviors:
-    def test_returns_agents_md(self) -> None:
+    def test_returns_project_agents_md_clarity_block(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Set up a userspace project with a freshly-rendered Clarity
+        # block, then verify read_behaviors returns it.
         from clarity_agent.mcp.server import read_behaviors
+        from clarity_agent.setup.layout import Mode, ProjectLayout
+        from clarity_agent.setup.snippet import ensure_agents_md
+
+        project = tmp_path / "project"
+        bundle = tmp_path / "bundle"
+        project.mkdir()
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+        layout = ProjectLayout(
+            mode=Mode.USERSPACE,
+            project_dir=project,
+            clarity_agent_dir=bundle,
+            protocol_dir=project / "Clarity Protocol",
+        )
+        ensure_agents_md(layout)
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(project))
+
         result = read_behaviors()
         assert "Behaviors" in result
+        assert "<!-- clarity-begin -->" in result
+        assert "<!-- clarity-end -->" in result
+
+    def test_missing_agents_md_returns_actionable_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # No AGENTS.md in the project — the reader should return a
+        # message that tells the user how to fix it, not silently
+        # empty.
+        from clarity_agent.mcp.server import read_behaviors
+
+        project = tmp_path / "empty"
+        project.mkdir()
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(project))
+
+        result = read_behaviors()
+        assert "AGENTS.md not found" in result
+        assert "Clarity" in result
 
 
 class TestGeneratePacket:
