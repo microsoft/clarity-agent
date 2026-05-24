@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from clarity_agent.setup.layout import Mode, PROTOCOL_DIR_VISIBLE
+from clarity_agent.setup.layout import PROTOCOL_DIR_VISIBLE, Mode
 from clarity_agent.setup.project import setup_userspace_project
 from clarity_agent.setup.snippet import (
     BEGIN_DELIMITER,

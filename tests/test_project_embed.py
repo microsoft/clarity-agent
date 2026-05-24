@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from clarity_agent.setup.installer import CLARITY_DIR, Outcome
+from clarity_agent.setup.installer import Outcome
 from clarity_agent.setup.layout import (
     PROTOCOL_DIR_DOT,
     Mode,

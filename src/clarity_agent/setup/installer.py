@@ -23,6 +23,13 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+# ``ProjectLayout`` is stdlib-only (``setup/layout.py`` matches this
+# module's "no third-party imports" constraint), so importing at
+# module top is safe.  Real (not forward-ref) import lets ruff /
+# pyright resolve the annotations on ``update_gitignore`` and
+# ``insert_agent_snippet`` without per-line noqa noise.
+from clarity_agent.setup.layout import ProjectLayout
+
 CLARITY_DIR = ".clarity-agent"
 MIN_PYTHON = (3, 12)
 MIN_NODE = 22
@@ -315,7 +322,7 @@ def clone_or_update(target: Path, clone_url: str) -> StepResult:
     return StepResult(Outcome.OK, f"Cloned clarity agent into {CLARITY_DIR}")
 
 
-def update_gitignore(layout: "ProjectLayout") -> list[StepResult]:  # noqa: F821
+def update_gitignore(layout: ProjectLayout) -> list[StepResult]:  # noqa: F821
     """Ensure ``.clarity-agent/`` and clarity wrappers are in ``.gitignore``.
 
     Reads the protocol-dir name from *layout* rather than re-deriving
@@ -591,7 +598,7 @@ def create_wrapper(
     return StepResult(Outcome.OK, f"Wrapper(s) created: {', '.join(results_desc)}")
 
 
-def insert_agent_snippet(layout: "ProjectLayout") -> StepResult:  # noqa: F821
+def insert_agent_snippet(layout: ProjectLayout) -> StepResult:  # noqa: F821
     """Insert (or refresh) the Clarity block in ``layout.agents_md``.
 
     Thin wrapper around
@@ -754,7 +761,7 @@ def run_install(
     # via :func:`detect_layout`) because the protocol dir hasn't
     # been created yet on a fresh embedded install — detection
     # would return None.
-    embedded_layout: "ProjectLayout | None" = None  # noqa: F821
+    embedded_layout: ProjectLayout | None = None  # noqa: F821
     if mode == InstallMode.EMBEDDED:
         from clarity_agent.setup.layout import (
             PROTOCOL_DIR_DOT,

@@ -27,7 +27,6 @@ from clarity_agent.setup.layout import (
 from clarity_agent.setup.snippet import snippet_path
 from clarity_agent.web.launcher import create_launcher
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: tmp data dir + a stand-in clarity-agent bundle
 # ---------------------------------------------------------------------------

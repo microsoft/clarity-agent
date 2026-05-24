@@ -21,13 +21,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from clarity_agent.setup.layout import EMBEDDED_AGENT_SUBDIR
 from clarity_agent.setup.installer import (
     Outcome,
     StepResult,
     build_web_frontend,
     install_python_deps,
 )
+from clarity_agent.setup.layout import EMBEDDED_AGENT_SUBDIR
 
 # GitHub repo for release checks.
 _GITHUB_REPO = "microsoft/clarity-agent"

@@ -29,7 +29,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from .layout import LayoutBroken, Mode, ProjectLayout, detect_layout
+from .layout import Mode, ProjectLayout, detect_layout
 
 BEGIN_DELIMITER = "<!-- clarity-begin -->"
 END_DELIMITER = "<!-- clarity-end -->"

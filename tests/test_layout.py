@@ -23,7 +23,6 @@ from clarity_agent.setup.layout import (
     looks_like_code_directory,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -55,7 +54,7 @@ class TestDetectLayoutHappyPaths:
         layout = detect_layout(
             project, bundled_clarity_agent_dir=_make_bundle(tmp_path),
         )
-        assert layout is not None
+        assert isinstance(layout, ProjectLayout)
         assert layout.mode is Mode.EMBEDDED
         # clarity_agent_dir points at the in-repo install, not the
         # bundle — the embedded install marker is the source of truth.
@@ -71,7 +70,7 @@ class TestDetectLayoutHappyPaths:
         bundle = _make_bundle(tmp_path)
 
         layout = detect_layout(project, bundled_clarity_agent_dir=bundle)
-        assert layout is not None
+        assert isinstance(layout, ProjectLayout)
         assert layout.mode is Mode.USERSPACE
         # USERSPACE means clarity-agent lives outside the project — in
         # the bundle the caller supplied.

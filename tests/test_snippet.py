@@ -34,7 +34,6 @@ from clarity_agent.setup.snippet import (
     snippet_path,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: build minimal layouts for either mode
 # ---------------------------------------------------------------------------
