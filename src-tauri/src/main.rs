@@ -396,6 +396,26 @@ fn open_panel_window(
 // legitimate latest-release install.  See `setup/release_feed.py`
 // for the matching Python-side behavior.
 
+/// Parse the PRETEND_TO_BE_VERSION env var into a semver `Version`.
+///
+/// Returns `None` when the var is unset, empty, or holds something
+/// that doesn't parse as semver — those all mean "no pretend, use
+/// the real running version."  Strips an optional leading `v`
+/// since semver itself rejects it but our git tags (and the
+/// matching Python-side parser in `setup/release_feed.py`) do
+/// use the `v` prefix consistently.
+///
+/// Extracted from `build_updater` so it can be unit-tested without
+/// a Tauri `AppHandle`.  See `pretend_version_parses_*` tests below.
+fn pretend_version_from_env() -> Option<semver::Version> {
+    let raw = std::env::var("PRETEND_TO_BE_VERSION").ok()?;
+    if raw.is_empty() {
+        return None;
+    }
+    let stripped = raw.strip_prefix('v').unwrap_or(&raw);
+    semver::Version::parse(stripped).ok()
+}
+
 /// Build an updater honoring the PRETEND_TO_BE_VERSION env var.
 ///
 /// ``tauri-plugin-updater`` doesn't expose a setter for the current
@@ -410,15 +430,9 @@ fn build_updater(
     app: &AppHandle,
 ) -> Result<tauri_plugin_updater::Updater, tauri_plugin_updater::Error> {
     let mut builder = app.updater_builder();
-    if let Ok(pretend) = std::env::var("PRETEND_TO_BE_VERSION") {
-        if !pretend.is_empty() {
-            // Strip optional leading "v" — semver rejects it.
-            let stripped = pretend.strip_prefix('v').unwrap_or(&pretend);
-            if let Ok(pretend_version) = semver::Version::parse(stripped) {
-                builder = builder
-                    .version_comparator(move |_current, remote| remote.version > pretend_version);
-            }
-        }
+    if let Some(pretend_version) = pretend_version_from_env() {
+        builder =
+            builder.version_comparator(move |_current, remote| remote.version > pretend_version);
     }
     builder.build()
 }
@@ -595,6 +609,87 @@ mod tests {
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "gamma");
+    }
+
+    // -----------------------------------------------------------------------
+    // pretend_version_from_env — the PRETEND_TO_BE_VERSION parser
+    // -----------------------------------------------------------------------
+    //
+    // The matching Python parser (`setup/version.py`) has its own
+    // tests in `tests/test_version.py`; these cover the Rust-side
+    // mirror that drives the tauri-plugin-updater override.  All
+    // tests grab ENV_LOCK to avoid clobbering other tests' env
+    // state when the suite runs in parallel.
+
+    /// Run `body` with `PRETEND_TO_BE_VERSION` set to `value` (or
+    /// removed when `None`), restoring the original afterward.
+    fn with_pretend<F: FnOnce() -> R, R>(value: Option<&str>, body: F) -> R {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let old = std::env::var("PRETEND_TO_BE_VERSION").ok();
+        match value {
+            Some(v) => std::env::set_var("PRETEND_TO_BE_VERSION", v),
+            None => std::env::remove_var("PRETEND_TO_BE_VERSION"),
+        }
+        let result = body();
+        match old {
+            Some(v) => std::env::set_var("PRETEND_TO_BE_VERSION", v),
+            None => std::env::remove_var("PRETEND_TO_BE_VERSION"),
+        }
+        result
+    }
+
+    #[test]
+    fn pretend_version_parses_v_prefixed_tag() {
+        // The form release tags actually take — must round-trip
+        // through the parser since this is the dominant input shape.
+        let v = with_pretend(Some("v1.2.3"), pretend_version_from_env);
+        assert_eq!(v, Some(semver::Version::new(1, 2, 3)));
+    }
+
+    #[test]
+    fn pretend_version_parses_bare_semver() {
+        // No "v" prefix — also valid; `strip_prefix` is a no-op.
+        let v = with_pretend(Some("1.2.3"), pretend_version_from_env);
+        assert_eq!(v, Some(semver::Version::new(1, 2, 3)));
+    }
+
+    #[test]
+    fn pretend_version_handles_prerelease_suffix() {
+        // The "pretend to be an older RC" scenario — semver
+        // ordering puts `1.2.3-rc1` *before* `1.2.3` (release),
+        // matching the Python `is_newer` rule.
+        let v = with_pretend(Some("v1.2.3-rc1"), pretend_version_from_env);
+        assert_eq!(v, Some("1.2.3-rc1".parse().unwrap()));
+    }
+
+    #[test]
+    fn pretend_version_returns_none_when_unset() {
+        // No env var → no override; `build_updater` falls through
+        // to the plugin's default current-version comparison.
+        assert_eq!(with_pretend(None, pretend_version_from_env), None);
+    }
+
+    #[test]
+    fn pretend_version_returns_none_when_empty() {
+        // `PRETEND_TO_BE_VERSION=""` is almost certainly a shell
+        // mistake (`export FOO=`) — treat as unset, same as the
+        // Python `setup/version.py` rule.  Otherwise we'd install a
+        // version_comparator that always returns false (empty <
+        // anything fails semver parse), silently disabling updates.
+        assert_eq!(with_pretend(Some(""), pretend_version_from_env), None);
+    }
+
+    #[test]
+    fn pretend_version_returns_none_when_garbage() {
+        // Defensive: a non-semver value (typo, "local", a date)
+        // should not crash and should not silently install some
+        // unexpected comparator.  Falling back to None means the
+        // app behaves exactly as if the env var weren't set.
+        assert_eq!(
+            with_pretend(Some("not-a-version"), pretend_version_from_env),
+            None,
+        );
+        assert_eq!(with_pretend(Some("local"), pretend_version_from_env), None,);
     }
 }
 

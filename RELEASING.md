@@ -16,6 +16,8 @@ git push origin main v1.2.0
 
 The release workflow builds macOS, Windows, and Linux artifacts, then creates a GitHub Release with all of them attached.
 
+After the workflow finishes, validate the auto-updater end-to-end — see [AUTOUPDATE-TESTING.md](AUTOUPDATE-TESTING.md).
+
 ## What gets built
 
 | Platform | Artifacts                        |
