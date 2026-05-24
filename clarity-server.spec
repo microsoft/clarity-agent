@@ -102,6 +102,7 @@ if not _copilot_bin.exists():
     _copilot_bin = Path(".venv", "Lib", "site-packages", "copilot", "bin")
 
 datas = [
+    ("AGENTS.md", "."),
     ("processes", "processes"),
     ("thinkers", "thinkers"),
     ("web/dist", "web/dist"),
