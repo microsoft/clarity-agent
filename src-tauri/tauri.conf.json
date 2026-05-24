@@ -45,5 +45,18 @@
     "macOS": {
       "minimumSystemVersion": "11.0"
     }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQyNTA3MUU4NzUzODBBNkYKUldSdkNqaDE2SEZRUWpwTEduQmtRbngrekRuV2VxMW9GYWFwSUpTN3k1L09kWHlPNzlUTVE5UWEK",
+      "endpoints": [
+        "https://github.com/microsoft/clarity-agent/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

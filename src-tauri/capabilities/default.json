@@ -13,6 +13,11 @@
     "shell:default",
     "dialog:allow-open",
     "dialog:allow-save",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install",
     "fs:allow-write-file",
     {
       "identifier": "fs:scope",

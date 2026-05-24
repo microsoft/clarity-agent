@@ -13,6 +13,7 @@ use tauri::{
 };
 #[cfg(not(dev))]
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 /// Open a startup log file for diagnosing sidecar launch and panel-window issues.
 /// Writes to ``%LOCALAPPDATA%/Clarity/clarity-startup.log`` (Windows)
@@ -383,6 +384,103 @@ fn open_panel_window(
 }
 
 // ---------------------------------------------------------------------------
+// Auto-update commands (tauri-plugin-updater wrapper)
+// ---------------------------------------------------------------------------
+//
+// We wrap the plugin's `check()`/`download_and_install()` API in two
+// commands so we can honor the `PRETEND_TO_BE_VERSION` env var on the
+// Rust side via `UpdaterBuilder::current_version()`.  The env var is
+// the *only* test/override knob — the signing pubkey and update
+// endpoints stay locked to the values in `tauri.conf.json`, so the
+// worst an attacker who sets the env var can do is trigger a
+// legitimate latest-release install.  See `setup/release_feed.py`
+// for the matching Python-side behavior.
+
+/// Build an updater honoring the PRETEND_TO_BE_VERSION env var.
+///
+/// ``tauri-plugin-updater`` doesn't expose a setter for the current
+/// app version — that's read from ``Cargo.toml``.  To make the
+/// updater think we're running an older release (for manual E2E
+/// testing) we install a custom ``version_comparator`` that compares
+/// remote releases against the env-var value instead of the
+/// real running version.  When the env var is unset, the comparator
+/// isn't installed and the plugin's default semver comparison runs
+/// against the real version.
+fn build_updater(
+    app: &AppHandle,
+) -> Result<tauri_plugin_updater::Updater, tauri_plugin_updater::Error> {
+    let mut builder = app.updater_builder();
+    if let Ok(pretend) = std::env::var("PRETEND_TO_BE_VERSION") {
+        if !pretend.is_empty() {
+            // Strip optional leading "v" — semver rejects it.
+            let stripped = pretend.strip_prefix('v').unwrap_or(&pretend);
+            if let Ok(pretend_version) = semver::Version::parse(stripped) {
+                builder = builder
+                    .version_comparator(move |_current, remote| remote.version > pretend_version);
+            }
+        }
+    }
+    builder.build()
+}
+
+/// Result of a check-for-update call surfaced to the frontend.
+#[derive(serde::Serialize)]
+struct UpdateCheckResult {
+    /// Whether a newer release is available.
+    available: bool,
+    /// The latest release version (only set when `available` is true).
+    version: Option<String>,
+    /// Release notes / changelog body (only set when `available` is true).
+    notes: Option<String>,
+}
+
+/// Check the configured endpoint for a newer release.  Returns
+/// `available=false` when we're already up-to-date or the feed has
+/// no releases; raises a string error on transport / signature
+/// failures so the frontend can surface them in a tooltip.
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
+    let updater = build_updater(&app).map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(UpdateCheckResult {
+            available: true,
+            version: Some(update.version.clone()),
+            notes: update.body.clone(),
+        }),
+        Ok(None) => Ok(UpdateCheckResult {
+            available: false,
+            version: None,
+            notes: None,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Download and install the latest release.  Blocks until the
+/// install handoff completes — on macOS/Linux the app should be
+/// restarted by the caller; on Windows the installer's `passive`
+/// mode handles the swap with no UI from us.
+#[tauri::command]
+async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
+    let updater = build_updater(&app).map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Err("no update available".to_string());
+    };
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Restart the app after a completed install.  Frontend calls this
+/// from the "restart now" button so the user keeps a single
+/// gesture: click, wait, restart.
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    app.restart();
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -505,9 +603,13 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             refresh_recent_menu,
             open_panel_window,
+            check_for_update,
+            download_and_install_update,
+            restart_app,
         ])
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {

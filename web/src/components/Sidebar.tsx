@@ -14,6 +14,7 @@ import type { SessionInfo, UpdateRunResult } from "../types";
 import GlossaryTerm from "./GlossaryTerm";
 import ModelSelector from "./ModelSelector";
 import ProjectSwitcher from "./ProjectSwitcher";
+import ReleaseUpdater from "./ReleaseUpdater";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -328,6 +329,13 @@ function VersionLabel() {
 }
 
 function UpdateBadge({ collapsed }: { collapsed: boolean }) {
+  // Gate: release builds get their updates from ``ReleaseUpdater``
+  // (signed binaries via tauri-plugin-updater).  This badge is for
+  // source clones and locally-built binaries that update via
+  // ``git pull`` and a rebuild.  ``isSourceBuild`` is ``null`` until
+  // /api/version comes back; we render nothing during that gap to
+  // avoid a flash of the wrong UI for release users.
+  const [isSourceBuild, setIsSourceBuild] = useState<boolean | null>(null);
   const [available, setAvailable] = useState(false);
   const [commitCount, setCommitCount] = useState(0);
   const [frozen, setFrozen] = useState(false);
@@ -338,6 +346,12 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
   const [restarting, setRestarting] = useState(false);
   const [result, setResult] = useState<UpdateRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getVersion()
+      .then((info) => setIsSourceBuild(info.source === "local"))
+      .catch(() => setIsSourceBuild(true)); // assume source on failure
+  }, []);
 
   const check = useCallback(() => {
     checkForUpdate()
@@ -352,10 +366,11 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (isSourceBuild !== true) return;
     check();
     const id = setInterval(check, UPDATE_CHECK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [check]);
+  }, [check, isSourceBuild]);
 
   const handleUpdate = async () => {
     setUpdating(true);
@@ -401,6 +416,7 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
     poll();
   };
 
+  if (isSourceBuild !== true) return null;
   if (!available && !showModal) return null;
 
   if (collapsed) {
@@ -620,7 +636,14 @@ export default function Sidebar({ collapsed, onToggle, launcherMode, projectId, 
         </button>
       </div>
 
-      {/* Update indicator — prominent, near the top */}
+      {/* Update indicator — prominent, near the top.  Two paths:
+          ``ReleaseUpdater`` handles signed-binary updates via
+          tauri-plugin-updater (release builds only); ``UpdateBadge``
+          handles in-place ``git pull`` updates for source clones
+          and locally-built binaries.  At most one renders at a
+          time — each component decides whether to show itself
+          based on the version source it queries. */}
+      <ReleaseUpdater collapsed={collapsed} />
       <UpdateBadge collapsed={collapsed} />
 
       {/* Project indicator / switcher */}
