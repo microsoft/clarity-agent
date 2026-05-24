@@ -214,7 +214,6 @@ lerna-debug.log*
 # Astro / Frontend
 .astro/
 dist/
-!web/dist/
 .turbo/
 .vercel/
 .netlify/

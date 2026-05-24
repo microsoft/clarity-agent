@@ -111,12 +111,8 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -138,17 +134,3 @@ jobs:
 
       - name: Build
         run: cd web && npm run build
-
-      - name: Commit updated web/dist/ if changed
-        if: github.event_name == 'pull_request'
-        run: |
-          if git diff --quiet web/dist/; then
-            echo "web/dist/ is up to date"
-            exit 0
-          fi
-          echo "web/dist/ changed — committing back to PR branch"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/dist/
-          git commit -m "chore: rebuild web/dist/"
-          git push origin HEAD:${{ github.head_ref }}

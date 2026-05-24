@@ -80,7 +80,7 @@ All LLM interaction goes through two abstractions in `src/clarity_agent/llm/`:
 
 `src/clarity_agent/web/app.py` is a FastAPI server. The WebSocket at `/ws/chat` streams chat between the React frontend and `ClaritySession`. `session_manager.py` bridges the sync session to async WebSocket via a thread pool. REST endpoints call the same Python functions as the CLI.
 
-The React frontend (`web/`) is built with Vite + TypeScript + Tailwind CSS. `web/dist/` is pre-built and checked in — Node.js is only needed when changing frontend code. All visual tokens live in `web/src/themes/sage.css` as CSS custom properties.
+The React frontend (`web/`) is built with Vite + TypeScript + Tailwind CSS. `web/dist/` is built locally by `clarity install`, the desktop bundler, or `cd web && npm run build` — it's not checked into the repo. All visual tokens live in `web/src/themes/sage.css` as CSS custom properties.
 
 ### Registry sync invariant
 

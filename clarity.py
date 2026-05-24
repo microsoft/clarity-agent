@@ -217,8 +217,12 @@ def _cmd_web(args: argparse.Namespace) -> None:
     static_dir: Path | None = web_dist if web_dist.exists() else None
 
     if static_dir is None:
+        # ``web/dist/`` is built locally — not checked into the repo —
+        # so a fresh clone won't have one until either ``clarity install``
+        # runs (which builds it) or the user builds the frontend by hand.
         print("Warning: No built web UI found at web/dist/.")
-        print("Run 'npm run build' in the web/ directory first.")
+        print("Build it with 'cd web && npm install && npm run build',")
+        print("or run 'python clarity.py install' to set everything up.")
         print("Starting in API-only mode.\n")
 
     # No project_dir → launcher mode (multi-project).

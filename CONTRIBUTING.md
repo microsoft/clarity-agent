@@ -48,12 +48,12 @@ The `dev` extra installs all optional dependency groups: `cli` (Claude SDK, Anth
 
 ### For frontend development
 
-The `web/dist/` directory is pre-built and checked into the repo — you don't need Node.js unless you're changing the frontend. When you do change frontend code:
+`web/dist/` is built locally — it is not checked into the repo. Every install path (`clarity install`, the desktop bundler, the release workflow) builds it from source via `npm run build`. If you cloned the repo and want a UI in `clarity web`, run the build once:
 
 ```bash
 cd web
 npm install                          # install Node dependencies (first time only)
-npm run build                        # rebuild web/dist/
+npm run build                        # build into web/dist/
 ```
 
 For hot-reloading during frontend development, run both in parallel:
@@ -66,7 +66,7 @@ uv run python clarity.py web /tmp/test-project
 cd web && npm run dev
 ```
 
-After making frontend changes that will be committed, always rebuild `web/dist/` — CI checks that the checked-in dist matches the source.
+CI runs the frontend build on every PR as a compile check — there's no committed-dist invariant to maintain.
 
 ## How the System Flows: Logical Architecture
 
