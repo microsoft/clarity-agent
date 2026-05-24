@@ -1,6 +1,34 @@
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage as ChatMessageType } from "../types";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy to clipboard"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px]
+        rounded text-body-faint hover:text-body hover:bg-surface-hover
+        transition-colors"
+    >
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+        <path d="M10.5 5.5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h2.5" />
+      </svg>
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -81,11 +109,12 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           )}
         </div>
 
-        {/* Role label — subtle, below the bubble */}
-        <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+        {/* Role label + copy — subtle, below the bubble */}
+        <div className={`flex items-center gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
           <span className="text-[10px] uppercase tracking-widest text-body-faint/50 px-1">
             {isUser ? "You" : "Clarity"}
           </span>
+          {!isUser && <CopyButton text={message.content} />}
         </div>
       </div>
     </div>
