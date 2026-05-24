@@ -99,6 +99,18 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     if (showOpenForm) openInputRef.current?.focus();
   }, [showOpenForm]);
 
+  // Escape-key dismiss for any open prompt — the modal's
+  // click-outside-to-dismiss has its keyboard equivalent here, so
+  // the backdrop's onClick isn't the only way to close.
+  useEffect(() => {
+    if (!prompt) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPrompt(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [prompt]);
+
   const handleActivate = async (project: ProjectEntry) => {
     setActivating(project.name);
     setError(null);
@@ -485,14 +497,28 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
           modal overlays so they sit above the sidebar UI without
           fighting its layout. */}
       {prompt && (
+        // Backdrop is presentation-only; its click-to-dismiss has a
+        // keyboard equivalent via the Escape-key effect above, so
+        // the a11y click-events-have-key-events guidance is met at
+        // the component level rather than per-element.
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div
           className="fixed inset-0 z-50 flex items-center justify-center
             bg-black/40 animate-fade-in"
+          role="presentation"
           onClick={() => setPrompt(null)}
         >
+          {/* The inner ``onClick`` exists solely to stop the
+              backdrop's dismiss handler from firing on clicks
+              inside the dialog content — it's structural, not
+              user-actionable.  role="dialog" + aria-modal gives the
+              screen reader the right modality semantics. */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
           <div
             className="max-w-md w-full mx-4 rounded-xl bg-surface
               border border-border shadow-xl p-5"
+            role="dialog"
+            aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
             {prompt.kind === "needs_setup" && (
