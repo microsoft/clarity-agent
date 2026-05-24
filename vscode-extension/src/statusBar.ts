@@ -1,5 +1,6 @@
 /**
- * Status bar item that shows the Clarity Agent backend state.
+ * Status bar item that shows the Clarity Agent backend state
+ * and the active project name.
  */
 
 import * as vscode from "vscode";
@@ -28,6 +29,7 @@ const COLORS: Record<BackendState, string | undefined> = {
 
 export class ClarityStatusBar {
   private item: vscode.StatusBarItem;
+  private _projectName = "";
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(
@@ -40,7 +42,10 @@ export class ClarityStatusBar {
   }
 
   update(state: BackendState): void {
-    this.item.text = `${ICONS[state]} ${LABELS[state]}`;
+    const projectSuffix = this._projectName && state === "running"
+      ? ` · ${this._projectName}`
+      : "";
+    this.item.text = `${ICONS[state]} ${LABELS[state]}${projectSuffix}`;
     const bg = COLORS[state];
     this.item.backgroundColor = bg
       ? new vscode.ThemeColor(bg)
@@ -51,6 +56,10 @@ export class ClarityStatusBar {
         : state === "error"
           ? "Clarity backend encountered an error. Click to open."
           : "Clarity Agent";
+  }
+
+  setProjectName(name: string): void {
+    this._projectName = name;
   }
 
   dispose(): void {

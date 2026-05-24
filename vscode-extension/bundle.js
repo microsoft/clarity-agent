@@ -20,6 +20,7 @@ const ITEMS = [
   // Entry point
   "clarity.py",
   "pyproject.toml",
+  "uv.lock",
   "AGENTS.md",
 
   // Python package

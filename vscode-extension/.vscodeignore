@@ -7,3 +7,8 @@ bundle.js
 **/*.map
 .gitignore
 *.vsix
+PARITY-PLAN.md
+out/test/**
+src/test/**
+bundled/**/__pycache__/**
+bundled/**/*.pyc
