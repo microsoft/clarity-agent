@@ -1,15 +1,15 @@
 """Project layout abstraction — the typed handle for everything that
-varies between embedded and userspace projects.
+varies between project install styles.
 
-Two project modes exist (see :class:`Mode`):
+Three modes exist (see :class:`Mode`); each is a clean 1:1 mapping
+from install style to filesystem layout, with no hybrids:
 
   * **EMBEDDED** — a git repository the user explicitly installed
-    Clarity into (``clarity embed`` / ``clarity install --embedded``).
-    Clarity's code lives at ``.clarity-agent/`` inside the repo; the
-    protocol dir is ``.clarity-protocol/`` (hidden, so it doesn't
-    clutter the working tree); the AGENTS.md snippet uses paths
-    relative to the repo so the file commits identically across
-    machines.
+    Clarity into (``clarity install --embedded``).  Clarity's code
+    lives at ``.clarity-agent/`` inside the repo; the protocol dir
+    is ``.clarity-protocol/`` (hidden, doesn't clutter the working
+    tree); the AGENTS.md snippet uses repo-relative paths so the
+    file commits identically across machines.
 
   * **USERSPACE** — a regular project directory opened from the
     desktop / web app.  Clarity's code lives in the app bundle (the
@@ -17,16 +17,25 @@ Two project modes exist (see :class:`Mode`):
     (visible, since non-technical users need to find it); the
     AGENTS.md snippet uses absolute install paths.
 
-The asymmetry is concentrated entirely here.  Downstream code takes a
+  * **CLARITY_AGENT_SOURCE** — the one unusual project: the
+    clarity-agent source repo itself, dogfooded.  Detected
+    structurally (``clarity.py`` at the root + ``src/clarity_agent/``
+    subdirectory).  ``project_dir == clarity_agent_dir``; protocol
+    dir is ``.clarity-protocol/``; processes render as just
+    ``processes`` because the repo *is* the agent — no
+    ``.clarity-agent/`` prefix.  The AGENTS.md is hand-curated and
+    must not be auto-rewritten; ``ensure_agents_md`` skips this
+    mode.
+
+The asymmetries are concentrated here.  Downstream code takes a
 :class:`ProjectLayout` and asks it questions instead of branching on
 mode every time it needs a path.
 
 Detection (:func:`detect_layout`) is read-only: it inspects what's on
-disk and reports the layout it finds, or ``None`` if the project
-isn't a Clarity project yet or is in an ambiguous state.  Creation /
-install actions live in :mod:`clarity_agent.setup.project` (userspace
-ensure) and :mod:`clarity_agent.setup.installer` (embedded install) —
-``layout.py`` itself never writes to disk.
+disk and reports either a layout, ``None`` (no Clarity setup yet —
+caller may run an explicit setup flow), or :class:`LayoutBroken`
+(partial / inconsistent install — caller should surface a repair
+prompt rather than guess).  The function never writes.
 """
 
 from __future__ import annotations
@@ -37,9 +46,8 @@ from pathlib import Path
 
 # The directory name an embedded install uses for the clarity-agent
 # code inside the host project.  Matches ``installer.CLARITY_DIR``;
-# duplicated here only because importing ``installer`` would pull in
-# its third-party-light-but-large surface for what is essentially a
-# constant.
+# the constant lives here so layout-aware code never has to import
+# the heavier ``installer`` module just for one string.
 EMBEDDED_AGENT_SUBDIR = ".clarity-agent"
 
 # The two possible names for the protocol directory.  Kept in sync
@@ -49,12 +57,56 @@ EMBEDDED_AGENT_SUBDIR = ".clarity-agent"
 PROTOCOL_DIR_DOT = ".clarity-protocol"
 PROTOCOL_DIR_VISIBLE = "Clarity Protocol"
 
+# Markers a project may have that suggest it's a code repo (rather
+# than a non-technical user's workspace folder).  Used by the flow-3
+# "looks like code directory?" decision to pick which install-mode
+# default to recommend in the SetupPromptDialog.  Generous on
+# purpose — EMBEDDED is only the recommendation, never forced.  Add
+# more as needed (Mercurial ``.hg/``, Perforce ``.p4config``, etc.).
+_CODE_DIRECTORY_MARKERS: tuple[str, ...] = (
+    ".git",
+    "pyproject.toml",
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "Gemfile",
+)
+
+# Markers that uniquely identify the clarity-agent source repo
+# itself.  Both must be present; together they're specific enough
+# that no other repo will trip the structural detection.  See
+# :class:`Mode.CLARITY_AGENT_SOURCE` for why this mode exists.
+_CLARITY_AGENT_SOURCE_MARKERS: tuple[str, ...] = (
+    "clarity.py",
+    "src/clarity_agent",
+)
+
 
 class Mode(Enum):
     """How a project relates to its Clarity install."""
 
     EMBEDDED = "embedded"
     USERSPACE = "userspace"
+    CLARITY_AGENT_SOURCE = "clarity_agent_source"
+
+
+class LayoutBroken(Enum):
+    """Why a directory's layout couldn't be detected as a clean
+    Clarity project.  Returned by :func:`detect_layout` (in place of
+    a :class:`ProjectLayout`) when the caller needs to know the
+    *kind* of brokenness to surface an actionable prompt.
+    """
+
+    AMBIGUOUS_PROTOCOL_DIRS = "ambiguous_protocol_dirs"
+    """Both ``.clarity-protocol/`` and ``Clarity Protocol/`` exist
+    in the same project.  We refuse to pick one silently; the user
+    must resolve before we proceed."""
+
+    PARTIAL_EMBEDDED_INSTALL = "partial_embedded_install"
+    """``.clarity-protocol/`` is present but ``.clarity-agent/`` is
+    not — looks like the embedded install was started but didn't
+    finish (or the user manually created the protocol dir in a git
+    repo without running the install)."""
 
 
 @dataclass(frozen=True)
@@ -74,11 +126,14 @@ class ProjectLayout:
     """Where Clarity's code (``processes/``, ``thinkers/``, …) lives
     *for this project*.  In EMBEDDED mode that's
     ``project_dir / ".clarity-agent"``; in USERSPACE it's the app
-    bundle directory passed in by the caller."""
+    bundle directory passed in by the caller; in CLARITY_AGENT_SOURCE
+    it's ``project_dir`` itself (the repo *is* the agent)."""
 
     protocol_dir: Path
-    """Absolute path to the protocol directory.  Name varies by mode
-    (see :data:`PROTOCOL_DIR_DOT` / :data:`PROTOCOL_DIR_VISIBLE`)."""
+    """Absolute path to the protocol directory.  Name is determined
+    by ``mode`` (see :data:`PROTOCOL_DIR_DOT` / :data:`PROTOCOL_DIR_VISIBLE`):
+    EMBEDDED and CLARITY_AGENT_SOURCE use the dotted name; USERSPACE
+    uses the visible name."""
 
     @property
     def agents_md(self) -> Path:
@@ -98,14 +153,22 @@ class ProjectLayout:
         """Return the path to ``processes/`` as it should appear in
         the rendered AGENTS.md.
 
-        EMBEDDED: relative to the project root
-        (``.clarity-agent/processes``), so the rendered file commits
-        identically across machines.  USERSPACE: absolute, because
-        the bundle lives outside the project and there's no relative
-        path that makes sense.
+        Three forms, one per mode:
+
+        - **EMBEDDED**: ``.clarity-agent/processes`` — repo-relative
+          so the rendered file commits identically across machines.
+        - **USERSPACE**: absolute path to the bundled processes dir
+          — the bundle lives outside the project, no relative path
+          makes sense.
+        - **CLARITY_AGENT_SOURCE**: ``processes`` — bare relative
+          path, because the repo IS clarity-agent (no
+          ``.clarity-agent/`` subdirectory layer above the
+          processes directory).
         """
         if self.mode is Mode.EMBEDDED:
             return f"{EMBEDDED_AGENT_SUBDIR}/processes"
+        if self.mode is Mode.CLARITY_AGENT_SOURCE:
+            return "processes"
         return self.processes_dir.as_posix()
 
     def protocol_dir_name(self) -> str:
@@ -117,54 +180,112 @@ class ProjectLayout:
         return self.protocol_dir.name
 
 
+# ---------------------------------------------------------------------------
+# Structural predicates
+# ---------------------------------------------------------------------------
+
+
+def looks_like_clarity_agent_source(project_dir: Path) -> bool:
+    """True iff *project_dir* looks like the clarity-agent source
+    repository itself.
+
+    Requires every marker in :data:`_CLARITY_AGENT_SOURCE_MARKERS`
+    to be present (``clarity.py`` file + ``src/clarity_agent/``
+    package directory).  Both together are specific enough that no
+    other project will match.  Used to route detection toward
+    :data:`Mode.CLARITY_AGENT_SOURCE` and to make
+    :func:`ensure_for_project` skip the dogfooding case.
+    """
+    return all((project_dir / marker).exists() for marker in _CLARITY_AGENT_SOURCE_MARKERS)
+
+
+def looks_like_code_directory(project_dir: Path) -> bool:
+    """True iff *project_dir* has any marker suggesting it's a code
+    repository (rather than a non-technical user's workspace).
+
+    Used by the flow-3 "open ambiguous directory" prompt to pick
+    which install-mode default to recommend: code-like → EMBEDDED
+    suggested (with USERSPACE permitted as an override),
+    everything else → USERSPACE only.  Match is generous on purpose
+    — false positives just mean the SetupPromptDialog offers both
+    options, which is fine.
+    """
+    return any((project_dir / marker).exists() for marker in _CODE_DIRECTORY_MARKERS)
+
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+
 def detect_layout(
     project_dir: Path,
     *,
     bundled_clarity_agent_dir: Path,
-) -> ProjectLayout | None:
-    """Inspect *project_dir* and return its :class:`ProjectLayout`.
+) -> ProjectLayout | LayoutBroken | None:
+    """Inspect *project_dir* and report its layout.
 
-    Returns ``None`` when the project either isn't a Clarity project
-    yet (no markers present — caller may proceed with an install /
-    ensure action) **or** is in an ambiguous broken state (e.g. both
-    protocol-directory names present).  The function never writes;
-    it's safe to call speculatively at any project-open hook.
+    Three possible return shapes:
 
-    ``bundled_clarity_agent_dir`` is the app's bundled clarity-agent
-    location (i.e. ``app_paths.get_bundle_dir()``).  Used as the
-    ``clarity_agent_dir`` for USERSPACE layouts where the code lives
-    outside the project entirely.
+    - :class:`ProjectLayout` — clean, recognized layout for one of
+      the three modes.
+    - :class:`LayoutBroken` — the directory has Clarity markers but
+      they're inconsistent (partial install, both protocol-dir
+      names, etc.).  Caller should surface a repair prompt rather
+      than guess; the variant tells the caller *what* to say.
+    - ``None`` — no Clarity markers at all.  Caller may proceed
+      with an explicit setup flow (flow 1 "create new" or flow 3
+      "open ambiguous" + user confirmation).
+
+    Function is read-only; safe to call speculatively at any
+    project-open hook.
 
     Detection precedence (deliberately structural, never heuristic):
 
-    1. ``.clarity-agent/`` present in *project_dir* → EMBEDDED.  The
-       embedded install marker is unambiguous: the user (or installer)
-       explicitly created that directory.  ``protocol_dir`` is
-       ``.clarity-protocol/`` if it exists, otherwise constructed
-       (the rare "embedded install half-done" case — caller can still
-       run ``ensure_agents_md`` against the layout to finish setup).
-    2. Both protocol-dir names present → ``None``.  An ambiguous
-       project where ``ensure_agents_md`` couldn't reliably choose
-       which to advertise; surface the error rather than picking.
-    3. ``Clarity Protocol/`` present → USERSPACE.
-    4. ``.clarity-protocol/`` present without ``.clarity-agent/`` →
-       EMBEDDED.  Someone laid down the protocol dir by hand or via
-       ``protocol.initialize`` without a full install; treat it as
-       embedded so the snippet's relative paths match.
-    5. Neither marker present → ``None``.  Caller decides what to do
-       (userspace open creates the dir, embedded install errors).
+    1. **CLARITY_AGENT_SOURCE**: structural markers
+       (``clarity.py`` + ``src/clarity_agent/``) present →
+       :data:`Mode.CLARITY_AGENT_SOURCE`.  Checked first so the
+       dogfooding case is recognized before any other rules can
+       claim it.
+    2. **EMBEDDED**: ``.clarity-agent/`` + ``.clarity-protocol/``
+       both present → clean :data:`Mode.EMBEDDED`.
+    3. **USERSPACE**: ``Clarity Protocol/`` present (without the
+       embedded marker) → clean :data:`Mode.USERSPACE`.
+    4. **Brokenness** (these checks come *after* the clean cases):
+       - Both ``.clarity-protocol/`` and ``Clarity Protocol/``
+         present → :data:`LayoutBroken.AMBIGUOUS_PROTOCOL_DIRS`.
+       - ``.clarity-protocol/`` present without ``.clarity-agent/``
+         (i.e. not the source repo, and not a clean userspace) →
+         :data:`LayoutBroken.PARTIAL_EMBEDDED_INSTALL`.
+       - ``.clarity-agent/`` present without ``.clarity-protocol/``
+         → :data:`LayoutBroken.PARTIAL_EMBEDDED_INSTALL` (same
+         remedy: complete the install).
+    5. No markers → ``None``.
     """
     project_dir = project_dir.resolve()
+
+    # Source-repo case is structural and takes precedence.  It also
+    # has its own ``.clarity-protocol/`` inside, which would
+    # otherwise trip the PARTIAL_EMBEDDED_INSTALL branch — checking
+    # first sidesteps that.
+    if looks_like_clarity_agent_source(project_dir):
+        return ProjectLayout(
+            mode=Mode.CLARITY_AGENT_SOURCE,
+            project_dir=project_dir,
+            clarity_agent_dir=project_dir,
+            protocol_dir=project_dir / PROTOCOL_DIR_DOT,
+        )
+
     embedded_agent = project_dir / EMBEDDED_AGENT_SUBDIR
     dot_protocol = project_dir / PROTOCOL_DIR_DOT
     visible_protocol = project_dir / PROTOCOL_DIR_VISIBLE
 
-    if embedded_agent.is_dir():
-        # Embedded install — protocol dir name is fixed to the dotted
-        # form regardless of whether the directory has been created
-        # yet (it always is for an embedded install; constructing the
-        # path is just a defensive fallback for half-initialized
-        # repos that ``ensure_agents_md`` will fix on the next pass).
+    has_embedded_marker = embedded_agent.is_dir()
+    has_dot_protocol = dot_protocol.is_dir()
+    has_visible_protocol = visible_protocol.is_dir()
+
+    # Clean EMBEDDED: both markers present and consistent.
+    if has_embedded_marker and has_dot_protocol and not has_visible_protocol:
         return ProjectLayout(
             mode=Mode.EMBEDDED,
             project_dir=project_dir,
@@ -172,11 +293,9 @@ def detect_layout(
             protocol_dir=dot_protocol,
         )
 
-    if dot_protocol.is_dir() and visible_protocol.is_dir():
-        # Ambiguous — caller must resolve before we can proceed.
-        return None
-
-    if visible_protocol.is_dir():
+    # Clean USERSPACE: visible protocol dir present, no embedded
+    # marker, no competing dotted protocol dir.
+    if has_visible_protocol and not has_embedded_marker and not has_dot_protocol:
         return ProjectLayout(
             mode=Mode.USERSPACE,
             project_dir=project_dir,
@@ -184,16 +303,15 @@ def detect_layout(
             protocol_dir=visible_protocol,
         )
 
-    if dot_protocol.is_dir():
-        # Protocol dir exists but no embedded install marker.  Treat
-        # as EMBEDDED so paths render relative — matches how the
-        # protocol dir was likely created (someone ran
-        # ``protocol.initialize`` in a git repo).
-        return ProjectLayout(
-            mode=Mode.EMBEDDED,
-            project_dir=project_dir,
-            clarity_agent_dir=bundled_clarity_agent_dir.resolve(),
-            protocol_dir=dot_protocol,
-        )
+    # Brokenness cases — return a specific variant so the caller
+    # can surface an actionable prompt rather than a generic "we
+    # don't know what to do with this directory."
+    if has_dot_protocol and has_visible_protocol:
+        return LayoutBroken.AMBIGUOUS_PROTOCOL_DIRS
+    if has_embedded_marker and not has_dot_protocol:
+        return LayoutBroken.PARTIAL_EMBEDDED_INSTALL
+    if has_dot_protocol and not has_embedded_marker:
+        return LayoutBroken.PARTIAL_EMBEDDED_INSTALL
 
+    # No markers — caller decides what to do next.
     return None

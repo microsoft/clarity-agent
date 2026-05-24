@@ -29,6 +29,7 @@ from clarity_agent.setup.installer import (
 )
 from clarity_agent.setup.layout import (
     PROTOCOL_DIR_DOT,
+    PROTOCOL_DIR_VISIBLE,
     Mode,
     ProjectLayout,
 )
@@ -148,6 +149,56 @@ def _is_pip_installed(agent_dir: Path | None = None) -> bool:
         return r.returncode == 0
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# USERSPACE setup — the lightweight counterpart to embedded install
+# ---------------------------------------------------------------------------
+
+def setup_userspace_project(
+    project_dir: Path,
+    clarity_agent_dir: Path,
+) -> ProjectLayout:
+    """Set up a USERSPACE-mode Clarity project at *project_dir*.
+
+    Creates the project directory if absent, lays down
+    ``Clarity Protocol/`` and its template structure (via
+    :func:`~clarity_agent.protocol.initialize.init_protocol`), and
+    reconciles ``AGENTS.md`` against the rendered snippet.
+    Idempotent — safe to call on an existing userspace project, in
+    which case it just refreshes anything stale.
+
+    Returns the :class:`ProjectLayout` so callers can register it
+    or pass it to follow-up steps.
+
+    This is the lightweight counterpart to :func:`run_project_embed`,
+    which does the heavy embedded install (clone + venv + pip).
+    Both are explicit setup entry points; ``ensure_for_project`` at
+    runtime never invokes either.
+    """
+    project_dir.mkdir(parents=True, exist_ok=True)
+    # Create ``Clarity Protocol/`` *before* delegating to
+    # ``init_protocol``, so ``app_paths.protocol_dir`` (which picks
+    # whichever name exists) returns the visible name we want for
+    # USERSPACE — keeps the strict mode↔name mapping intact even
+    # for the rare case of opening as USERSPACE inside a git repo.
+    protocol = project_dir / PROTOCOL_DIR_VISIBLE
+    protocol.mkdir(exist_ok=True)
+
+    # ``init_protocol`` populates the template structure
+    # (``goal/``, ``solution/``, ``failures/``, ``decisions/``, …)
+    # and writes ``config.json``; it also calls
+    # ``ensure_agents_md`` so the AGENTS.md block is current
+    # before we return.
+    from clarity_agent.protocol.initialize import init_protocol
+    init_protocol(project_dir, clarity_agent_dir=clarity_agent_dir)
+
+    return ProjectLayout(
+        mode=Mode.USERSPACE,
+        project_dir=project_dir,
+        clarity_agent_dir=clarity_agent_dir,
+        protocol_dir=protocol,
+    )
 
 
 # ---------------------------------------------------------------------------

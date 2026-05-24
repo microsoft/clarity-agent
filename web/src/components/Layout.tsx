@@ -97,14 +97,34 @@ export default function Layout() {
   // The Rust side dispatches CustomEvents via webview.eval() instead,
   // and we listen with standard DOM addEventListener — no Tauri JS API needed.
   useEffect(() => {
-    /** Helper: open a path as a project (create if needed, activate, navigate). */
-    const openProjectPath = async (path: string) => {
+    /** Helper: open a path as a project (create or open, activate, navigate).
+     *
+     * Called from the Tauri menu's "Open Project…" and "New
+     * Project…" items.  The Tauri-side handlers already picked a
+     * folder, so we just route to the launcher endpoint with the
+     * appropriate intent; on the no-layout / broken-install branches
+     * we fall through silently rather than popping a dialog — the
+     * full flow-3 prompt lives in ``ProjectSwitcher`` and only fires
+     * when the user goes through the in-app New/Open buttons.
+     */
+    const openProjectPath = async (
+      path: string, intent: "create_new" | "open_existing",
+    ) => {
       const name = path.split("/").filter(Boolean).pop() || "project";
       let id: string;
       try {
-        const entry = await createProject(name, path);
-        await activateProject(entry.name);
-        id = entry.id;
+        const result = await createProject({ name, path, intent });
+        if (result.status === "ok") {
+          await activateProject(result.entry.name);
+          id = result.entry.id;
+        } else {
+          // Menu-driven open hit a needs_setup / broken / embedded-
+          // required branch; the menu UI has no place to host the
+          // SetupPromptDialog, so the user has to use the in-app
+          // ProjectSwitcher flow.  Surface nothing; the directory
+          // simply doesn't activate.
+          return;
+        }
       } catch {
         const data = await getProjects();
         const existing = data.projects.find((p) => p.path === path);
@@ -116,8 +136,10 @@ export default function Layout() {
       navigate(`/p/${id}/`);
     };
 
-    const onOpen = (e: Event) => openProjectPath((e as CustomEvent).detail);
-    const onNew = (e: Event) => openProjectPath((e as CustomEvent).detail);
+    const onOpen = (e: Event) =>
+      openProjectPath((e as CustomEvent).detail, "open_existing");
+    const onNew = (e: Event) =>
+      openProjectPath((e as CustomEvent).detail, "create_new");
     const onActivate = async (e: Event) => {
       const projectId = (e as CustomEvent).detail;
       await activateProjectById(projectId);

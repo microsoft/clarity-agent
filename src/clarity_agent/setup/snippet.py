@@ -29,7 +29,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from .layout import ProjectLayout, detect_layout
+from .layout import LayoutBroken, Mode, ProjectLayout, detect_layout
 
 BEGIN_DELIMITER = "<!-- clarity-begin -->"
 END_DELIMITER = "<!-- clarity-end -->"
@@ -287,31 +287,37 @@ def ensure_for_project(
     Returns the :class:`EnsureStatus` when ``ensure_agents_md`` ran,
     or ``None`` for any of the "no-op by design" outcomes:
 
-    - **Dogfooding skip.** When ``project_dir == clarity_agent_dir``
-      (the clarity-agent source repo opened on itself), we leave the
-      hand-curated block at the repo root alone — auto-rewriting
-      would clobber its source-relative paths with the generic
-      embedded-relative form.
-    - **No layout detected.** Fresh project with no Clarity markers
-      yet, or ambiguous state with both protocol-dir names present.
-      We don't implicitly create directories here; mode selection
-      belongs in the explicit setup entry points (``clarity install
-      --embedded``, the desktop "new project" flow).
+    - **Source-repo skip.** When the layout is
+      :data:`~clarity_agent.setup.layout.Mode.CLARITY_AGENT_SOURCE`
+      (this *is* the clarity-agent source repo, detected
+      structurally by :func:`~clarity_agent.setup.layout.looks_like_clarity_agent_source`),
+      we leave the hand-curated AGENTS.md alone — auto-rewriting
+      would clobber its source-relative paths.
+    - **No layout / broken layout detected.** Fresh project with no
+      Clarity markers, or a partial/ambiguous install that the
+      caller should surface a repair prompt for.  We don't
+      implicitly create directories here; mode selection belongs in
+      the explicit setup entry points (``clarity install --embedded``
+      for git repos, the desktop "new project" flow for userspace).
     - **Write failure (OSError).** Read-only mount, permissions, etc.
       A stale ``AGENTS.md`` is better than a failed caller.
 
     Used by every runtime touch-point that wants "make sure
     ``project_dir/AGENTS.md`` is current before I read it" semantics
     — :meth:`WebSessionAdapter.start` on session open, the MCP
-    server's behaviors reader.  Centralised here so the dogfooding
-    rule and the no-layout policy live in exactly one place.
+    server's behaviors reader.  Centralised here so the no-op
+    policy lives in exactly one place.
     """
-    if project_dir.resolve() == clarity_agent_dir.resolve():
-        return None
     layout = detect_layout(
         project_dir, bundled_clarity_agent_dir=clarity_agent_dir,
     )
-    if layout is None:
+    if not isinstance(layout, ProjectLayout):
+        # Either ``None`` (no markers) or a :class:`LayoutBroken`
+        # variant (partial / ambiguous install).  Both mean
+        # "runtime shouldn't touch AGENTS.md"; the explicit setup
+        # flow is where repair / install prompts belong.
+        return None
+    if layout.mode is Mode.CLARITY_AGENT_SOURCE:
         return None
     try:
         return ensure_agents_md(layout)

@@ -99,6 +99,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
@@ -427,25 +428,129 @@ def create_launcher(
         }
 
     @app.post("/api/projects")
-    async def create_project(body: dict[str, Any]) -> dict[str, Any]:
+    async def create_project(body: dict[str, Any]) -> Any:
+        """Register a project, possibly setting it up first.
+
+        Body shape::
+
+            {
+              "name": str,                              # required
+              "path": str | null,                       # required for open_existing
+              "intent": "create_new" | "open_existing", # default "open_existing"
+              "mode":   "userspace" | "embedded" | null # for open_existing's flow 3
+            }
+
+        Behavior (one cell per intent × mode × disk-state combination):
+
+        - ``intent="create_new"``: always USERSPACE.  Creates the
+          directory if absent, lays down ``Clarity Protocol/`` + the
+          template structure, writes AGENTS.md, registers.
+          Returns 200 with the registry entry.
+        - ``intent="open_existing"`` with a clean detected layout
+          (any mode): registers without touching disk.  Returns 200.
+        - ``intent="open_existing"`` with a :class:`LayoutBroken`
+          state: returns 409 ``{status: "broken_install", brokenness, ...}``
+          so the UI can surface a repair prompt.
+        - ``intent="open_existing"`` with no layout and no ``mode``:
+          returns 409 ``{status: "needs_setup", looks_like_code, suggested_mode}``
+          to drive the SetupPromptDialog.
+        - ``intent="open_existing"`` + ``mode="userspace"``: runs
+          USERSPACE setup, registers.  Returns 200.
+        - ``intent="open_existing"`` + ``mode="embedded"``: returns
+          200 ``{status: "embedded_install_required", command}`` with
+          the ``clarity install --embedded <path>`` command.  Does
+          NOT register — the install hasn't happened yet; the user
+          will reopen once it has.
+        """
+        from clarity_agent.app_paths import (
+            clarity_projects_dir,
+            get_bundle_dir,
+        )
+        from clarity_agent.setup.layout import (
+            LayoutBroken,
+            ProjectLayout,
+            detect_layout,
+            looks_like_code_directory,
+        )
+        from clarity_agent.setup.project import setup_userspace_project
+
         name: str = body.get("name", "").strip()
         path: str | None = body.get("path")
+        intent: str = body.get("intent", "open_existing")
+        mode: str | None = body.get("mode")
 
         if not name:
             raise HTTPException(status_code=400, detail="Project name is required")
+        if intent not in {"create_new", "open_existing"}:
+            raise HTTPException(status_code=400, detail=f"Invalid intent: {intent!r}")
+        if mode is not None and mode not in {"userspace", "embedded"}:
+            raise HTTPException(status_code=400, detail=f"Invalid mode: {mode!r}")
 
+        # Resolve the target path.  If unspecified, use the default
+        # workspace location (only meaningful for create_new).
         if path:
             project_path = Path(path).resolve()
+        else:
+            project_path = (clarity_projects_dir() / name).resolve()
+
+        bundle = get_bundle_dir()
+
+        # --- intent: create_new ----------------------------------------
+        # Always USERSPACE; no prompt regardless of disk state.
+        if intent == "create_new":
+            setup_userspace_project(project_path, bundle)
+            # Fall through to registry add.
+
+        # --- intent: open_existing -------------------------------------
+        else:
             if not project_path.exists():
                 raise HTTPException(
                     status_code=400,
                     detail=f"Directory not found: {project_path}",
                 )
-        else:
-            # Default workspace — create the directory automatically.
-            from clarity_agent.app_paths import clarity_projects_dir
-            project_path = clarity_projects_dir() / name
-            project_path.mkdir(parents=True, exist_ok=True)
+            layout = detect_layout(project_path, bundled_clarity_agent_dir=bundle)
+
+            if isinstance(layout, ProjectLayout):
+                # Clean layout — proceed to registry add.
+                pass
+            elif isinstance(layout, LayoutBroken):
+                # The UI can word the prompt based on the variant.
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "broken_install",
+                        "brokenness": layout.value,
+                        "path": str(project_path),
+                    },
+                )
+            else:
+                # No markers — decide based on caller's ``mode``.
+                if mode is None:
+                    code_like = looks_like_code_directory(project_path)
+                    return JSONResponse(
+                        status_code=409,
+                        content={
+                            "status": "needs_setup",
+                            "looks_like_code": code_like,
+                            "suggested_mode": (
+                                "embedded" if code_like else "userspace"
+                            ),
+                            "path": str(project_path),
+                        },
+                    )
+                if mode == "userspace":
+                    setup_userspace_project(project_path, bundle)
+                    # Fall through to registry add.
+                elif mode == "embedded":
+                    # Option (ii): we don't run the install ourselves
+                    # from the desktop app.  Surface the CLI command;
+                    # the user runs it and reopens.  Don't register
+                    # — the project isn't a valid Clarity setup yet.
+                    return {
+                        "status": "embedded_install_required",
+                        "command": f"clarity install --embedded {project_path}",
+                        "path": str(project_path),
+                    }
 
         try:
             entry = registry.add(name, project_path)
@@ -453,6 +558,7 @@ def create_launcher(
             raise HTTPException(status_code=409, detail=str(e)) from e
 
         return {
+            "status": "ok",
             "id": entry.id,
             "name": entry.name,
             "path": entry.path,

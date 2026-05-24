@@ -27,6 +27,7 @@ from clarity_agent.setup.snippet import (
     SCHEMA_VERSION,
     EnsureStatus,
     ensure_agents_md,
+    ensure_for_project,
     has_snippet,
     parse_meta,
     render_snippet,
@@ -370,3 +371,91 @@ def test_mode_drives_path_form_in_render(
     assert meta is not None
     assert meta["protocol_dir_name"] == expected_protocol
     assert meta["processes_dir"].startswith(expected_processes_prefix)
+
+
+# ---------------------------------------------------------------------------
+# ensure_for_project — the shared runtime touchpoint
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureForProject:
+    """The reconcile-on-touch helper used by ``WebSessionAdapter.start``,
+    ``create_app``, and the MCP server's ``read_behaviors``.  It must
+    never write under any of the "no-op by design" conditions —
+    those tests are the contract."""
+
+    def test_writes_for_a_clean_userspace_layout(
+        self, tmp_path: Path,
+    ) -> None:
+        # Standard happy path: layout detectable, nothing's stale →
+        # ensure_agents_md runs and reports its real status.  This
+        # is the case the production code's ``create_app`` hook
+        # primarily exists for.
+        project = tmp_path / "ws"
+        project.mkdir()
+        (project / "Clarity Protocol").mkdir()
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        status = ensure_for_project(project, bundle)
+        assert status is EnsureStatus.CREATED
+        assert (project / "AGENTS.md").exists()
+        # Idempotent on re-call.
+        assert ensure_for_project(project, bundle) is EnsureStatus.UNCHANGED
+
+    def test_skips_for_clarity_agent_source_repo(
+        self, tmp_path: Path,
+    ) -> None:
+        # The structural source-repo markers (``clarity.py`` +
+        # ``src/clarity_agent/``) drive the skip — not a path-equality
+        # check.  Even if a separate bundled clarity_agent_dir is
+        # passed in, the source-repo property of *project_dir* alone
+        # is enough to opt out of auto-management (the hand-curated
+        # AGENTS.md must stay untouched).
+        repo = tmp_path / "clarity-agent-checkout"
+        repo.mkdir()
+        (repo / "clarity.py").write_text("# entry\n")
+        (repo / "src" / "clarity_agent").mkdir(parents=True)
+        (repo / ".clarity-protocol").mkdir()
+        # AGENTS.md with content we want preserved verbatim.
+        hand_curated = "# Hand-curated for the source repo\n"
+        (repo / "AGENTS.md").write_text(hand_curated)
+
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        status = ensure_for_project(repo, bundle)
+        assert status is None
+        # Unchanged on disk — the source repo's curated AGENTS.md is
+        # the contract we're protecting here.
+        assert (repo / "AGENTS.md").read_text() == hand_curated
+
+    def test_skips_when_no_layout_detected(self, tmp_path: Path) -> None:
+        # Fresh directory with no Clarity markers → no-op.  Mode
+        # selection belongs in explicit setup entry points, not
+        # this runtime helper.
+        project = tmp_path / "empty"
+        project.mkdir()
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        assert ensure_for_project(project, bundle) is None
+        assert not (project / "AGENTS.md").exists()
+
+    def test_skips_on_broken_layout(self, tmp_path: Path) -> None:
+        # LayoutBroken variants are also "runtime shouldn't touch
+        # AGENTS.md" — the launcher's open endpoint surfaces the
+        # repair prompt instead.  ensure_for_project just returns
+        # None.
+        project = tmp_path / "partial"
+        project.mkdir()
+        (project / ".clarity-protocol").mkdir()  # dotted only → PARTIAL_EMBEDDED_INSTALL
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        assert ensure_for_project(project, bundle) is None
+        assert not (project / "AGENTS.md").exists()
