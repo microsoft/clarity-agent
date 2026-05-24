@@ -69,6 +69,26 @@ export async function generatePacket(
 // Session
 export const getSession = () => fetchJson<SessionInfo>("/api/session");
 
+/**
+ * The running binary's version + cached update-check result.
+ *
+ * Mirrors the dict shape returned by
+ * ``clarity_agent.web.version_endpoint.get_version_payload``.  Kept
+ * in sync with that module — every field below has a counterpart
+ * there.  ``version`` is a release tag (e.g. ``"v1.2.3"``) or the
+ * literal ``"local"``.
+ */
+export interface VersionPayload {
+  version: string;
+  source: "release" | "local";
+  is_release: boolean;
+  update_status: "available" | "up_to_date" | "unknown";
+  latest: { version: string; assets: Record<string, string> } | null;
+  reason: string | null;
+}
+
+export const getVersion = () => fetchJson<VersionPayload>("/api/version");
+
 // Conversation thread
 /**
  * Roll the current project's conversation thread over to a new chapter.

@@ -395,6 +395,20 @@ def create_launcher(
             return None
 
     # ------------------------------------------------------------------
+    # REST: Version + update status (handled by the launcher, not
+    # proxied — the version is a property of *this* process, the
+    # same one the user sees in the menu/badge.  See
+    # ``clarity_agent.web.version_endpoint`` for the cache details.
+    # The per-project app also serves the same endpoint so
+    # single-project mode works without the launcher.
+    # ------------------------------------------------------------------
+
+    @app.get("/api/version")
+    async def version_info() -> dict[str, Any]:
+        from clarity_agent.web.version_endpoint import get_version_payload
+        return get_version_payload()
+
+    # ------------------------------------------------------------------
     # REST: Project management
     # ------------------------------------------------------------------
 
