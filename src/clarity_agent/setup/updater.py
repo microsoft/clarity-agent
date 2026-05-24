@@ -11,12 +11,10 @@ for a newer version, and provides a download URL.
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
 import threading
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,48 +72,51 @@ def _git_fetch(cwd: Path, *, timeout: int = 30) -> None:
     )
 
 
-def _parse_version(tag: str) -> tuple[int, ...]:
-    """Parse a version tag like 'v1.2.3' into a comparable tuple."""
-    return tuple(int(x) for x in tag.lstrip("v").split(".") if x.isdigit())
+# Version parsing + comparison live in
+# ``clarity_agent.setup.release_feed`` now (the abstraction that
+# also drives the frontend's update-available indicator).  Old
+# ``_parse_version`` helper is gone — the only caller was
+# ``_check_github_release``, which delegates to the shared
+# ``check_for_update`` orchestrator.
 
 
 def _check_github_release() -> UpdateStatus:
-    """Check GitHub Releases for a newer version (used in frozen builds)."""
+    """Check GitHub Releases for a newer version (used in frozen builds).
 
-    # Read current version from pyproject.toml metadata or package
-    try:
-        from importlib.metadata import version as pkg_version
-        current = pkg_version("clarity-agent")
-    except Exception:
-        current = "0.0.0"
+    Delegates to :func:`~clarity_agent.setup.release_feed.check_for_update`
+    so the comparison + parsing logic has exactly one production
+    implementation (this CLI path) and one unit-testable surface
+    (``setup/release_feed.py``).
+    """
+    from .release_feed import check_for_update
+    from .version import current_version as _cv
 
-    url = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    avail = check_for_update()
+    current_str = _cv().version
 
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-    except Exception:
-        return UpdateStatus(
-            available=False, local_sha=current, remote_sha=None,
-            commit_count=0, frozen=True, current_version=current,
+    if avail.status == "available" and avail.latest is not None:
+        # Surface the GitHub Release page (where the assets live) as
+        # the download URL; matches the prior behavior of pointing
+        # the user at the releases page rather than at a raw asset.
+        download_url = (
+            f"https://github.com/{_GITHUB_REPO}/releases/tag/"
+            f"{avail.latest.version}"
         )
-
-    latest_tag = data.get("tag_name", "")
-    html_url = data.get("html_url", "")
-
-    if _parse_version(latest_tag) > _parse_version(current):
         return UpdateStatus(
-            available=True, local_sha=current, remote_sha=latest_tag,
+            available=True, local_sha=current_str,
+            remote_sha=avail.latest.version,
             commit_count=0, frozen=True,
-            current_version=current, latest_version=latest_tag.lstrip("v"),
-            download_url=html_url,
+            current_version=current_str,
+            latest_version=avail.latest.version.lstrip("v"),
+            download_url=download_url,
         )
 
+    remote = avail.latest.version if avail.latest else None
     return UpdateStatus(
-        available=False, local_sha=current, remote_sha=latest_tag,
+        available=False, local_sha=current_str, remote_sha=remote,
         commit_count=0, frozen=True,
-        current_version=current, latest_version=latest_tag.lstrip("v"),
+        current_version=current_str,
+        latest_version=(remote.lstrip("v") if remote else None),
     )
 
 

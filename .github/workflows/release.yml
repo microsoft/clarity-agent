@@ -108,6 +108,32 @@ jobs:
       # Then add certificateThumbprint to tauri.conf.json bundle.windows.
       # ----------------------------------------------------------------
 
+      # Stamp the release version + source into
+      # ``src/clarity_agent/_version.py``.  The committed file holds
+      # ``"local"`` defaults; release CI rewrites it before
+      # PyInstaller picks it up so the shipped binary self-reports
+      # the tag.  See the module docstring + ``setup/version.py``
+      # for the read side (including the ``PRETEND_TO_BE_VERSION``
+      # override used to manually test updates without cutting a
+      # real release).
+      - name: Stamp release version into _version.py
+        shell: bash
+        run: |
+          cat > src/clarity_agent/_version.py <<EOF
+          """Version metadata baked at build time.
+
+          Stamped by the release CI from the git tag.  See the
+          committed copy in source control for the local-defaults
+          version of this file.
+          """
+
+          from __future__ import annotations
+
+          __version__: str = "${GITHUB_REF_NAME}"
+          __build_source__: str = "release"
+          EOF
+          echo "Stamped _version.py with version=${GITHUB_REF_NAME}, source=release"
+
       - name: Build release
         run: python clarity.py install --release
         env:

@@ -407,6 +407,22 @@ def create_app(
             reader_task.cancel()
 
     # ------------------------------------------------------------------
+    # REST: Version + update status
+    # ------------------------------------------------------------------
+
+    @app.get("/api/version")
+    async def version_info() -> dict[str, Any]:
+        """Return the running binary's version + cached update-check
+        result.  Both the launcher and the per-project app expose
+        this so the frontend can render the version badge regardless
+        of which one's serving the request.  See
+        :mod:`clarity_agent.web.version_endpoint` for the cache /
+        TTL / test-stub details.
+        """
+        from clarity_agent.web.version_endpoint import get_version_payload
+        return get_version_payload()
+
+    # ------------------------------------------------------------------
     # REST: Process registry
     # ------------------------------------------------------------------
 

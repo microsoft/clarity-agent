@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { getSession, checkForUpdate, runUpdate, restartServer } from "../api/client";
+import {
+  checkForUpdate,
+  getSession,
+  getVersion,
+  restartServer,
+  runUpdate,
+  type VersionPayload,
+} from "../api/client";
 import type { PanelId, PanelType } from "../data/panels";
 import { openPanelInNewWindow } from "../data/windows";
 import type { SessionInfo, UpdateRunResult } from "../types";
@@ -283,6 +290,43 @@ function NavGroupItem({
 
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
+function VersionLabel() {
+  // Tiny presentational component: fetches /api/version once and
+  // renders the result under the "Thinking Agent" subtitle.
+  // Update polling lives in ``UpdateBadge`` — this label is just
+  // the static "what version am I" tag.  Failures are silent (the
+  // label disappears) because there's nothing useful to say if the
+  // backend isn't reachable.
+  const [info, setInfo] = useState<VersionPayload | null>(null);
+
+  useEffect(() => {
+    getVersion()
+      .then(setInfo)
+      .catch(() => {});
+  }, []);
+
+  if (!info) return null;
+
+  // Released binaries show their version tag verbatim ("v1.2.3");
+  // anything else (source clone, locally-built binary, pretend
+  // mode without ``PRETEND_TO_BE_VERSION``) reports as "local".
+  // The tooltip carries the longer-form explanation so the badge
+  // itself stays narrow.
+  const label = info.is_release ? info.version : "local";
+  const tooltip = info.is_release
+    ? `Clarity ${info.version} (release build)`
+    : "Locally-built or source-run Clarity (no release version)";
+
+  return (
+    <p
+      className="text-[10px] font-mono text-sidebar-text-faint mt-1"
+      title={tooltip}
+    >
+      {label}
+    </p>
+  );
+}
+
 function UpdateBadge({ collapsed }: { collapsed: boolean }) {
   const [available, setAvailable] = useState(false);
   const [commitCount, setCommitCount] = useState(0);
@@ -554,6 +598,7 @@ export default function Sidebar({ collapsed, onToggle, launcherMode, projectId, 
             <p className="text-[10px] tracking-[0.2em] uppercase text-sidebar-text-faint mt-0.5">
               Thinking Agent
             </p>
+            <VersionLabel />
           </div>
         )}
         <button
