@@ -41,6 +41,7 @@ export default function Layout() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const projectId = useProjectId();
@@ -80,9 +81,19 @@ export default function Layout() {
     setSessionLoading(true);
     activateProjectById(projectId)
       .then(() => fetchSession())
-      .catch(() => {
-        // Project ID doesn't exist — go to root
+      .catch((err: unknown) => {
+        // The launcher returns 410 when a project's directory no longer
+        // exists; refresh the recent menu so the stale entry drops out,
+        // surface a banner, and route the user back to the picker.
+        const msg = err instanceof Error ? err.message : String(err);
+        setActivationError(
+          msg.startsWith("410")
+            ? "That project's folder no longer exists. It has been removed from your recent list."
+            : "Couldn't open that project."
+        );
+        void refreshRecentMenu();
         navigate("/", { replace: true });
+        setSessionLoading(false);
       })
       .finally(() => {
         activatingRef.current = null;
@@ -142,9 +153,19 @@ export default function Layout() {
       openProjectPath((e as CustomEvent).detail, "create_new");
     const onActivate = async (e: Event) => {
       const projectId = (e as CustomEvent).detail;
-      await activateProjectById(projectId);
-      await refreshRecentMenu();
-      navigate(`/p/${projectId}/`);
+      try {
+        await activateProjectById(projectId);
+        await refreshRecentMenu();
+        navigate(`/p/${projectId}/`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setActivationError(
+          msg.startsWith("410")
+            ? "That project's folder no longer exists. It has been removed from your recent list."
+            : "Couldn't open that project."
+        );
+        await refreshRecentMenu();
+      }
     };
     // Print is handled natively by Tauri (WebviewWindow::print()),
     // not via JS — window.print() is a no-op in WKWebView.
@@ -264,6 +285,21 @@ export default function Layout() {
         // `onShowFeedback={() => setShowFeedback(true)}`.
       />
       <main id="main-content" className="flex-1 overflow-auto animate-fade-in">
+        {activationError && (
+          <div
+            role="alert"
+            className="mx-4 mt-3 px-3 py-2 rounded text-xs
+              text-status-error-text bg-status-error-bg flex items-center gap-2"
+          >
+            <span className="flex-1">{activationError}</span>
+            <button
+              onClick={() => setActivationError(null)}
+              className="underline hover:no-underline"
+            >
+              dismiss
+            </button>
+          </div>
+        )}
         {noActiveProject ? (
           <div className="h-full flex items-center justify-center text-body-faint text-sm select-none">
             Select or create a project to get started.

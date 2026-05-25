@@ -10,6 +10,7 @@ import {
   getSession,
   getModelProfile,
   setModelOverride,
+  removeProject,
 } from "../api/client";
 
 // ---------------------------------------------------------------------------
@@ -199,6 +200,17 @@ describe("API client", () => {
       const result = await getModelProfile();
       expect(mockFetch).toHaveBeenCalledWith("/api/model-profile", undefined);
       expect(result).toEqual(data);
+    });
+
+    it("removeProject sends DELETE with url-encoded name", async () => {
+      mockFetch.mockReturnValue(jsonResponse({ status: "removed" }));
+
+      const result = await removeProject("my project/with space");
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/projects/my%20project%2Fwith%20space",
+        { method: "DELETE" },
+      );
+      expect(result).toEqual({ status: "removed" });
     });
 
     it("setModelOverride sends PUT with tier", async () => {

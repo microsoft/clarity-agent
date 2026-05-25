@@ -4,6 +4,7 @@ import {
   activateProject,
   createProject,
   getProjects,
+  removeProject,
   type CreateProjectResult,
 } from "../api/client";
 import type { ProjectEntry } from "../types";
@@ -60,6 +61,8 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // New-project inline form (browser-mode fallback only).
@@ -120,8 +123,32 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
       refreshRecentMenu();
       navigate(`/p/${project.id}/`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        msg.startsWith("410")
+          ? "That project's folder no longer exists. It has been removed from your list."
+          : msg
+      );
       setActivating(null);
+      if (msg.startsWith("410")) {
+        void refreshRecentMenu();
+        refresh();
+      }
+    }
+  };
+
+  const handleRemove = async (project: ProjectEntry) => {
+    setRemoving(project.name);
+    setError(null);
+    try {
+      await removeProject(project.name);
+      setConfirmRemove(null);
+      refresh();
+      void refreshRecentMenu();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemoving(null);
     }
   };
 
@@ -307,6 +334,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     setNewName("");
     setShowOpenForm(false);
     setOpenPath("");
+    setConfirmRemove(null);
     setError(null);
   };
 
@@ -359,34 +387,86 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
           ) : (
             projects.map((project) => {
               const isCurrent = project.path === currentProject;
+              if (confirmRemove === project.name) {
+                return (
+                  <div
+                    key={project.name}
+                    className="flex items-center gap-1.5 pl-4 pr-3 py-1.5 text-xs
+                      bg-sidebar-active/40 border-l-2 border-status-error/60 -ml-px"
+                  >
+                    <span className="flex-1 min-w-0 truncate text-sidebar-text">
+                      Remove <span className="font-medium">{project.name}</span> from list?
+                    </span>
+                    <button
+                      onClick={() => handleRemove(project)}
+                      disabled={removing === project.name}
+                      className="px-2 py-0.5 rounded text-[11px] bg-status-error/80 text-white
+                        hover:bg-status-error disabled:opacity-50 transition-colors"
+                    >
+                      {removing === project.name ? "Removing…" : "Remove"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemove(null)}
+                      disabled={removing === project.name}
+                      className="px-2 py-0.5 rounded text-[11px] text-sidebar-text-muted
+                        hover:text-sidebar-text hover:bg-sidebar-active/60 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                );
+              }
               return (
-                <button
+                <div
                   key={project.name}
-                  onClick={() => !isCurrent && !activating && handleActivate(project)}
-                  disabled={isCurrent || activating !== null}
-                  title={project.path}
-                  className={`w-full text-left flex items-center gap-2 pl-4 pr-3 py-1.5 text-sm
-                    transition-all duration-150 disabled:cursor-default ${
+                  className={`group flex items-center w-full transition-all duration-150 ${
                     isCurrent
-                      ? "text-sidebar-text bg-sidebar-active/80 border-l-2 border-accent-focus -ml-px"
-                      : "text-sidebar-text-muted hover:text-sidebar-text hover:pl-5"
+                      ? "bg-sidebar-active/80 border-l-2 border-accent-focus -ml-px"
+                      : ""
                   }`}
                 >
-                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    project.running
-                      ? isCurrent ? "bg-accent-focus" : "bg-status-ok"
-                      : "bg-sidebar-line/60"
-                  }`} />
-                  <span className="truncate flex-1 min-w-0">{project.name}</span>
-                  {activating === project.name ? (
-                    <svg className="w-3 h-3 animate-spin shrink-0 text-accent" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
-                      <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <button
+                    onClick={() => !isCurrent && !activating && handleActivate(project)}
+                    disabled={isCurrent || activating !== null}
+                    title={project.path}
+                    className={`flex-1 min-w-0 text-left flex items-center gap-2 pl-4 pr-2 py-1.5 text-sm
+                      transition-all duration-150 disabled:cursor-default ${
+                      isCurrent
+                        ? "text-sidebar-text"
+                        : "text-sidebar-text-muted hover:text-sidebar-text hover:pl-5"
+                    }`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      project.running
+                        ? isCurrent ? "bg-accent-focus" : "bg-status-ok"
+                        : "bg-sidebar-line/60"
+                    }`} />
+                    <span className="truncate flex-1 min-w-0">{project.name}</span>
+                    {activating === project.name ? (
+                      <svg className="w-3 h-3 animate-spin shrink-0 text-accent" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+                        <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <span className="text-[10px] text-sidebar-text-faint shrink-0 group-hover:opacity-0 transition-opacity">
+                        {timeAgo(project.last_opened)}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(project.name)}
+                    disabled={activating !== null}
+                    aria-label={`Remove ${project.name} from list`}
+                    title="Remove from list"
+                    className="shrink-0 mr-2 p-1 rounded opacity-0 group-hover:opacity-100
+                      focus:opacity-100 text-sidebar-text-faint hover:text-status-error
+                      hover:bg-sidebar-active/60 transition-opacity disabled:cursor-default"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                     </svg>
-                  ) : (
-                    <span className="text-[10px] text-sidebar-text-faint shrink-0">{timeAgo(project.last_opened)}</span>
-                  )}
-                </button>
+                  </button>
+                </div>
               );
             })
           )}
