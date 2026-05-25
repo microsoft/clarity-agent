@@ -980,6 +980,51 @@ class TestAzureInferenceClient:
 
         assert deltas == ["Hello", " world"]
 
+    def _capture_azure_complete_kwargs(
+        self, model: str, max_tokens: int,
+    ) -> dict[str, Any]:
+        # Same shape as the OpenAI helper above: drive a one-shot
+        # create_message against a mock Azure client and return the
+        # kwargs that landed on the inference SDK's ``complete()``.
+        chunks = [_make_stream_chunk(content="hi"), _make_stream_chunk(finish_reason="stop")]
+        with \
+             patch("clarity_agent.llm.impl.azure_inference._azure_aio_mod") as mock_aio, \
+             patch("clarity_agent.llm.impl.azure_inference._AzureKeyCredential"), \
+             patch("clarity_agent.llm.impl.azure_inference._azure_models"):
+            mock_client = AsyncMock()
+            mock_client.complete = AsyncMock(return_value=self._make_stream(chunks))
+            mock_aio.ChatCompletionsClient.return_value = mock_client
+
+            from clarity_agent.llm.impl.azure_inference import AzureInferenceClient
+            client = AzureInferenceClient(
+                api_key="fake", endpoint="https://example.com",
+            )
+            asyncio.run(client.create_message(
+                messages=[{"role": "user", "content": "hi"}],
+                model=model,
+                max_tokens=max_tokens,
+            ))
+        return mock_client.complete.await_args.kwargs
+
+    def test_default_routes_through_model_extras(self) -> None:
+        # Azure mirrors the OpenAI inversion (see test_default_picks_
+        # max_completion_tokens above), but routes via ``model_extras``
+        # because the inference SDK doesn't surface
+        # ``max_completion_tokens`` as a first-class kwarg.  Unknown /
+        # future model names must take this branch by default.
+        for model in ("gpt-5.4", "o3-mini", "ft:gpt-7-future"):
+            kw = self._capture_azure_complete_kwargs(model, 1234)
+            assert kw.get("model_extras") == {"max_completion_tokens": 1234}, model
+            assert "max_tokens" not in kw, model
+
+    def test_legacy_models_use_max_tokens(self) -> None:
+        # Pre-o1 deployments take the legacy first-class kwarg
+        # rather than the ``model_extras`` route.
+        for model in ("gpt-4", "gpt-4o", "gpt-3.5-turbo-1106"):
+            kw = self._capture_azure_complete_kwargs(model, 2048)
+            assert kw.get("max_tokens") == 2048, model
+            assert "model_extras" not in kw, model
+
 
 # ---------------------------------------------------------------------------
 # AzureInferenceClient — auth modes
@@ -1221,6 +1266,51 @@ class TestOpenAIClient:
             ))
 
         assert deltas == ["Hello", " ", "world"]
+
+    def _capture_create_kwargs(self, model: str, max_tokens: int) -> dict[str, Any]:
+        # Run a one-shot create_message against a mock and return
+        # the kwargs the OpenAI SDK was called with — the assertion
+        # surface for the legacy / modern token-kwarg routing tests.
+        chunks = [_make_stream_chunk(content="hi"), _make_stream_chunk(finish_reason="stop")]
+        with patch("clarity_agent.llm.impl.openai._openai_mod") as mock_mod:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(
+                return_value=self._make_stream(chunks),
+            )
+            mock_mod.AsyncOpenAI.return_value = mock_client
+
+            from clarity_agent.llm.impl.openai import OpenAIClient
+            client = OpenAIClient(api_key="fake")
+            asyncio.run(client.create_message(
+                messages=[{"role": "user", "content": "hi"}],
+                model=model,
+                max_tokens=max_tokens,
+            ))
+        return mock_client.chat.completions.create.await_args.kwargs
+
+    def test_default_picks_max_completion_tokens(self) -> None:
+        # Regression for issue #59 and forward-default guarantee:
+        # any model not in the legacy prefix list (the dwindling
+        # set of pre-o1 chat models) gets ``max_completion_tokens``.
+        # This covers the named gpt-5 family models, reasoning
+        # models (o3/o4), AND unknown future / fine-tuned model
+        # names — the inversion's whole point is that new model
+        # IDs work without a code change.
+        for model in ("gpt-5.4", "o3-mini", "o4-mini", "ft:gpt-7-future"):
+            kw = self._capture_create_kwargs(model, 1234)
+            assert kw.get("max_completion_tokens") == 1234, model
+            assert "max_tokens" not in kw, model
+
+    def test_legacy_models_use_max_tokens(self) -> None:
+        # The flip side: pre-o1 chat models still take the legacy
+        # kwarg.  These date-stamped names exercise the prefix
+        # match — bare ``gpt-4``, ``gpt-4o-2024-08-06``, and
+        # ``gpt-3.5-turbo-1106`` must all be recognised as legacy
+        # rather than getting the new kwarg.
+        for model in ("gpt-4", "gpt-4o", "gpt-4o-2024-08-06", "gpt-3.5-turbo-1106"):
+            kw = self._capture_create_kwargs(model, 2048)
+            assert kw.get("max_tokens") == 2048, model
+            assert "max_completion_tokens" not in kw, model
 
 
 # ---------------------------------------------------------------------------
