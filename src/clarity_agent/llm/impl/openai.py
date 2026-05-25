@@ -13,6 +13,7 @@ from typing import Any
 import openai as _openai_mod
 
 from clarity_agent.llm.client import LLMClient
+from clarity_agent.llm.impl._openai_compat import uses_legacy_max_tokens
 from clarity_agent.llm.types import (
     LLMResponse,
     TextBlock,
@@ -128,10 +129,19 @@ class OpenAIClient(LLMClient):
         kwargs: dict[str, Any] = {
             "messages": _translate_messages(messages, system),
             "model": model,
-            "max_tokens": max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},
         }
+        # ``max_completion_tokens`` is the forward-compatible kwarg
+        # (required by gpt-5 family + reasoning models, accepted by
+        # everything since o1).  ``uses_legacy_max_tokens`` picks
+        # out the dwindling set of pre-o1 chat models that still
+        # need the legacy name.  See ``_openai_compat`` for the
+        # rationale and the maintenance note on the prefix list.
+        if uses_legacy_max_tokens(model):
+            kwargs["max_tokens"] = max_tokens
+        else:
+            kwargs["max_completion_tokens"] = max_tokens
         if tools:
             kwargs["tools"] = _translate_tools(tools)
 
