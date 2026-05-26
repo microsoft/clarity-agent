@@ -1,10 +1,17 @@
-"""Check for and apply clarity-agent updates.
+"""Check for and apply clarity-agent updates — the git-checkout side.
 
-In development (git checkout): compares local HEAD against origin/main,
-and orchestrates git pull + pip install + web rebuild when updating.
+In development (git checkout): compares local HEAD against
+``origin/<current-branch>``, and orchestrates git pull + pip
+install + web rebuild when updating.
 
-In frozen (PyInstaller) builds: queries the GitHub Releases API to check
-for a newer version, and provides a download URL.
+Release-mode updates live in
+:mod:`~clarity_agent.setup.release_feed` and are dispatched to by
+:func:`~clarity_agent.setup.version.current_state` based on
+:attr:`~clarity_agent.setup.types.VersionInfo.source`.  This module
+deliberately does *not* know about release-URL synthesis — that's
+the :class:`~clarity_agent.setup.release_feed.ReleaseFeed`
+producer's job (it owns the URL scheme of whatever it talks to),
+and the URL rides along on :attr:`ReleaseInfo.release_url`.
 
 **Stdlib-only** — same constraint as installer.py: no third-party imports.
 """
@@ -48,10 +55,6 @@ __all__ = [
     "schedule_restart",
 ]
 
-# GitHub repo for release checks.
-_GITHUB_REPO = "microsoft/clarity-agent"
-
-
 def _git_head(cwd: Path) -> str:
     """Return the current HEAD commit SHA."""
     return subprocess.check_output(
@@ -78,51 +81,30 @@ def _git_fetch(cwd: Path, *, timeout: int = 30) -> None:
     )
 
 
-# Version parsing + comparison live in
-# ``clarity_agent.setup.release_feed`` now (the abstraction that
-# also drives the frontend's update-available indicator).  Old
-# ``_parse_version`` helper is gone — the only caller was
-# ``_check_github_release``, which delegates to the shared
-# ``check_for_update`` orchestrator.
+def _frozen_local_status() -> UpdateStatus:
+    """Silent ``UpdateStatus`` for the locally-built frozen binary
+    edge case.
 
+    The only path that reaches here is a PyInstaller binary whose
+    ``_version.py`` wasn't stamped by release CI (so ``source ==
+    "local"``).  That binary has no upstream we can update against
+    — the GitHub release feed is for stamped releases, the git
+    layer needs a checkout — so the right answer is "stay silent."
+    ``remote_sha=None`` signals "couldn't determine" upstream;
+    :func:`~clarity_agent.setup.version._local_update_state`
+    translates that into ``update_status="unknown"`` so the badge
+    doesn't render.
 
-def _check_github_release() -> UpdateStatus:
-    """Check GitHub Releases for a newer version (used in frozen builds).
-
-    Delegates to :func:`~clarity_agent.setup.release_feed.check_for_update`
-    so the comparison + parsing logic has exactly one production
-    implementation (this CLI path) and one unit-testable surface
-    (``setup/release_feed.py``).
+    Genuine release binaries never reach this function:
+    :func:`~clarity_agent.setup.version.current_state` dispatches
+    them straight to the release-feed path based on
+    ``VersionInfo.source``, so the URL the user might download is
+    carried by :attr:`~clarity_agent.setup.types.ReleaseInfo.release_url`
+    — owned by the :class:`~clarity_agent.setup.release_feed.ReleaseFeed`
+    that produced it, not synthesized here.
     """
-    from .release_feed import check_for_update
-    from .version import current_version as _cv
-
-    avail = check_for_update()
-    current_str = _cv().version
-
-    if avail.status == "available" and avail.latest is not None:
-        # Surface the GitHub Release page (where the assets live) as
-        # the download URL; matches the prior behavior of pointing
-        # the user at the releases page rather than at a raw asset.
-        download_url = (
-            f"https://github.com/{_GITHUB_REPO}/releases/tag/"
-            f"{avail.latest.version}"
-        )
-        return UpdateStatus(
-            available=True, local_sha=current_str,
-            remote_sha=avail.latest.version,
-            commit_count=0, frozen=True,
-            current_version=current_str,
-            latest_version=avail.latest.version.lstrip("v"),
-            download_url=download_url,
-        )
-
-    remote = avail.latest.version if avail.latest else None
     return UpdateStatus(
-        available=False, local_sha=current_str, remote_sha=remote,
-        commit_count=0, frozen=True,
-        current_version=current_str,
-        latest_version=(remote.lstrip("v") if remote else None),
+        available=False, local_sha="", remote_sha=None, commit_count=0,
     )
 
 
@@ -203,15 +185,21 @@ def _check_git_updates(agent_dir: Path) -> UpdateStatus:
 
 
 def check_for_updates(agent_dir: Path) -> UpdateStatus:
-    """Check whether a newer version is available.
+    """Check whether a newer version is available against the
+    current branch's upstream.
 
-    In frozen (PyInstaller) builds, queries the GitHub Releases API.
-    In development, uses git fetch + rev-parse against origin/main.
+    Only invoked for source-checkout builds — release-mode lookups
+    flow through the release feed via
+    :func:`~clarity_agent.setup.version.current_state` directly.
+    The locally-built frozen-binary edge case (PyInstaller binary
+    whose ``_version.py`` wasn't stamped) has no upstream to check
+    and returns a silent ``UpdateStatus`` via
+    :func:`_frozen_local_status`.
     """
     from clarity_agent.app_paths import is_frozen
 
     if is_frozen():
-        return _check_github_release()
+        return _frozen_local_status()
     return _check_git_updates(agent_dir)
 
 

@@ -132,27 +132,22 @@ class UpdateAvailability:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class UpdateStatus:
     """Result of :func:`~clarity_agent.setup.updater.check_for_updates`.
 
-    Mutable on purpose — the doctor / installer paths sometimes
-    decorate it with additional context before returning.  Only
-    consumed by :func:`~clarity_agent.setup.version.current_state`
-    in normal operation; the frozen-binary fields exist for the
-    legacy CLI ``check-for-updates`` command that still uses this
-    shape directly.
+    A minimal git-mode summary — translated by
+    :func:`~clarity_agent.setup.version._local_update_state` into the
+    richer :class:`RuntimeState` shape the UI consumes.  ``remote_sha
+    is None`` is the signal for "couldn't determine" (no upstream,
+    fetch failed, detached HEAD); a present ``remote_sha`` with
+    ``available=False`` means genuinely up-to-date.
     """
 
     available: bool
     local_sha: str
     remote_sha: str | None
     commit_count: int  # number of commits behind origin/<current-branch>
-    # Fields used only in frozen mode:
-    frozen: bool = False
-    current_version: str | None = None
-    latest_version: str | None = None
-    download_url: str | None = None
 
 
 @dataclass(frozen=True)
