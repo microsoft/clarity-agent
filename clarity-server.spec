@@ -12,6 +12,7 @@ sidecar.  For distribution, rename with the platform-architecture suffix
 expected by Tauri (e.g. ``clarity-server-aarch64-apple-darwin``).
 """
 
+import importlib.util
 import platform
 import sys
 from pathlib import Path
@@ -95,11 +96,20 @@ hidden_imports = [
 # Data files: non-Python assets that must be available at runtime.
 # Each tuple is (source_path, dest_path_in_bundle).
 # ---------------------------------------------------------------------------
-# Locate the Copilot SDK's bundled CLI binary so it's available at runtime.
-_copilot_bin = Path(sys.prefix, "Lib", "site-packages", "copilot", "bin")
-if not _copilot_bin.exists():
-    # Also check the venv (editable installs).
-    _copilot_bin = Path(".venv", "Lib", "site-packages", "copilot", "bin")
+# Locate the Copilot SDK's bundled CLI binary via Python's own import
+# machinery — the previous hard-coded ``sys.prefix/Lib/site-packages``
+# path worked only on Windows (which uses ``Lib`` rather than the
+# ``lib/python3.X`` layout used on macOS / Linux), silently no-opping
+# elsewhere and shipping a Mac desktop bundle without the binary.
+# ``find_spec`` doesn't care about platform layout — it asks Python
+# where the package actually lives.  We're running under the same
+# venv PyInstaller will bundle from, so this is the source of truth.
+_copilot_spec = importlib.util.find_spec("copilot")
+_copilot_bin = (
+    Path(_copilot_spec.origin).parent / "bin"
+    if _copilot_spec is not None and _copilot_spec.origin
+    else Path()
+)
 
 datas = [
     ("processes", "processes"),
@@ -109,6 +119,16 @@ datas = [
 ]
 if _copilot_bin.exists():
     datas.append((str(_copilot_bin), "copilot/bin"))
+else:
+    # Loud failure beats silent: if we ever lose track of the
+    # copilot package (uninstalled, optional extra, etc.), surface
+    # it at build time rather than producing a bundle that crashes
+    # on the first GHCP call.
+    print(
+        f"WARNING: copilot/bin not found (looked for {_copilot_bin}). "
+        "GHCP backend will not work in the bundled binary.",
+        file=sys.stderr,
+    )
 
 a = Analysis(
     ["clarity.py"],

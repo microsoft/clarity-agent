@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+# ``EMBEDDED_AGENT_SUBDIR`` is the canonical name of the in-repo
+# clarity-agent install directory (``.clarity-agent``).  Importing it
+# here keeps both ``check_installation_type`` call sites from
+# duplicating the literal — the test for "is this an embedded install"
+# is one place, period.  The module is stdlib-only and has no cycle
+# risk, so a regular import works.
+from .layout import EMBEDDED_AGENT_SUBDIR
+
+if TYPE_CHECKING:
+    # Imported under TYPE_CHECKING so type-checkers can resolve the
+    # ``ProjectLayout`` annotation on ``_refresh_snippet_fix`` without
+    # importing the module at runtime (it's already imported lazily
+    # inside the function that needs the type).
+    from .layout import ProjectLayout
 
 # ---------------------------------------------------------------------------
 # Types
@@ -135,50 +152,59 @@ def check_installation_type(agent_dir: Path) -> list[CheckResult]:
 
     # Check if agent_dir lives inside a parent git repo.
     parent_git = _find_git_root(agent_dir.parent)
-    is_embedded = parent_git is not None and agent_dir.name == ".clarity-agent"
+    is_embedded = parent_git is not None and agent_dir.name == EMBEDDED_AGENT_SUBDIR
 
     if is_embedded:
+        assert parent_git is not None  # guaranteed by is_embedded check
         results.append(CheckResult(
             name="Installation type",
             status=Status.PASS,
             message=f"In-repo installation inside {parent_git}",
         ))
-        # Sub-check: Clarity snippet in the host repo's agent config.
-        from .snippet import (
-            find_target,
-            has_snippet,
-            insert_snippet,
-            render_snippet,
-            snippet_path,
+        # Sub-check: Clarity block in the host repo's AGENTS.md.  Now
+        # delegates to the same ``ensure_agents_md`` reconcile loop the
+        # runtime uses, so the doctor and the runtime agree on what
+        # "in sync" means.  Embedded mode → relative paths in the
+        # rendered block.
+        from .layout import (
+            PROTOCOL_DIR_DOT,
+            Mode,
+            ProjectLayout,
         )
-        assert parent_git is not None  # guaranteed by is_embedded check
-        target = find_target(parent_git)
+        from .snippet import has_snippet, snippet_path
+        layout = ProjectLayout(
+            mode=Mode.EMBEDDED,
+            project_dir=parent_git,
+            clarity_agent_dir=agent_dir,
+            protocol_dir=parent_git / PROTOCOL_DIR_DOT,
+        )
+        target = layout.agents_md
         if has_snippet(target):
-            results.append(CheckResult(
-                name="Agent config",
-                status=Status.PASS,
-                message=f"{target.name} contains clarity snippet",
-            ))
-        elif target.exists() and "clarity" in target.read_text(errors="replace").lower():
-            # Old-style integration (full AGENTS.md template) — still counts.
-            results.append(CheckResult(
-                name="Agent config",
-                status=Status.PASS,
-                message=f"{target.name} references clarity (legacy format)",
-            ))
+            # Distinguish "in sync" from "present but drifted".  We
+            # don't actually rewrite here — that would be a side
+            # effect inside a check; the fix_fn does the rewriting if
+            # the user opts in.
+            from .snippet import _current_meta, _extract_block, parse_meta
+            existing_block = _extract_block(target.read_text(encoding="utf-8"))
+            existing_meta = parse_meta(existing_block) if existing_block else None
+            if existing_meta == _current_meta(layout):
+                results.append(CheckResult(
+                    name="Agent config",
+                    status=Status.PASS,
+                    message=f"{target.name} contains current clarity snippet",
+                ))
+            else:
+                results.append(CheckResult(
+                    name="Agent config",
+                    status=Status.WARN,
+                    message=f"{target.name} clarity snippet is stale",
+                    fix_hint=f"Refresh clarity snippet in {target.name}",
+                    fix_fn=_refresh_snippet_fix(layout),
+                ))
         else:
             fix_fn: Callable[[], bool] | None = None
             if snippet_path().exists():
-                def _insert_snippet(
-                    _target: Path = target,
-                    _agent_dir: Path = agent_dir,
-                ) -> bool:
-                    snippet = render_snippet(
-                        ".clarity-agent/processes",
-                    )
-                    insert_snippet(_target, snippet)
-                    return True
-                fix_fn = _insert_snippet
+                fix_fn = _refresh_snippet_fix(layout)
             if target.exists():
                 results.append(CheckResult(
                     name="Agent config",
@@ -191,7 +217,7 @@ def check_installation_type(agent_dir: Path) -> list[CheckResult]:
                 results.append(CheckResult(
                     name="Agent config",
                     status=Status.WARN,
-                    message=f"No agent config file in {parent_git}",
+                    message=f"No {target.name} in {parent_git}",
                     fix_hint=f"Create {target.name} with clarity snippet",
                     fix_fn=fix_fn,
                 ))
@@ -203,6 +229,21 @@ def check_installation_type(agent_dir: Path) -> list[CheckResult]:
         ))
 
     return results
+
+
+def _refresh_snippet_fix(layout: ProjectLayout) -> Callable[[], bool]:
+    """Build a fix_fn that runs ``ensure_agents_md`` against *layout*.
+
+    Wrapping it lets ``check_installation_type`` reuse the same fixer
+    for the "no snippet" and "stale snippet" branches, and keeps the
+    closure capture explicit.
+    """
+    from .snippet import EnsureStatus, ensure_agents_md
+
+    def _fix() -> bool:
+        return ensure_agents_md(layout) is not EnsureStatus.UNCHANGED
+
+    return _fix
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +518,7 @@ def check_clarity_command(agent_dir: Path) -> CheckResult:
     # For standalone installs the wrapper lives in agent_dir itself;
     # for embedded installs (.clarity-agent/) it lives in the host repo root.
     parent_git = _find_git_root(agent_dir.parent)
-    is_embedded = parent_git is not None and agent_dir.name == ".clarity-agent"
+    is_embedded = parent_git is not None and agent_dir.name == EMBEDDED_AGENT_SUBDIR
 
     if is_embedded and parent_git is not None:
         wrapper_path = parent_git / "clarity"
@@ -663,6 +704,27 @@ def check_llm_provider(agent_dir: Path) -> CheckResult:
 def _classify_error(error: Exception, provider: str) -> str:
     """Return a targeted fix hint for common backend errors."""
     msg = str(error).lower()
+    # Per-tool config rejection is checked first: it's the most
+    # confusing failure for users, because the offending tool belongs
+    # to one of *their* configured MCP servers — not to Clarity — yet
+    # the raw error points only at an opaque ``tools.<n>`` index.  We
+    # don't try to restate the specific schema problem (there are many
+    # ways a tool definition can be invalid); the raw error already
+    # carries that, and the surrounding ``message`` field shows it.
+    # Our job is just to send the user to the right remediation.
+    # See :func:`_is_claude_tool_config_error`.
+    if _is_claude_tool_config_error(error):
+        return (
+            "The Anthropic API rejected one of the tool definitions in "
+            "the request (see the error above for the specific tool index "
+            "and problem). Clarity registers no custom tools here, so this "
+            "almost always comes from a tool exposed by an MCP server in "
+            "your Claude configuration — and it breaks *every* Claude "
+            "request, the `claude` CLI and Clarity alike, until it's "
+            "fixed. Run `claude mcp list` to see your configured servers, "
+            "then `claude mcp remove <servername>` to disable the "
+            "malfunctioning one."
+        )
     if "auth" in msg or "api key" in msg or "401" in msg or "403" in msg:
         return f"Your API key for {provider} may be invalid or expired."
     if "connection" in msg or "timeout" in msg or "resolve" in msg:
@@ -678,6 +740,41 @@ def _is_auth_error(error: Exception) -> bool:
     """Return True if *error* looks like an authentication failure."""
     msg = str(error).lower()
     return any(s in msg for s in ("auth", "api key", "401", "403"))
+
+
+# A 4xx status immediately followed by a ``tools.<index>.`` path is the
+# Anthropic (Claude) API's format for "tool definition number N is
+# invalid" — regardless of *which* field is wrong
+# (``custom_input_schema``, ``name``, ``input_schema.properties…``,
+# etc.).  The 4xx makes it a client-side error (the request is
+# malformed), and the ``tools.<n>.`` scope makes it specifically a bad
+# tool definition.  Matching the structure rather than any one error
+# phrasing catches every variant of "your tool config is broken" with
+# a single rule.  This is the *Claude* error shape specifically; other
+# providers (OpenAI, Gemini, …) report tool problems with different
+# wording and won't match — hence the ``claude`` qualifier on the
+# helper below.
+_CLAUDE_TOOL_CONFIG_ERROR_RE = re.compile(r"4\d{2}\s+tools\.\d+\.")
+
+
+def _is_claude_tool_config_error(error: Exception) -> bool:
+    """Return True if *error* is the Claude/Anthropic API rejecting a
+    specific tool definition (a ``4xx tools.<index>.<field>`` error).
+
+    The offending tool is almost always supplied by a user-configured
+    MCP server (on the ``claude_sdk`` backend Clarity registers no
+    custom tools of its own), so matching this structure lets
+    :func:`_classify_error` point the user at ``claude mcp`` rather than
+    at their API key.  Example::
+
+        400 tools.195.custom_input_schema: input_schema does not
+        support oneOf, allOf, or anyOf at top level
+
+    Named for the Claude backend deliberately: this is the Anthropic
+    API's error shape.  Other backends surface tool-definition problems
+    differently and would need their own detector + remediation.
+    """
+    return bool(_CLAUDE_TOOL_CONFIG_ERROR_RE.search(str(error)))
 
 
 def _make_update_key_fn(

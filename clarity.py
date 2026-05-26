@@ -22,6 +22,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -217,8 +219,12 @@ def _cmd_web(args: argparse.Namespace) -> None:
     static_dir: Path | None = web_dist if web_dist.exists() else None
 
     if static_dir is None:
+        # ``web/dist/`` is built locally — not checked into the repo —
+        # so a fresh clone won't have one until either ``clarity install``
+        # runs (which builds it) or the user builds the frontend by hand.
         print("Warning: No built web UI found at web/dist/.")
-        print("Run 'npm run build' in the web/ directory first.")
+        print("Build it with 'cd web && npm install && npm run build',")
+        print("or run 'python clarity.py install' to set everything up.")
         print("Starting in API-only mode.\n")
 
     # No project_dir → launcher mode (multi-project).
@@ -384,6 +390,33 @@ def _transcript_dir(args: argparse.Namespace, project_dir: Path):
         return None
     from clarity_agent.transcript import Transcript
     return Transcript(project_dir)
+
+
+# ---------------------------------------------------------------------------
+# Crash logging
+# ---------------------------------------------------------------------------
+
+def _write_crash_log(exc: BaseException) -> Path | None:
+    """Append *exc*'s traceback to the per-user crash log.
+
+    The Tauri sidecar runs without an attached console on Windows, so a
+    bare ``print(Error: ...)`` leaves users (and us) blind to startup
+    failures.  Writing the traceback to a known on-disk location turns
+    silent exit codes into something we can ask users to read back.
+
+    Best-effort: any failure during logging is swallowed so a broken
+    logger never masks the real exception.
+    """
+    try:
+        from clarity_agent.app_paths import clarity_data_dir
+        log_path = clarity_data_dir() / "clarity-crash.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} ===\n")
+            f.write("".join(traceback.format_exception(exc)))
+        return log_path
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +675,10 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"Error: {e}")
+        crash_log = _write_crash_log(e)
+        print(f"Error: {e}", file=sys.stderr)
+        if crash_log is not None:
+            print(f"Full traceback written to: {crash_log}", file=sys.stderr)
         raise SystemExit(1) from e
 
 

@@ -41,6 +41,7 @@ export default function Layout() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const projectId = useProjectId();
@@ -80,9 +81,19 @@ export default function Layout() {
     setSessionLoading(true);
     activateProjectById(projectId)
       .then(() => fetchSession())
-      .catch(() => {
-        // Project ID doesn't exist — go to root
+      .catch((err: unknown) => {
+        // The launcher returns 410 when a project's directory no longer
+        // exists; refresh the recent menu so the stale entry drops out,
+        // surface a banner, and route the user back to the picker.
+        const msg = err instanceof Error ? err.message : String(err);
+        setActivationError(
+          msg.startsWith("410")
+            ? "That project's folder no longer exists. It has been removed from your recent list."
+            : "Couldn't open that project."
+        );
+        void refreshRecentMenu();
         navigate("/", { replace: true });
+        setSessionLoading(false);
       })
       .finally(() => {
         activatingRef.current = null;
@@ -97,14 +108,34 @@ export default function Layout() {
   // The Rust side dispatches CustomEvents via webview.eval() instead,
   // and we listen with standard DOM addEventListener — no Tauri JS API needed.
   useEffect(() => {
-    /** Helper: open a path as a project (create if needed, activate, navigate). */
-    const openProjectPath = async (path: string) => {
+    /** Helper: open a path as a project (create or open, activate, navigate).
+     *
+     * Called from the Tauri menu's "Open Project…" and "New
+     * Project…" items.  The Tauri-side handlers already picked a
+     * folder, so we just route to the launcher endpoint with the
+     * appropriate intent; on the no-layout / broken-install branches
+     * we fall through silently rather than popping a dialog — the
+     * full flow-3 prompt lives in ``ProjectSwitcher`` and only fires
+     * when the user goes through the in-app New/Open buttons.
+     */
+    const openProjectPath = async (
+      path: string, intent: "create_new" | "open_existing",
+    ) => {
       const name = path.split("/").filter(Boolean).pop() || "project";
       let id: string;
       try {
-        const entry = await createProject(name, path);
-        await activateProject(entry.name);
-        id = entry.id;
+        const result = await createProject({ name, path, intent });
+        if (result.status === "ok") {
+          await activateProject(result.entry.name);
+          id = result.entry.id;
+        } else {
+          // Menu-driven open hit a needs_setup / broken / embedded-
+          // required branch; the menu UI has no place to host the
+          // SetupPromptDialog, so the user has to use the in-app
+          // ProjectSwitcher flow.  Surface nothing; the directory
+          // simply doesn't activate.
+          return;
+        }
       } catch {
         const data = await getProjects();
         const existing = data.projects.find((p) => p.path === path);
@@ -116,13 +147,25 @@ export default function Layout() {
       navigate(`/p/${id}/`);
     };
 
-    const onOpen = (e: Event) => openProjectPath((e as CustomEvent).detail);
-    const onNew = (e: Event) => openProjectPath((e as CustomEvent).detail);
+    const onOpen = (e: Event) =>
+      openProjectPath((e as CustomEvent).detail, "open_existing");
+    const onNew = (e: Event) =>
+      openProjectPath((e as CustomEvent).detail, "create_new");
     const onActivate = async (e: Event) => {
       const projectId = (e as CustomEvent).detail;
-      await activateProjectById(projectId);
-      await refreshRecentMenu();
-      navigate(`/p/${projectId}/`);
+      try {
+        await activateProjectById(projectId);
+        await refreshRecentMenu();
+        navigate(`/p/${projectId}/`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setActivationError(
+          msg.startsWith("410")
+            ? "That project's folder no longer exists. It has been removed from your recent list."
+            : "Couldn't open that project."
+        );
+        await refreshRecentMenu();
+      }
     };
     // Print is handled natively by Tauri (WebviewWindow::print()),
     // not via JS — window.print() is a no-op in WKWebView.
@@ -242,6 +285,21 @@ export default function Layout() {
         // `onShowFeedback={() => setShowFeedback(true)}`.
       />
       <main id="main-content" className="flex-1 overflow-auto animate-fade-in">
+        {activationError && (
+          <div
+            role="alert"
+            className="mx-4 mt-3 px-3 py-2 rounded text-xs
+              text-status-error-text bg-status-error-bg flex items-center gap-2"
+          >
+            <span className="flex-1">{activationError}</span>
+            <button
+              onClick={() => setActivationError(null)}
+              className="underline hover:no-underline"
+            >
+              dismiss
+            </button>
+          </div>
+        )}
         {noActiveProject ? (
           <div className="h-full flex items-center justify-center text-body-faint text-sm select-none">
             Select or create a project to get started.

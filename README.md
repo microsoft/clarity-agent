@@ -17,17 +17,25 @@ Clarity runs as a desktop app, a web UI, or embedded in your coding agent. It pr
 
 Read more about the philosophy behind clarity agent [in this blog post](https://medium.com/@yonatanzunger/are-we-building-the-right-ai-203cfc7effdc).
 
+You can also join the [Clarity Agent Discord](https://aka.ms/clarity-agent-community) to talk with the team, share feedback, and connect with the community.
+
 ## Getting Started
 
 ### Install
 
-**macOS / Linux:**
+**Download the desktop app** (no terminal required):
+
+Download the latest `.dmg` (macOS) or `.exe` installer (Windows) from the [GitHub Releases page](https://github.com/microsoft/clarity-agent/releases/latest) and install it directly. No prerequisites.
+
+**Or install via script** (adds the `clarity` CLI and embeds Clarity into git repos):
+
+*macOS / Linux:*
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/microsoft/clarity-agent/main/scripts/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+*Windows (PowerShell):*
 
 ```powershell
 irm https://raw.githubusercontent.com/microsoft/clarity-agent/main/scripts/install.ps1 | iex
@@ -46,9 +54,11 @@ bash scripts/install.sh        # macOS / Linux
 
 ### Launch and connect an LLM
 
-**macOS:** Open `~/Applications/Clarity.app`
+**macOS:** Open `Clarity.app` from `~/Applications`.
 
-**Linux / Windows:** Run `clarity` from your terminal or Start Menu.
+**Windows:** Run the installed app from the Start Menu, or run `clarity` from your terminal if you used the script installer.
+
+**Linux:** Run `clarity` from your terminal.
 
 On first launch, the setup wizard walks you through connecting an LLM provider.
 
@@ -102,13 +112,17 @@ A `.clarity-protocol/` directory:
 .clarity-protocol/
 ├── summary.md              # Brief summary of what this project is
 ├── notes.md                # Principles and cross-cutting observations
+├── observations.md         # Patterns and coverage notes from analysis
 ├── goal/
 │   ├── problem.md          # What you're trying to achieve and why
 │   ├── stakeholders.md     # Who cares about the outcome
-│   └── requirements.md     # Criteria any solution must satisfy
+│   ├── requirements.md     # Criteria any solution must satisfy
+│   ├── open-questions.md   # Unknowns that could change the approach
+│   └── resolved-questions.md # Questions answered, with findings
 ├── solution/
 │   ├── solution.md         # What you plan to build
-│   └── architecture.md     # How you plan to build it
+│   ├── architecture.md     # How you plan to build it
+│   └── solution-summary.md # Concise overview for stakeholders
 ├── failures/
 │   └── failures.md         # Failure modes, chains, and management plans
 ├── decisions/
@@ -137,9 +151,9 @@ See [Responsible AI FAQ](AIFAQ.md) for detailed information about intended uses,
 ## CLI Reference
 
 ```text
-clarity                            Launch desktop app
-clarity app                        Same, explicit
+clarity                            Launch web UI (default)
 clarity web [project_dir]          Headless web server
+clarity app                        Launch desktop app
 clarity cli [project_dir]          Interactive terminal session
 clarity process NAME [project_dir] Run a single process by name
 clarity packet [project_dir]       Generate a review packet

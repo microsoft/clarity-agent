@@ -43,6 +43,36 @@ Ask questions that get at the core motivation:
 
 The goal is to understand not just what the problem is, but why it matters. This "why" is what keeps projects on track when implementation decisions get tough.
 
+### Step 2.25: Pressure-test the Framing of the Goal
+
+Before going deeper, take one explicit pass at the user's framing of the goal itself. The user has told you *what they want*. Step 2 told you *why it matters to them*. Now ask: **does the stated goal actually serve that "why," or is it one path among several?**
+
+The failure mode this catches is subtle and very common: the user names a goal that is really a *means* to a goal one level up, and you treat the means as the endpoint. Even a thoughtful user will frame their request in terms of the intervention they've been thinking about ("rebuild the donor database," "switch from Jira to Linear," "build a team-tracking dashboard") rather than the outcome that intervention is meant to produce. If you accept the framing as the goal, you'll do good work in service of the wrong thing.
+
+**Concretely, ask:**
+
+- "If [the stated goal] were already done — magic wand, no effort — what would you actually be able to do that you can't do today?"
+- "What's the worst version of [the stated goal] that would still count as a success? What does that tell us about what success really is?"
+- "Is [the stated goal] the goal, or the route you've picked toward a goal? If it's the route, what's the destination?"
+- "What's the next layer up — if we zoomed out one level, what's the larger thing this is in service of?"
+
+**Probe at least once; usually that's enough.** Do it in the first few turns even when the goal sounds concrete and reasonable — that's when the framing is most likely to slip past unexamined. Probing the framing is *not* the same as challenging the user, and it's *not* the same as second-guessing — you're confirming the shared destination before optimizing the route. State that explicitly if the user pushes back: "I'm not pushing you off this — I just want to make sure I'm helping with the right thing before we go deep."
+
+**Signs the framing needs more pressure-testing, not less:**
+
+- The stated goal is a noun that names an artifact ("a CRM," "a dashboard," "a rewrite," "a literature review") rather than a state of the world.
+- The user has already done substantial work toward the stated goal — they may be invested in the means and lose sight of the end.
+- The "why" from Step 2 names an outcome ("we want to retain more first-time donors") while the stated goal names an artifact ("rebuild the donor database") — the gap between them is room for a different intervention.
+- You can articulate a different intervention that would also satisfy the "why" — that's a sign the means and the ends have separated.
+
+**What to do with what you find:**
+
+- If the framing survives the pressure-test, write the stated goal to `problem.md` as before and proceed. Note in `problem.md` that the framing was examined — one short sentence is enough.
+- If a higher-level goal surfaces, *don't silently swap*. Surface what you noticed back to the user explicitly: "It sounds like the actual destination might be [X], and [their stated goal] is one route. Is that right?" Then let the user decide whether to keep the original framing or reframe.
+- If the user is adamant about the stated framing even after pressure-testing, respect that — capture both the stated goal and the higher-level "why" in `problem.md` so the larger context isn't lost downstream.
+
+This step is intentionally short: one pass, surfaced gently, then proceed. The pitfall to avoid is making every conversation feel like an interrogation. The pitfall it prevents is bigger: a project that succeeds at the wrong thing.
+
 ### Step 2.5: Separate Problems from Solutions
 
 **Watch for overspecified requirements.** Sometimes stakeholders arrive with extremely detailed requirements that are actually proposed solutions, not underlying problems. This commonly happens when:
@@ -521,6 +551,10 @@ You've achieved problem clarity when:
 - When someone asks "why?", you have clear answers
 
 ## Common Pitfalls
+
+**Pitfall: Accepting the initial framing of the goal**
+
+The user states a goal; you accept it and start optimizing within it. If the stated goal is really a means to a goal one level up, you'll do good work toward the wrong endpoint. Run Step 2.25's framing pressure-test even when the goal sounds concrete and well-formed — *especially* then.
 
 **Pitfall: Jumping to solutions**
 

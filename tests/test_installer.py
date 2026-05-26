@@ -31,6 +31,25 @@ from clarity_agent.setup.installer import (
     update_gitignore,
     validate_target,
 )
+from clarity_agent.setup.layout import (
+    PROTOCOL_DIR_DOT,
+    Mode,
+    ProjectLayout,
+)
+
+
+def _embedded_layout(target: Path, agent: Path | None = None) -> ProjectLayout:
+    """Build an EMBEDDED layout for *target* — mirrors what
+    ``run_install`` / ``run_project_embed`` construct at orchestrator
+    top.  Test helper so each call site doesn't repeat the 5-line
+    ProjectLayout(...) construction.
+    """
+    return ProjectLayout(
+        mode=Mode.EMBEDDED,
+        project_dir=target,
+        clarity_agent_dir=agent if agent is not None else target / CLARITY_DIR,
+        protocol_dir=target / PROTOCOL_DIR_DOT,
+    )
 
 # ---------------------------------------------------------------------------
 # _parse_version
@@ -255,7 +274,7 @@ class TestCloneOrUpdate:
 class TestUpdateGitignore:
     def test_adds_all_entries(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()  # simulate git repo
-        results = update_gitignore(tmp_path)
+        results = update_gitignore(_embedded_layout(tmp_path))
         assert len(results) == 5
         assert all(r.outcome == Outcome.OK for r in results)
         content = (tmp_path / ".gitignore").read_text()
@@ -270,7 +289,7 @@ class TestUpdateGitignore:
         (tmp_path / ".gitignore").write_text(
             f"/{CLARITY_DIR}\n/clarity\n/clarity.ps1\n/clarity.bat\n/.clarity-protocol/transcripts/\n"
         )
-        results = update_gitignore(tmp_path)
+        results = update_gitignore(_embedded_layout(tmp_path))
         assert len(results) == 5
         assert all(r.outcome == Outcome.OK for r in results)
         assert "already" in results[0].message
@@ -278,7 +297,7 @@ class TestUpdateGitignore:
     def test_partial_present(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()  # simulate git repo
         (tmp_path / ".gitignore").write_text(f"/{CLARITY_DIR}\n")
-        results = update_gitignore(tmp_path)
+        results = update_gitignore(_embedded_layout(tmp_path))
         assert len(results) == 5
         content = (tmp_path / ".gitignore").read_text()
         assert "/clarity\n" in content
@@ -288,14 +307,14 @@ class TestUpdateGitignore:
     def test_without_leading_slash(self, tmp_path: Path) -> None:
         """Entries without leading slash should also be recognized."""
         (tmp_path / ".gitignore").write_text(f"{CLARITY_DIR}\nclarity\n")
-        results = update_gitignore(tmp_path)
+        results = update_gitignore(_embedded_layout(tmp_path))
         assert all(r.outcome == Outcome.OK for r in results)
         assert "already" in results[0].message
 
     def test_appends_newline_separator(self, tmp_path: Path) -> None:
         """A newline is added before the section if the file doesn't end with one."""
         (tmp_path / ".gitignore").write_text("node_modules")
-        update_gitignore(tmp_path)
+        update_gitignore(_embedded_layout(tmp_path))
         content = (tmp_path / ".gitignore").read_text()
         assert content.startswith("node_modules\n")
 
@@ -791,7 +810,7 @@ class TestInsertAgentSnippet:
     def test_creates_claude_md(self, tmp_path: Path) -> None:
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
-        r = insert_agent_snippet(tmp_path, agent)
+        r = insert_agent_snippet(_embedded_layout(tmp_path, agent))
         assert r.outcome == Outcome.OK
         assert "Created" in r.message
         target = tmp_path / "AGENTS.md"
@@ -802,9 +821,13 @@ class TestInsertAgentSnippet:
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
         (tmp_path / "AGENTS.md").write_text("# My agents\n")
-        r = insert_agent_snippet(tmp_path, agent)
+        r = insert_agent_snippet(_embedded_layout(tmp_path, agent))
         assert r.outcome == Outcome.OK
-        assert "appended" in r.message.lower()
+        # The new ensure_agents_md path reports outcomes as
+        # "Created", "Refreshed", or "already current".  An append to
+        # an existing file is an "Refreshed" (the block was added /
+        # the file content updated).
+        assert "refreshed" in r.message.lower()
         content = (tmp_path / "AGENTS.md").read_text()
         assert "# My agents" in content
         assert "<!-- clarity-begin -->" in content
@@ -812,9 +835,9 @@ class TestInsertAgentSnippet:
     def test_idempotent(self, tmp_path: Path) -> None:
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
-        insert_agent_snippet(tmp_path, agent)
+        insert_agent_snippet(_embedded_layout(tmp_path, agent))
         first = (tmp_path / "AGENTS.md").read_text()
-        r = insert_agent_snippet(tmp_path, agent)
+        r = insert_agent_snippet(_embedded_layout(tmp_path, agent))
         assert r.outcome == Outcome.OK
         assert "already" in r.message.lower()
         assert (tmp_path / "AGENTS.md").read_text() == first
@@ -823,7 +846,7 @@ class TestInsertAgentSnippet:
         """The snippet should reference MCP tool names, not CLI commands."""
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
-        insert_agent_snippet(tmp_path, agent)
+        insert_agent_snippet(_embedded_layout(tmp_path, agent))
         content = (tmp_path / "AGENTS.md").read_text()
         assert "run_clarity" in content
         assert "check_decision" in content
@@ -832,14 +855,18 @@ class TestInsertAgentSnippet:
     def test_skip_when_no_template(self, tmp_path: Path) -> None:
         fake = tmp_path / "nonexistent" / "snippet.md"
         with patch("clarity_agent.setup.snippet.snippet_path", return_value=fake):
-            r = insert_agent_snippet(tmp_path, tmp_path / CLARITY_DIR)
+            r = insert_agent_snippet(_embedded_layout(tmp_path))
         assert r.outcome == Outcome.SKIP
 
-    def test_prefers_claude_md_over_agents_md(self, tmp_path: Path) -> None:
+    def test_always_targets_agents_md_not_claude_md(self, tmp_path: Path) -> None:
+        # AGENTS.md is the universal convention every modern LLM
+        # coding agent (Claude, GPT, ...) reads — that's why the
+        # rendered block lives there.  Even when CLAUDE.md is also
+        # present, we leave it alone.
         agent = tmp_path / CLARITY_DIR
         agent.mkdir()
         (tmp_path / "CLAUDE.md").write_text("# Claude\n")
         (tmp_path / "AGENTS.md").write_text("# Agents\n")
-        insert_agent_snippet(tmp_path, agent)
-        assert "<!-- clarity-begin -->" in (tmp_path / "CLAUDE.md").read_text()
-        assert "<!-- clarity-begin -->" not in (tmp_path / "AGENTS.md").read_text()
+        insert_agent_snippet(_embedded_layout(tmp_path, agent))
+        assert "<!-- clarity-begin -->" in (tmp_path / "AGENTS.md").read_text()
+        assert "<!-- clarity-begin -->" not in (tmp_path / "CLAUDE.md").read_text()

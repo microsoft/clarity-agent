@@ -143,12 +143,64 @@ export const getProcesses = () =>
 export const getProjects = () =>
   fetchJson<{ projects: ProjectEntry[] }>("/api/projects");
 
-export const createProject = (name: string, path?: string) =>
-  fetchJson<ProjectEntry>("/api/projects", {
+/**
+ * Discriminated union of outcomes from ``POST /api/projects``.  The
+ * server returns one of these shapes; the UI dispatches on
+ * ``status`` to drive flow-2 (registered + activated), the flow-3
+ * SetupPromptDialog (needs_setup / broken_install), or the
+ * EmbeddedCommandDialog (embedded_install_required).
+ *
+ * Keep these field names in sync with
+ * ``src/clarity_agent/web/launcher.py``'s ``create_project`` handler.
+ */
+export type CreateProjectResult =
+  | { status: "ok"; entry: ProjectEntry }
+  | {
+      status: "needs_setup";
+      looks_like_code: boolean;
+      suggested_mode: "embedded" | "userspace";
+      path: string;
+    }
+  | { status: "broken_install"; brokenness: string; path: string }
+  | { status: "embedded_install_required"; command: string; path: string };
+
+/**
+ * Register / set up a project.  See the server-side docstring on
+ * ``create_project`` for the per-(intent, mode, disk-state)
+ * behavior matrix.  This wrapper handles the 409 responses
+ * structurally (they carry actionable JSON, not error text), so
+ * callers can ``switch`` on ``status`` rather than parsing
+ * exception strings.
+ */
+export async function createProject(args: {
+  name: string;
+  path?: string;
+  intent: "create_new" | "open_existing";
+  mode?: "userspace" | "embedded";
+}): Promise<CreateProjectResult> {
+  const res = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, path }),
+    body: JSON.stringify(args),
   });
+  // The launcher returns 409 with structured bodies for the two
+  // setup-decision-needed cases; everything else is either a
+  // success (200) or a genuine error.
+  if (res.status === 200 || res.status === 409) {
+    const body = await res.json();
+    if (res.status === 200 && !body.status) {
+      // Legacy code path that didn't set ``status`` — treat as ok.
+      return { status: "ok", entry: body as ProjectEntry };
+    }
+    if (body.status === "ok") {
+      const { status: _s, ...entry } = body;
+      return { status: "ok", entry: entry as ProjectEntry };
+    }
+    return body as CreateProjectResult;
+  }
+  const errorBody = await res.text();
+  throw new Error(`${res.status}: ${errorBody}`);
+}
 
 export const removeProject = (name: string) =>
   fetchJson<{ status: string }>(`/api/projects/${encodeURIComponent(name)}`, {

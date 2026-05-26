@@ -16,6 +16,7 @@ from azure.core.credentials import AzureKeyCredential as _AzureKeyCredential
 from azure.identity import DefaultAzureCredential as _DefaultAzureCredential
 
 from clarity_agent.llm.client import LLMClient
+from clarity_agent.llm.impl._openai_compat import uses_legacy_max_tokens
 from clarity_agent.llm.types import (
     LLMAuthExpiredError,
     LLMResponse,
@@ -133,9 +134,6 @@ class AzureInferenceClient(LLMClient):
     TIER_DEFAULTS = _AZURE_TIER_DEFAULTS
     MODEL_CONTEXT_WINDOWS = _AZURE_MODEL_CONTEXT_WINDOWS
 
-    # Models that require max_completion_tokens instead of max_tokens.
-    _MODERN_MODELS = {"gpt-5", "gpt-5.2", "gpt-5.3", "gpt-5.4", "gpt-5-mini", "o3", "o3-mini", "o4-mini"}
-
     def __init__(
         self,
         *,
@@ -220,10 +218,6 @@ class AzureInferenceClient(LLMClient):
             self._clients[model] = _azure_aio_mod.ChatCompletionsClient(**kwargs)
         return self._clients[model]
 
-    def _needs_modern_tokens(self, model: str) -> bool:
-        """Return True if the model requires max_completion_tokens."""
-        return any(model.startswith(m) for m in self._MODERN_MODELS)
-
     async def _create_message(
         self,
         *,
@@ -240,11 +234,16 @@ class AzureInferenceClient(LLMClient):
             "model": model,
         }
 
-        # GPT-5 family and reasoning models require max_completion_tokens.
-        if self._needs_modern_tokens(model):
-            kwargs["model_extras"] = {"max_completion_tokens": max_tokens}
-        else:
+        # ``max_completion_tokens`` is the forward-compatible kwarg
+        # name — only pre-o1 chat models still take ``max_tokens``.
+        # See ``_openai_compat`` for the prefix list and rationale.
+        # The Azure inference SDK doesn't accept ``max_completion_tokens``
+        # as a first-class argument, so we route it through
+        # ``model_extras`` (which forwards to the underlying HTTP body).
+        if uses_legacy_max_tokens(model):
             kwargs["max_tokens"] = max_tokens
+        else:
+            kwargs["model_extras"] = {"max_completion_tokens": max_tokens}
 
         if tools:
             kwargs["tools"] = _translate_tools(tools)

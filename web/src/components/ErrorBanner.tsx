@@ -12,6 +12,9 @@ const CATEGORY_ICONS: Record<string, string> = {
   rate_limit: "\u23F3",
   billing: "\uD83D\uDCB3",
   warning: "\u26A0\uFE0F",
+  // Malfunctioning MCP server (bad tool schema) \u2014 see the
+  // ``mcp_config`` branch in app.py's _classify_ws_error.
+  mcp_config: "\uD83D\uDD0C",
 };
 
 export default function ErrorBanner({ error, onDismiss, onRetry }: ErrorBannerProps) {

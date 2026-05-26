@@ -27,6 +27,7 @@ from clarity_agent.setup.installer import (
     build_web_frontend,
     install_python_deps,
 )
+from clarity_agent.setup.layout import EMBEDDED_AGENT_SUBDIR
 
 # GitHub repo for release checks.
 _GITHUB_REPO = "microsoft/clarity-agent"
@@ -191,7 +192,7 @@ def _detect_pip_spec(agent_dir: Path) -> tuple[Path, Path, str]:
     if embedded_venv.exists():
         # Could be either mode — check for the project-root venv pattern.
         parent_venv = parent / ".venv"
-        if parent_venv.exists() and agent_dir.name == ".clarity-agent":
+        if parent_venv.exists() and agent_dir.name == EMBEDDED_AGENT_SUBDIR:
             # Embedded mode: pip cwd is the project root.
             return parent_venv, parent, "./.clarity-agent[cli,web,brainstorm,docx,openai,azure]"
 

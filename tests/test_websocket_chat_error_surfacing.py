@@ -186,3 +186,43 @@ class TestChatTurnFailure:
         assert msg["type"] == "error"
         assert msg["category"] == "auth"
         assert "Authentication" in msg["message"]
+
+    def test_mcp_tool_schema_error_is_non_retryable_with_remediation(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A malfunctioning MCP server makes the API reject the whole
+        # request.  This is not retryable — the bad tool ships on every
+        # request until the user removes the server — and the hint must
+        # point at the ``claude mcp`` commands rather than the API key.
+        async def _ok_start(self: Any) -> None:
+            return None
+
+        async def _broken_chat(
+            self: Any, message: str, system_prompt: str | None = None,
+        ) -> str:
+            raise RuntimeError(
+                "API Error: 400 tools.195.custom_input_schema: "
+                "input_schema does not support oneOf, allOf, or anyOf "
+                "at top level",
+            )
+
+        monkeypatch.setattr(
+            "clarity_agent.web.app.WebSessionAdapter.start", _ok_start,
+        )
+        monkeypatch.setattr(
+            "clarity_agent.web.app.WebSessionAdapter.chat", _broken_chat,
+        )
+
+        app = _make_app(tmp_path)
+        client = TestClient(app)
+        with client.websocket_connect("/ws/chat") as ws:
+            ws.send_json({"type": "chat", "message": "hi"})
+            msg = ws.receive_json()
+
+        assert msg["type"] == "error"
+        assert msg["category"] == "mcp_config"
+        assert msg["retryable"] is False
+        assert "claude mcp list" in msg["hint"]
+        assert "claude mcp remove" in msg["hint"]

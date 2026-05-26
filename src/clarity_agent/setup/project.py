@@ -21,12 +21,17 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.setup.installer import (
     Outcome,
     StepResult,
     insert_agent_snippet,
     update_gitignore,
+)
+from clarity_agent.setup.layout import (
+    PROTOCOL_DIR_DOT,
+    PROTOCOL_DIR_VISIBLE,
+    Mode,
+    ProjectLayout,
 )
 
 _IS_WINDOWS = sys.platform == "win32"
@@ -147,12 +152,67 @@ def _is_pip_installed(agent_dir: Path | None = None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# USERSPACE setup — the lightweight counterpart to embedded install
+# ---------------------------------------------------------------------------
+
+def setup_userspace_project(
+    project_dir: Path,
+    clarity_agent_dir: Path,
+) -> ProjectLayout:
+    """Set up a USERSPACE-mode Clarity project at *project_dir*.
+
+    Creates the project directory if absent, lays down
+    ``Clarity Protocol/`` and its template structure (via
+    :func:`~clarity_agent.protocol.initialize.init_protocol`), and
+    reconciles ``AGENTS.md`` against the rendered snippet.
+    Idempotent — safe to call on an existing userspace project, in
+    which case it just refreshes anything stale.
+
+    Returns the :class:`ProjectLayout` so callers can register it
+    or pass it to follow-up steps.
+
+    This is the lightweight counterpart to :func:`run_project_embed`,
+    which does the heavy embedded install (clone + venv + pip).
+    Both are explicit setup entry points; ``ensure_for_project`` at
+    runtime never invokes either.
+    """
+    project_dir.mkdir(parents=True, exist_ok=True)
+    # Create ``Clarity Protocol/`` *before* delegating to
+    # ``init_protocol``, so ``app_paths.protocol_dir`` (which picks
+    # whichever name exists) returns the visible name we want for
+    # USERSPACE — keeps the strict mode↔name mapping intact even
+    # for the rare case of opening as USERSPACE inside a git repo.
+    protocol = project_dir / PROTOCOL_DIR_VISIBLE
+    protocol.mkdir(exist_ok=True)
+
+    # ``init_protocol`` populates the template structure
+    # (``goal/``, ``solution/``, ``failures/``, ``decisions/``, …)
+    # and writes ``config.json``; it also calls
+    # ``ensure_agents_md`` so the AGENTS.md block is current
+    # before we return.
+    from clarity_agent.protocol.initialize import init_protocol
+    init_protocol(project_dir, clarity_agent_dir=clarity_agent_dir)
+
+    return ProjectLayout(
+        mode=Mode.USERSPACE,
+        project_dir=project_dir,
+        clarity_agent_dir=clarity_agent_dir,
+        protocol_dir=protocol,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Individual steps
 # ---------------------------------------------------------------------------
 
-def create_protocol_dir(project_dir: Path) -> StepResult:
-    """Create the protocol directory if it doesn't exist."""
-    protocol = _protocol_dir(project_dir)
+def create_protocol_dir(layout: ProjectLayout) -> StepResult:
+    """Create the protocol directory if it doesn't exist.
+
+    Path + name come from *layout* so we never duplicate the
+    dotted-vs-visible name resolution that
+    :class:`~clarity_agent.setup.layout.ProjectLayout` owns.
+    """
+    protocol = layout.protocol_dir
     dir_name = protocol.name
     if protocol.exists():
         return StepResult(Outcome.OK, f"{dir_name}/ already exists")
@@ -164,8 +224,9 @@ def create_protocol_dir(project_dir: Path) -> StepResult:
         return StepResult(Outcome.FAIL, f"{dir_name}/: {exc}")
 
 
-def create_project_wrapper(project_dir: Path, agent_dir: Path) -> StepResult:
+def create_project_wrapper(layout: ProjectLayout) -> StepResult:
     """Create a thin clarity wrapper in the project root."""
+    project_dir = layout.project_dir
     try:
         if _IS_WINDOWS:
             ps1 = project_dir / "clarity.ps1"
@@ -182,12 +243,15 @@ def create_project_wrapper(project_dir: Path, agent_dir: Path) -> StepResult:
         return StepResult(Outcome.FAIL, f"Wrapper: {exc}")
 
 
-def create_mcp_json(project_dir: Path, agent_dir: Path) -> StepResult:
+def create_mcp_json(layout: ProjectLayout) -> StepResult:
     """Create .vscode/mcp.json for MCP server integration.
 
     Detects whether clarity is pip-installed or running from a local
-    clone, and generates the appropriate MCP server configuration.
+    clone (via :func:`_is_pip_installed`), and generates the
+    appropriate MCP server configuration.
     """
+    project_dir = layout.project_dir
+    agent_dir = layout.clarity_agent_dir
     vscode_dir = project_dir / ".vscode"
     mcp_json = vscode_dir / "mcp.json"
     if mcp_json.exists():
@@ -222,6 +286,11 @@ def run_project_embed(
 ) -> list[StepResult]:
     """Embed Clarity into an existing git project.
 
+    Builds a single :class:`ProjectLayout` at the top and threads it
+    through every step — there's exactly one place in this file
+    that knows about the protocol-dir name, the ``.clarity-agent``
+    subdir, or any other layout-dependent path.
+
     Args:
         project_dir: Root of the git project to embed into.
         agent_dir:   The clarity-agent installation (for the snippet template).
@@ -241,14 +310,25 @@ def run_project_embed(
         _record(StepResult(Outcome.FAIL, f"Not a git repository: {project_dir}"))
         return results
 
-    _record(create_protocol_dir(project_dir))
+    # The embed command is by definition an EMBEDDED-mode install:
+    # the user explicitly asked to put Clarity inside a git repo,
+    # so the protocol dir is the dotted name and the layout is
+    # rooted at this project_dir + agent_dir.
+    layout = ProjectLayout(
+        mode=Mode.EMBEDDED,
+        project_dir=project_dir,
+        clarity_agent_dir=agent_dir,
+        protocol_dir=project_dir / PROTOCOL_DIR_DOT,
+    )
+
+    _record(create_protocol_dir(layout))
     if results[-1].outcome == Outcome.FAIL:
         return results
 
-    _record(insert_agent_snippet(project_dir, agent_dir))
-    _record(create_project_wrapper(project_dir, agent_dir))
-    _record(create_mcp_json(project_dir, agent_dir))
-    for r in update_gitignore(project_dir):
+    _record(insert_agent_snippet(layout))
+    _record(create_project_wrapper(layout))
+    _record(create_mcp_json(layout))
+    for r in update_gitignore(layout):
         _record(r)
 
     return results

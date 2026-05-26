@@ -594,13 +594,39 @@ def read_thinker_guide(thinker_name: str) -> str:
     return _read(agent_dir, thinker_name)
 
 
-def read_behaviors() -> str:
-    """Read the cross-cutting behavioral guidelines from AGENTS.md."""
-    agent_dir = _resolve_agent_dir()
-    agents_path = agent_dir / "AGENTS.md"
-    if not agents_path.exists():
-        return "AGENTS.md not found."
-    return agents_path.read_text(encoding="utf-8")
+def read_behaviors(project_dir: str | None = None) -> str:
+    """Read the cross-cutting behavioral guidelines from the project's
+    ``AGENTS.md`` — specifically the Clarity-managed block between
+    the ``<!-- clarity-begin -->`` / ``<!-- clarity-end -->`` markers.
+
+    Same source the in-process Clarity LLM reads (see
+    :meth:`ClaritySession.load_behaviors`).  Before reading, we run
+    the shared :func:`~clarity_agent.setup.snippet.ensure_for_project`
+    helper so a host agent that's only ever touched Clarity through
+    MCP (never opened ``clarity-web``) still sees current content.
+    The helper is idempotent — no write when nothing's drifted — so
+    the cost is one file read + comparison in the common case.
+    """
+    from clarity_agent.setup.snippet import _extract_block, ensure_for_project
+
+    resolved_project = _resolve_project_dir(project_dir)
+    ensure_for_project(resolved_project, _resolve_agent_dir())
+
+    agents_md = resolved_project / "AGENTS.md"
+    if not agents_md.exists():
+        return (
+            "AGENTS.md not found in this project. Open the project in "
+            "Clarity (or run `clarity install --embedded` for a git "
+            "repo) to create it."
+        )
+    block = _extract_block(agents_md.read_text(encoding="utf-8"))
+    if block is None:
+        return (
+            "AGENTS.md exists but has no Clarity block (no "
+            "<!-- clarity-begin --> / <!-- clarity-end --> markers). "
+            "Re-open the project in Clarity to refresh it."
+        )
+    return block
 
 
 def generate_packet(
@@ -813,12 +839,16 @@ def decisions_resource() -> str:
 
 @mcp.resource("clarity://behaviors")
 def behaviors_resource() -> str:
-    """Read the cross-cutting behavioral guidelines."""
-    agent_dir = _resolve_agent_dir()
-    agents_path = agent_dir / "AGENTS.md"
-    if not agents_path.exists():
-        return "AGENTS.md not found."
-    return agents_path.read_text(encoding="utf-8")
+    """Read the cross-cutting behavioral guidelines.
+
+    Thin wrapper around :func:`read_behaviors` — delegates to the
+    project-AGENTS.md path so the resource URI returns the same
+    content the host coding agent and Clarity's own LLM both see.
+    Uses the default project resolution (``CLARITY_PROJECT_DIR`` env
+    var or cwd); callers that need a specific project should invoke
+    :func:`read_behaviors` directly with an explicit ``project_dir``.
+    """
+    return read_behaviors()
 
 
 @mcp.resource("clarity://processes/{name}")

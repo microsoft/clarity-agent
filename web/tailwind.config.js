@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 
+// The package is ``"type": "module"`` so this file is ESM — use
+// ``import`` for plugins instead of CommonJS ``require()``.
+import typography from "@tailwindcss/typography";
+
 /* Helper: reference a CSS custom property with Tailwind alpha support */
 const themeColor = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
@@ -97,5 +101,5 @@ export default {
       },
     },
   },
-  plugins: [require("@tailwindcss/typography")],
+  plugins: [typography],
 };

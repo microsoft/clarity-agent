@@ -198,6 +198,77 @@ class TestResumeWithValidSdkSession:
         assert cfg.last_backend.llm_session_id == "my-session"
 
 
+class TestEnsureAgentsMdHook:
+    """``start()`` reconciles ``project_dir/AGENTS.md`` against the
+    detected layout *before* backend construction, so the LLM sees
+    the current rendering on its first turn — but only when:
+
+    - a layout is actually detectable (no implicit dir-creation here;
+      that belongs in the explicit setup entry points), and
+    - the project isn't the clarity-agent source repo itself
+      (``project_dir == clarity_agent_dir`` → "dogfooding") — that
+      repo carries a hand-curated block whose paths reference its
+      own source layout, which generic embedded rendering would
+      clobber.
+    """
+
+    def test_writes_block_for_userspace_project(
+        self, tmp_path, monkeypatch,
+    ):
+        # Userspace project with the ``Clarity Protocol/`` marker.
+        # The adapter's clarity_agent_dir is the (stub) bundle —
+        # distinct from project_dir, so the dogfooding skip doesn't
+        # fire.  ensure_agents_md should run and create AGENTS.md.
+        from clarity_agent.setup.layout import PROTOCOL_DIR_VISIBLE
+        project = tmp_path / "userspace-project"
+        project.mkdir()
+        (project / PROTOCOL_DIR_VISIBLE).mkdir()
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        cfg = _StubLLMConfig()
+        adapter = WebSessionAdapter(project, bundle, cfg)
+        asyncio.run(adapter.start())
+
+        agents_md = project / "AGENTS.md"
+        assert agents_md.exists()
+        content = agents_md.read_text(encoding="utf-8")
+        assert "<!-- clarity-begin -->" in content
+        # USERSPACE → absolute processes path in the rendered meta.
+        assert (bundle / "processes").as_posix() in content
+
+    def test_skips_when_project_is_clarity_agent_source(self, project):
+        # ``_start_adapter`` passes project_dir as both project and
+        # clarity_agent — the dogfooding case the skip guards.  The
+        # adapter must NOT write project/AGENTS.md, since this is the
+        # source repo whose curated block lives at the repo root.
+        adapter = _start_adapter(project)
+        # The fixture's project dir is a tmp_path with no pre-existing
+        # AGENTS.md.  After start(), it still shouldn't exist.
+        assert not (project / "AGENTS.md").exists()
+        # Sanity: the adapter started cleanly.
+        assert adapter._backend is not None
+
+    def test_skips_when_layout_undetectable(self, tmp_path):
+        # Bare project with no Clarity markers at all.  detect_layout
+        # returns None; the hook no-ops; start() succeeds; no file
+        # written.  We do *not* auto-create a userspace layout here —
+        # mode selection belongs in the explicit setup entry points.
+        project = tmp_path / "bare-project"
+        project.mkdir()
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "processes").mkdir()
+
+        cfg = _StubLLMConfig()
+        adapter = WebSessionAdapter(project, bundle, cfg)
+        asyncio.run(adapter.start())
+
+        assert not (project / "AGENTS.md").exists()
+        assert adapter._backend is not None  # start still succeeded
+
+
 class TestStartNewChapter:
     """``WebSessionAdapter.start_new_chapter`` is the persistence
     primitive behind the "Start new chapter" UI button (#27).

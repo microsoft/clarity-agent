@@ -7,11 +7,28 @@ from pathlib import Path
 from unittest.mock import patch
 
 from clarity_agent.setup.installer import Outcome
+from clarity_agent.setup.layout import (
+    PROTOCOL_DIR_DOT,
+    Mode,
+    ProjectLayout,
+)
 from clarity_agent.setup.project import (
     _is_pip_installed,
     _mcp_json_uv,
     create_mcp_json,
 )
+
+
+def _layout(project: Path, agent: Path) -> ProjectLayout:
+    """EMBEDDED-mode layout for *project* with *agent* as the
+    clarity-agent install dir — mirrors what ``run_project_embed``
+    builds at its orchestrator top."""
+    return ProjectLayout(
+        mode=Mode.EMBEDDED,
+        project_dir=project,
+        clarity_agent_dir=agent,
+        protocol_dir=project / PROTOCOL_DIR_DOT,
+    )
 
 
 class TestIsPipInstalled:
@@ -82,7 +99,7 @@ class TestCreateMcpJson:
         agent_dir = tmp_path / "agent"
         agent_dir.mkdir()
         with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
-            result = create_mcp_json(project, agent_dir)
+            result = create_mcp_json(_layout(project, agent_dir))
         assert result.outcome == Outcome.OK
         assert (project / ".vscode" / "mcp.json").exists()
         assert "pip" in result.message
@@ -92,7 +109,7 @@ class TestCreateMcpJson:
         vscode = project / ".vscode"
         vscode.mkdir()
         (vscode / "mcp.json").write_text("{}")
-        result = create_mcp_json(project, tmp_path)
+        result = create_mcp_json(_layout(project, tmp_path))
         assert result.outcome == Outcome.OK
         assert "already exists" in result.message
 
@@ -101,7 +118,7 @@ class TestCreateMcpJson:
         agent_dir = tmp_path / "agent"
         agent_dir.mkdir()
         with patch("clarity_agent.setup.project._is_pip_installed", return_value=False):
-            result = create_mcp_json(project, agent_dir)
+            result = create_mcp_json(_layout(project, agent_dir))
         assert result.outcome == Outcome.OK
         assert "uv" in result.message
         assert "re-run embed" in result.message
@@ -111,7 +128,7 @@ class TestCreateMcpJson:
         agent_dir = tmp_path / "agent"
         agent_dir.mkdir()
         with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
-            create_mcp_json(project, agent_dir)
+            create_mcp_json(_layout(project, agent_dir))
         content = json.loads((project / ".vscode" / "mcp.json").read_text())
         server = content["servers"]["clarity-agent"]
         assert server["command"] == "python"
@@ -121,7 +138,7 @@ class TestCreateMcpJson:
         agent_dir = tmp_path / "agent"
         agent_dir.mkdir()
         with patch("clarity_agent.setup.project._is_pip_installed", return_value=False):
-            create_mcp_json(project, agent_dir)
+            create_mcp_json(_layout(project, agent_dir))
         content = json.loads((project / ".vscode" / "mcp.json").read_text())
         server = content["servers"]["clarity-agent"]
         assert server["command"] == "uv"

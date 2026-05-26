@@ -211,10 +211,12 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# TypeScript incremental build state
+*.tsbuildinfo
+
 # Astro / Frontend
 .astro/
 dist/
-!web/dist/
 .turbo/
 .vercel/
 .netlify/

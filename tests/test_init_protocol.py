@@ -203,8 +203,7 @@ class TestSnippetInsertion:
 
         init_protocol(project, clarity_agent_dir=Path(__file__).resolve().parent.parent)
 
-        from clarity_agent.setup.snippet import find_target
-        content = find_target(project).read_text()
+        content = (project / "AGENTS.md").read_text()
         assert "run_clarity" in content
         assert "check_decision" in content
         assert "{{PROCESSES_DIR}}" not in content

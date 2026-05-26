@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { activateProject, createProject, getProjects } from "../api/client";
+import {
+  activateProject,
+  createProject,
+  getProjects,
+  removeProject,
+  type CreateProjectResult,
+} from "../api/client";
 import type { ProjectEntry } from "../types";
-import { open as tauriOpen } from "@tauri-apps/plugin-dialog";
+import {
+  open as tauriOpen,
+  save as tauriSave,
+} from "@tauri-apps/plugin-dialog";
 import { refreshRecentMenu } from "./Layout";
 
 interface ProjectSwitcherProps {
@@ -24,6 +33,27 @@ function hasNativeDialogs(): boolean {
   return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 }
 
+/** Derive a project name from a filesystem path's basename. */
+function deriveName(path: string): string {
+  return path.split("/").filter(Boolean).pop() || "project";
+}
+
+/**
+ * Modal state for the flow-3 SetupPromptDialog (open ambiguous /
+ * broken directory) and the EmbeddedCommandDialog (user picked
+ * embedded — surface the CLI command).  Kept as a discriminated
+ * union so the JSX dispatch is exhaustive.
+ */
+type PromptState =
+  | { kind: "needs_setup"; name: string; path: string;
+      looks_like_code: boolean;
+      suggested_mode: "embedded" | "userspace" }
+  | { kind: "broken_install"; name: string; path: string;
+      brokenness: string }
+  | { kind: "embedded_command"; name: string; path: string;
+      command: string }
+  | null;
+
 export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps) {
   const navigate = useNavigate();
   // Auto-expand when no project is active so the list is immediately visible.
@@ -31,16 +61,24 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [activating, setActivating] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // New-project inline form
+  // New-project inline form (browser-mode fallback only).
   const [showNewForm, setShowNewForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Open-folder fallback form (shown only in browser mode, not Tauri)
+  // Open-folder fallback form (browser mode only).
   const [showOpenForm, setShowOpenForm] = useState(false);
   const [openPath, setOpenPath] = useState("");
+
+  // Flow-3 prompt — null when no decision is pending.
+  const [prompt, setPrompt] = useState<PromptState>(null);
+  const [submittingMode, setSubmittingMode] = useState<
+    "userspace" | "embedded" | null
+  >(null);
 
   const newInputRef = useRef<HTMLInputElement>(null);
   const openInputRef = useRef<HTMLInputElement>(null);
@@ -57,13 +95,24 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     if (open) refresh();
   }, [open, refresh]);
 
-  // Focus the name input when the form appears
   useEffect(() => {
     if (showNewForm) newInputRef.current?.focus();
   }, [showNewForm]);
   useEffect(() => {
     if (showOpenForm) openInputRef.current?.focus();
   }, [showOpenForm]);
+
+  // Escape-key dismiss for any open prompt — the modal's
+  // click-outside-to-dismiss has its keyboard equivalent here, so
+  // the backdrop's onClick isn't the only way to close.
+  useEffect(() => {
+    if (!prompt) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPrompt(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [prompt]);
 
   const handleActivate = async (project: ProjectEntry) => {
     setActivating(project.name);
@@ -74,20 +123,93 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
       refreshRecentMenu();
       navigate(`/p/${project.id}/`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        msg.startsWith("410")
+          ? "That project's folder no longer exists. It has been removed from your list."
+          : msg
+      );
       setActivating(null);
+      if (msg.startsWith("410")) {
+        void refreshRecentMenu();
+        refresh();
+      }
     }
   };
 
-  const handleCreate = async () => {
+  const handleRemove = async (project: ProjectEntry) => {
+    setRemoving(project.name);
+    setError(null);
+    try {
+      await removeProject(project.name);
+      setConfirmRemove(null);
+      refresh();
+      void refreshRecentMenu();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  /**
+   * Dispatch on a ``CreateProjectResult`` from the launcher: activate
+   * on success, raise the appropriate modal on the 409 / install-required
+   * branches.  Centralised so every callsite (initial open, retry-after-
+   * SetupPromptDialog, retry-after-EmbeddedCommandDialog) routes the
+   * same way.
+   */
+  const handleCreateResult = async (
+    result: CreateProjectResult,
+    fallback: { name: string; path: string },
+  ) => {
+    if (result.status === "ok") {
+      setPrompt(null);
+      await handleActivate(result.entry);
+      return;
+    }
+    if (result.status === "needs_setup") {
+      setPrompt({
+        kind: "needs_setup",
+        name: fallback.name,
+        path: result.path,
+        looks_like_code: result.looks_like_code,
+        suggested_mode: result.suggested_mode,
+      });
+      return;
+    }
+    if (result.status === "broken_install") {
+      setPrompt({
+        kind: "broken_install",
+        name: fallback.name,
+        path: result.path,
+        brokenness: result.brokenness,
+      });
+      return;
+    }
+    if (result.status === "embedded_install_required") {
+      setPrompt({
+        kind: "embedded_command",
+        name: fallback.name,
+        path: result.path,
+        command: result.command,
+      });
+      return;
+    }
+  };
+
+  // ---- Browser-mode fallback (inline form) -------------------------------
+
+  const handleCreateFromForm = async () => {
     if (!newName.trim()) return;
     setCreating(true);
     setError(null);
     try {
-      const entry = await createProject(newName.trim());
+      const name = newName.trim();
+      const result = await createProject({ name, intent: "create_new" });
       setShowNewForm(false);
       setNewName("");
-      await handleActivate(entry);
+      await handleCreateResult(result, { name, path: "" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -95,40 +217,60 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     }
   };
 
+  // ---- Flow 1: New Project ------------------------------------------------
+
   const handleNew = async () => {
     setError(null);
-    if (hasNativeDialogs()) {
-      try {
-        const path = await tauriOpen({ directory: true, title: "Create project folder" });
-        if (!path) return;
-        const name = path.split("/").filter(Boolean).pop() || "project";
-        const entry = await createProject(name, path);
-        setOpen(false);
-        await handleActivate(entry);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    } else {
+    if (!hasNativeDialogs()) {
       setShowNewForm(true);
       setShowOpenForm(false);
+      return;
+    }
+    try {
+      // Save-file dialog is the macOS-natural convention for "name a
+      // new thing and pick where it goes."  The user types the
+      // project name and navigates to a parent location; the
+      // returned path is `<parent>/<name>` (doesn't exist yet — the
+      // backend mkdirs it as part of setup_userspace_project).
+      const path = await tauriSave({
+        title: "New Clarity project",
+        defaultPath: "Untitled Project",
+      });
+      if (!path) return; // user cancelled
+      const name = deriveName(path);
+      const result = await createProject({
+        name, path, intent: "create_new",
+      });
+      setOpen(false);
+      await handleCreateResult(result, { name, path });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
+  // ---- Flows 2 & 3: Open Project -----------------------------------------
+
   const handleOpenFolder = async () => {
     setError(null);
-    if (hasNativeDialogs()) {
-      try {
-        const path = await tauriOpen({ directory: true, title: "Open existing project" });
-        if (!path) return; // user cancelled
-        const name = path.split("/").filter(Boolean).pop() || "project";
-        const entry = await createProject(name, path);
-        setOpen(false);
-        await handleActivate(entry);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    } else {
+    if (!hasNativeDialogs()) {
       setShowOpenForm(true);
+      return;
+    }
+    try {
+      const path = await tauriOpen({
+        directory: true, title: "Open Clarity project",
+      });
+      if (!path) return;
+      const name = deriveName(path);
+      // No mode on the initial open — let the backend decide whether
+      // this is flow 2 (clean layout → 200 ok) or flow 3 (needs prompt).
+      const result = await createProject({
+        name, path, intent: "open_existing",
+      });
+      setOpen(false);
+      await handleCreateResult(result, { name, path });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -136,15 +278,55 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     const path = openPath.trim();
     if (!path) return;
     setError(null);
-    const name = path.split("/").filter(Boolean).pop() || "project";
+    const name = deriveName(path);
     try {
-      const entry = await createProject(name, path);
+      const result = await createProject({
+        name, path, intent: "open_existing",
+      });
       setShowOpenForm(false);
       setOpenPath("");
-      await handleActivate(entry);
+      await handleCreateResult(result, { name, path });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  // ---- Flow 3 prompt resolution ------------------------------------------
+
+  const resolveSetup = async (mode: "userspace" | "embedded") => {
+    if (!prompt || prompt.kind === "embedded_command") return;
+    setSubmittingMode(mode);
+    try {
+      const result = await createProject({
+        name: prompt.name, path: prompt.path,
+        intent: "open_existing", mode,
+      });
+      await handleCreateResult(result, { name: prompt.name, path: prompt.path });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmittingMode(null);
+    }
+  };
+
+  const retryAfterEmbeddedInstall = async () => {
+    if (!prompt || prompt.kind !== "embedded_command") return;
+    // The user has (presumably) run the install command in their
+    // terminal; re-open without a mode so the backend re-detects
+    // — a successful install will now show as clean EMBEDDED.
+    try {
+      const result = await createProject({
+        name: prompt.name, path: prompt.path,
+        intent: "open_existing",
+      });
+      await handleCreateResult(result, { name: prompt.name, path: prompt.path });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const copyCommand = (command: string) => {
+    void navigator.clipboard?.writeText(command);
   };
 
   const cancelForms = () => {
@@ -152,6 +334,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     setNewName("");
     setShowOpenForm(false);
     setOpenPath("");
+    setConfirmRemove(null);
     setError(null);
   };
 
@@ -204,34 +387,86 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
           ) : (
             projects.map((project) => {
               const isCurrent = project.path === currentProject;
+              if (confirmRemove === project.name) {
+                return (
+                  <div
+                    key={project.name}
+                    className="flex items-center gap-1.5 pl-4 pr-3 py-1.5 text-xs
+                      bg-sidebar-active/40 border-l-2 border-status-error/60 -ml-px"
+                  >
+                    <span className="flex-1 min-w-0 truncate text-sidebar-text">
+                      Remove <span className="font-medium">{project.name}</span> from list?
+                    </span>
+                    <button
+                      onClick={() => handleRemove(project)}
+                      disabled={removing === project.name}
+                      className="px-2 py-0.5 rounded text-[11px] bg-status-error/80 text-white
+                        hover:bg-status-error disabled:opacity-50 transition-colors"
+                    >
+                      {removing === project.name ? "Removing…" : "Remove"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemove(null)}
+                      disabled={removing === project.name}
+                      className="px-2 py-0.5 rounded text-[11px] text-sidebar-text-muted
+                        hover:text-sidebar-text hover:bg-sidebar-active/60 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                );
+              }
               return (
-                <button
+                <div
                   key={project.name}
-                  onClick={() => !isCurrent && !activating && handleActivate(project)}
-                  disabled={isCurrent || activating !== null}
-                  title={project.path}
-                  className={`w-full text-left flex items-center gap-2 pl-4 pr-3 py-1.5 text-sm
-                    transition-all duration-150 disabled:cursor-default ${
+                  className={`group flex items-center w-full transition-all duration-150 ${
                     isCurrent
-                      ? "text-sidebar-text bg-sidebar-active/80 border-l-2 border-accent-focus -ml-px"
-                      : "text-sidebar-text-muted hover:text-sidebar-text hover:pl-5"
+                      ? "bg-sidebar-active/80 border-l-2 border-accent-focus -ml-px"
+                      : ""
                   }`}
                 >
-                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    project.running
-                      ? isCurrent ? "bg-accent-focus" : "bg-status-ok"
-                      : "bg-sidebar-line/60"
-                  }`} />
-                  <span className="truncate flex-1 min-w-0">{project.name}</span>
-                  {activating === project.name ? (
-                    <svg className="w-3 h-3 animate-spin shrink-0 text-accent" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
-                      <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <button
+                    onClick={() => !isCurrent && !activating && handleActivate(project)}
+                    disabled={isCurrent || activating !== null}
+                    title={project.path}
+                    className={`flex-1 min-w-0 text-left flex items-center gap-2 pl-4 pr-2 py-1.5 text-sm
+                      transition-all duration-150 disabled:cursor-default ${
+                      isCurrent
+                        ? "text-sidebar-text"
+                        : "text-sidebar-text-muted hover:text-sidebar-text hover:pl-5"
+                    }`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      project.running
+                        ? isCurrent ? "bg-accent-focus" : "bg-status-ok"
+                        : "bg-sidebar-line/60"
+                    }`} />
+                    <span className="truncate flex-1 min-w-0">{project.name}</span>
+                    {activating === project.name ? (
+                      <svg className="w-3 h-3 animate-spin shrink-0 text-accent" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+                        <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <span className="text-[10px] text-sidebar-text-faint shrink-0 group-hover:opacity-0 transition-opacity">
+                        {timeAgo(project.last_opened)}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(project.name)}
+                    disabled={activating !== null}
+                    aria-label={`Remove ${project.name} from list`}
+                    title="Remove from list"
+                    className="shrink-0 mr-2 p-1 rounded opacity-0 group-hover:opacity-100
+                      focus:opacity-100 text-sidebar-text-faint hover:text-status-error
+                      hover:bg-sidebar-active/60 transition-opacity disabled:cursor-default"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                     </svg>
-                  ) : (
-                    <span className="text-[10px] text-sidebar-text-faint shrink-0">{timeAgo(project.last_opened)}</span>
-                  )}
-                </button>
+                  </button>
+                </div>
               );
             })
           )}
@@ -239,7 +474,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
           {/* Divider */}
           <div className="my-1 mx-3 border-t border-sidebar-line/30" />
 
-          {/* New project form or button */}
+          {/* New / Open buttons (or inline forms for browser mode) */}
           {showNewForm ? (
             <div className="pl-4 pr-3 py-1.5 space-y-1.5">
               <input
@@ -248,7 +483,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreate();
+                  if (e.key === "Enter") handleCreateFromForm();
                   if (e.key === "Escape") { setShowNewForm(false); setNewName(""); }
                 }}
                 placeholder="Project name"
@@ -258,7 +493,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
               />
               <div className="flex gap-1.5">
                 <button
-                  onClick={handleCreate}
+                  onClick={handleCreateFromForm}
                   disabled={!newName.trim() || creating}
                   className="flex-1 py-1 text-xs rounded bg-accent text-white
                     hover:bg-accent-hover disabled:opacity-50 transition-colors"
@@ -322,7 +557,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
                 New
               </button>
               <button
-                onClick={() => { setShowOpenForm(false); handleOpenFolder(); }}
+                onClick={handleOpenFolder}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded
                   text-sidebar-text-muted hover:text-sidebar-text hover:bg-sidebar-active/40
                   transition-colors"
@@ -336,6 +571,156 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
           )}
         </div>
       </div>
+
+      {/* Flow-3 SetupPromptDialog (needs_setup / broken_install) and
+          the EmbeddedCommandDialog all render as fixed-position
+          modal overlays so they sit above the sidebar UI without
+          fighting its layout. */}
+      {prompt && (
+        // Backdrop is presentation-only; its click-to-dismiss has a
+        // keyboard equivalent via the Escape-key effect above, so
+        // the a11y click-events-have-key-events guidance is met at
+        // the component level rather than per-element.
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center
+            bg-black/40 animate-fade-in"
+          role="presentation"
+          onClick={() => setPrompt(null)}
+        >
+          {/* The inner ``onClick`` exists solely to stop the
+              backdrop's dismiss handler from firing on clicks
+              inside the dialog content — it's structural, not
+              user-actionable.  role="dialog" + aria-modal gives the
+              screen reader the right modality semantics. */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+          <div
+            className="max-w-md w-full mx-4 rounded-xl bg-surface
+              border border-border shadow-xl p-5"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {prompt.kind === "needs_setup" && (
+              <>
+                <h3 className="text-sm font-medium text-body mb-2">
+                  Set up Clarity here?
+                </h3>
+                <p className="text-xs text-body-muted mb-1 font-mono break-all">
+                  {prompt.path}
+                </p>
+                <p className="text-xs text-body-muted mb-4">
+                  This directory doesn't have a Clarity setup yet.
+                  {prompt.looks_like_code
+                    ? " It looks like a code repository — an embedded install (with the agent inside the repo) is the natural fit."
+                    : " A userspace project will create a Clarity Protocol/ folder here and manage Clarity from the app."}
+                </p>
+                <div className="space-y-2">
+                  {prompt.looks_like_code && (
+                    <button
+                      disabled={submittingMode !== null}
+                      onClick={() => resolveSetup("embedded")}
+                      className="w-full py-2 text-xs rounded bg-accent text-white
+                        hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                    >
+                      {submittingMode === "embedded"
+                        ? "Working…"
+                        : "Set up as embedded install (recommended)"}
+                    </button>
+                  )}
+                  <button
+                    disabled={submittingMode !== null}
+                    onClick={() => resolveSetup("userspace")}
+                    className={`w-full py-2 text-xs rounded transition-colors
+                      disabled:opacity-50 ${
+                        prompt.looks_like_code
+                          ? "border border-border text-body hover:bg-surface-hover"
+                          : "bg-accent text-white hover:bg-accent-hover"
+                      }`}
+                  >
+                    {submittingMode === "userspace"
+                      ? "Working…"
+                      : "Set up as userspace project"}
+                  </button>
+                  <button
+                    onClick={() => setPrompt(null)}
+                    className="w-full py-2 text-xs rounded text-body-muted
+                      hover:text-body hover:bg-surface-hover transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {prompt.kind === "broken_install" && (
+              <>
+                <h3 className="text-sm font-medium text-body mb-2">
+                  Inconsistent Clarity setup
+                </h3>
+                <p className="text-xs text-body-muted mb-1 font-mono break-all">
+                  {prompt.path}
+                </p>
+                <p className="text-xs text-body-muted mb-4">
+                  {prompt.brokenness === "ambiguous_protocol_dirs"
+                    ? "Both .clarity-protocol/ and Clarity Protocol/ are present. Please remove one before reopening."
+                    : "Found a partial embedded install (.clarity-agent/ or .clarity-protocol/ but not both). Either complete the install with `clarity install --embedded`, or remove the stray directory and reopen as a userspace project."}
+                </p>
+                <button
+                  onClick={() => setPrompt(null)}
+                  className="w-full py-2 text-xs rounded bg-accent text-white
+                    hover:bg-accent-hover transition-colors"
+                >
+                  OK
+                </button>
+              </>
+            )}
+
+            {prompt.kind === "embedded_command" && (
+              <>
+                <h3 className="text-sm font-medium text-body mb-2">
+                  Run this in your terminal
+                </h3>
+                <p className="text-xs text-body-muted mb-3">
+                  Embedded installs require the CLI (it clones the agent
+                  into the repo and sets up a venv).  Run the command
+                  below, then click <em>Try again</em> to open the project.
+                </p>
+                <div className="flex gap-2 mb-4">
+                  <code className="flex-1 px-2 py-2 text-[11px] rounded
+                    bg-surface-inset text-body font-mono break-all">
+                    {prompt.command}
+                  </code>
+                  <button
+                    onClick={() => copyCommand(prompt.command)}
+                    title="Copy"
+                    className="px-3 text-xs rounded border border-border
+                      text-body hover:bg-surface-hover transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={retryAfterEmbeddedInstall}
+                    className="flex-1 py-2 text-xs rounded bg-accent text-white
+                      hover:bg-accent-hover transition-colors"
+                  >
+                    Try again
+                  </button>
+                  <button
+                    onClick={() => setPrompt(null)}
+                    className="px-3 py-2 text-xs rounded text-body-muted
+                      hover:text-body hover:bg-surface-hover transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

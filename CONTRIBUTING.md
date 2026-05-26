@@ -1,5 +1,7 @@
 # Clarity Agent: Developer Guide
 
+Join the [Clarity Agent Discord](https://aka.ms/clarity-agent-community) to talk with the team, share feedback, and connect with the community.
+
 This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.microsoft.com.
 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
@@ -29,7 +31,7 @@ cd clarity-agent
 uv sync --all-extras
 ```
 
-Prerequisites: **Python 3.10+**, **Node.js 18+** (for frontend development only), **git**, and credentials for at least one supported LLM backend (see "LLM backends" below).
+Prerequisites: **uv** (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or see [uv docs](https://docs.astral.sh/uv/getting-started/installation/)), **Node.js 18+** (for frontend development only), **git**, and credentials for at least one supported LLM backend (see "LLM backends" below). uv manages Python itself — no separate Python install required.
 
 ```bash
 # Authenticate (see "LLM backends" below for all options)
@@ -46,12 +48,12 @@ The `dev` extra installs all optional dependency groups: `cli` (Claude SDK, Anth
 
 ### For frontend development
 
-The `web/dist/` directory is pre-built and checked into the repo — you don't need Node.js unless you're changing the frontend. When you do change frontend code:
+`web/dist/` is built locally — it is not checked into the repo. Every install path (`clarity install`, the desktop bundler, the release workflow) builds it from source via `npm run build`. If you cloned the repo and want a UI in `clarity web`, run the build once:
 
 ```bash
 cd web
 npm install                          # install Node dependencies (first time only)
-npm run build                        # rebuild web/dist/
+npm run build                        # build into web/dist/
 ```
 
 For hot-reloading during frontend development, run both in parallel:
@@ -64,7 +66,7 @@ uv run python clarity.py web /tmp/test-project
 cd web && npm run dev
 ```
 
-After making frontend changes that will be committed, always rebuild `web/dist/` — CI checks that the checked-in dist matches the source.
+CI runs the frontend build on every PR as a compile check — there's no committed-dist invariant to maintain.
 
 ## How the System Flows: Logical Architecture
 
@@ -117,24 +119,28 @@ The web UI (`--web` flag) is a FastAPI server that exposes the same `ClaritySess
 
 ### LLM backends are pluggable
 
-The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Four providers are supported:
+The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two interfaces: `LLMClient` (low-level completions) and `ChatBackend` (multi-turn conversations with tool use). Five providers are supported:
 
 | Provider | `--provider` flag | API key env var | Notes |
 | --- | --- | --- | --- |
-| **Anthropic API** | `anthropic` | `ANTHROPIC_API_KEY` | Direct API access with tool use. |
+| **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | Default auth uses `claude login` (`--auth-mode claude_sdk`); use `--auth-mode api_key` for direct API access. |
 | **Azure AI Inference** | `azure` | `AZURE_AI_API_KEY` | Also requires `--endpoint` or `AZURE_AI_ENDPOINT`. |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | Tool definitions translated from Anthropic format. |
-| **Claude SDK** | `claude-sdk` (default) | None — uses `claude login` | Uses the Claude CLI for authentication. |
+| **GitHub Copilot** | `github` | `GITHUB_TOKEN` | Also supports zero-config via `gh auth login` (`--auth-mode gh_cli`). |
+| **Google Gemini** | `gemini` | `GEMINI_API_KEY` | API key from [Google AI Studio](https://aistudio.google.com/apikey). |
 
 Select a provider with `--provider`:
 
 ```bash
 ./clarity ./my-project --provider anthropic
+./clarity ./my-project --provider anthropic --auth-mode api_key  # use API key instead of claude login
 ./clarity ./my-project --provider openai --model gpt-4o
 ./clarity ./my-project --provider azure --endpoint https://your-deployment.inference.ai.azure.com
+./clarity ./my-project --provider github
+./clarity ./my-project --provider gemini
 ```
 
-The default model for all providers is `claude-sonnet-4-5-20250929`; override with `--model`.
+Each provider resolves its default model from provider-specific tier defaults (defined as `*_TIER_DEFAULTS` in `llm/impl/`), which can be overridden via settings, environment variables, or the `--model` flag.
 
 **Architecture:** `LLMConfig` (in `llm/config.py`) resolves provider, API key, model, and endpoint from CLI flags and environment variables. `create_chat_backend()` (in `llm/factory.py`) instantiates the correct backend. `ClaritySession` accepts any `ChatBackend` and doesn't know which provider is behind it.
 
@@ -214,7 +220,7 @@ The "standard library." Called by process guides and by clarity CLI.
 | `llm/chat.py` | `ChatBackend` abstract interface for multi-turn LLM conversations with tool use. |
 | `llm/client.py` | `LLMClient` abstract interface for low-level completions. |
 | `llm/types.py` | Shared type definitions (tool schemas, message types). |
-| `llm/impl/` | Provider implementations: `anthropic.py`, `claude_sdk.py`, `openai.py`, `azure_inference.py`. |
+| `llm/impl/` | Provider implementations: `anthropic.py`, `claude_sdk.py`, `openai.py`, `azure_inference.py`, `github_copilot.py`, `gemini.py`. |
 | `packet/` | Review packet generation — assembles protocol content into Markdown or Word documents. |
 | `web/app.py` | FastAPI application — WebSocket chat endpoint and REST API for protocol data. |
 | `web/session_manager.py` | Bridges sync `ClaritySession` to async WebSocket via `ThreadPoolExecutor`. |

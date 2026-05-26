@@ -56,6 +56,25 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _prepend_behaviors(
+    system_prompt: str | None, behaviors: str,
+) -> str | None:
+    """Prepend the AGENTS.md behaviors block to *system_prompt*.
+
+    Both arguments may be empty/None; result is ``None`` when
+    everything was empty (preserves the "no system prompt" semantics
+    for backends that distinguish it from an empty string).
+    Centralised so :meth:`ClaritySession.chat` and
+    :meth:`run_custom_process` produce identically-formatted system
+    prompts — same separator, same handling of missing behaviors.
+    """
+    if not behaviors:
+        return system_prompt
+    if not system_prompt:
+        return behaviors
+    return f"{behaviors}\n\n{system_prompt}"
+
+
 def _git_username(project_dir: Path) -> str | None:
     """Return a filesystem-safe git identity for the current user, or None."""
     for field in ("user.name", "user.email"):
@@ -171,23 +190,31 @@ class ClaritySession:
         return None
 
     def load_behaviors(self) -> str:
-        """Load cross-cutting behavioral guidelines from AGENTS.md.
+        """Load the cross-cutting behavioral guidelines from the
+        project's ``AGENTS.md`` — specifically the Clarity-managed
+        block between the ``<!-- clarity-begin -->`` and
+        ``<!-- clarity-end -->`` markers.
 
-        Extracts the ``## Behaviors`` section, which applies to all processes.
-        Returns an empty string if the file or section is missing.
+        Reading from ``project_dir/AGENTS.md`` means we share the
+        same file the host coding agent (Claude Code, Cursor, …) sees
+        — the file every modern LLM coding agent reads by default —
+        so there's one rendered artifact per project, kept current by
+        :func:`~clarity_agent.setup.snippet.ensure_agents_md` at
+        session-start time.
+
+        Returns the marker-bounded block (markers included) if found;
+        an empty string if the file or block is absent (e.g. a fresh
+        project where setup hasn't run yet).  Any text outside the
+        markers is the user's own project guidance, deliberately
+        excluded — we want only the content Clarity is responsible
+        for.
         """
-        agents_md: Path = self.clarity_agent_dir / "AGENTS.md"
+        from clarity_agent.setup.snippet import _extract_block
+        agents_md = self.project_dir / "AGENTS.md"
         if not agents_md.exists():
             return ""
-        content: str = agents_md.read_text(encoding="utf-8")
-        start: int = content.find("## Behaviors")
-        if start == -1:
-            return ""
-        rest: str = content[start:]
-        next_heading: int = rest.find("\n## ", 1)
-        if next_heading != -1:
-            return rest[:next_heading].strip()
-        return rest.strip()
+        block = _extract_block(agents_md.read_text(encoding="utf-8"))
+        return block.strip() if block else ""
 
     def load_process(self, process_name: str) -> str:
         """Load a process guide from the clarity agent directory."""
@@ -231,8 +258,19 @@ class ClaritySession:
         # the markdown matching what users used to see.
         if self._transcript is not None:
             self._transcript.write(UserTurn(timestamp=_now(), content=user_message))
+        # Prepend the project's behaviors block to the system prompt
+        # so non-SDK backends (Anthropic API direct, OpenAI, Azure,
+        # Gemini — which don't auto-discover ``AGENTS.md`` from the
+        # cwd the way the Claude CLI does) still see the
+        # cross-cutting guidance.  Symmetric with
+        # :meth:`run_custom_process`'s system-prompt construction;
+        # the SDK path sees the same content twice (once via
+        # auto-discovery, once via injection) which is harmless.
+        effective_system_prompt = _prepend_behaviors(
+            system_prompt, self.load_behaviors(),
+        )
         response: str = self.backend.chat(
-            user_message, system_prompt, model=model,
+            user_message, effective_system_prompt, model=model,
             tools=tools, tool_handler=tool_handler,
         )
         if self._transcript is not None:
@@ -360,11 +398,7 @@ class ClaritySession:
             print(f"Error: {e}")
             return
 
-        behaviors: str = self.load_behaviors()
-        behaviors_block: str = f"{behaviors}\n\n" if behaviors else ""
-
-        system_prompt: str = (
-            f"{behaviors_block}"
+        process_specific: str = (
             f"You are running the {process_name} process. "
             f"Here is the process guide:\n\n{process_content}\n\n"
             f"Follow this process step by step.\n\n"
@@ -372,6 +406,13 @@ class ClaritySession:
             f"thinker definitions) is: {self.clarity_agent_dir}\n"
             f"Process guides: {self.clarity_agent_dir / 'processes'}/\n"
             f"Thinker guides: {self.clarity_agent_dir / 'thinkers'}/"
+        )
+        # ``_prepend_behaviors`` matches the formatting that
+        # :meth:`chat` uses, so both paths produce identically-shaped
+        # system prompts.
+        system_prompt: str = (
+            _prepend_behaviors(process_specific, self.load_behaviors())
+            or process_specific
         )
 
         # Include packet status report for processes that benefit from it
