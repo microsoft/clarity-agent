@@ -60,6 +60,12 @@ class ReleaseInfo:
     :func:`~clarity_agent.setup.version.current_version` returns
     for a stamped release.
 
+    ``release_url`` is the GitHub Release page (``html_url`` from
+    the API) — the human-facing URL the v1 update badge links to.
+    Defaulted to ``""`` so test fixtures that don't care about it
+    can keep constructing :class:`ReleaseInfo` with just the
+    version/assets pair.
+
     ``assets`` maps a Tauri-updater-style platform key (e.g.
     ``"darwin-aarch64"``, ``"windows-x86_64"``) to the asset's
     download URL.  Callers that don't care about the per-platform
@@ -69,6 +75,7 @@ class ReleaseInfo:
 
     version: str
     assets: dict[str, str]
+    release_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -225,7 +232,7 @@ class GitHubReleaseFeed:
                 # report this as ``up_to_date`` against ``None``.
                 return None
             raise
-        return _parse_release(data)
+        return _parse_release(data, repo=self._repo)
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +305,7 @@ def check_for_update(
 # ---------------------------------------------------------------------------
 
 
-def _parse_release(data: dict) -> ReleaseInfo:
+def _parse_release(data: dict, *, repo: str = DEFAULT_REPO) -> ReleaseInfo:
     """Translate a single GitHub Releases API response into
     :class:`ReleaseInfo`.
 
@@ -307,8 +314,15 @@ def _parse_release(data: dict) -> ReleaseInfo:
     are pulled from ``browser_download_url``; the platform key is
     derived from the asset's filename using
     :func:`_platform_key_for_asset` (Tauri-updater-compatible).
+    ``release_url`` is read from the ``html_url`` field with a
+    fallback to the conventional ``/releases/tag/<tag>`` URL — the
+    fallback covers older tests/fixtures that don't include
+    ``html_url`` in their payloads.
     """
     version = data.get("tag_name") or ""
+    release_url = data.get("html_url") or (
+        f"https://github.com/{repo}/releases/tag/{version}" if version else ""
+    )
     assets: dict[str, str] = {}
     for asset in data.get("assets", []):
         name = asset.get("name") or ""
@@ -317,7 +331,7 @@ def _parse_release(data: dict) -> ReleaseInfo:
             continue
         for key in _platform_keys_for_asset(name):
             assets[key] = url
-    return ReleaseInfo(version=version, assets=assets)
+    return ReleaseInfo(version=version, assets=assets, release_url=release_url)
 
 
 def _platform_keys_for_asset(filename: str) -> Iterator[str]:

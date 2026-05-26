@@ -418,9 +418,14 @@ def create_app(
         of which one's serving the request.  See
         :mod:`clarity_agent.web.version_endpoint` for the cache /
         TTL / test-stub details.
+
+        ``clarity_agent_dir`` is threaded through so the local-mode
+        branch can run ``git fetch`` against the checkout; release
+        builds ignore it.  The git call goes through ``to_thread``
+        because it can take a couple of seconds.
         """
         from clarity_agent.web.version_endpoint import get_version_payload
-        return get_version_payload()
+        return await asyncio.to_thread(get_version_payload, None, clarity_agent_dir)
 
     # ------------------------------------------------------------------
     # REST: Process registry
@@ -773,35 +778,10 @@ def create_app(
         }
 
     # ------------------------------------------------------------------
-    # REST: Update check & apply
+    # REST: Update apply (the *check* now lives on ``/api/version`` —
+    # both release-mode and git-mode payloads come back through that
+    # single endpoint; UpdateBadge dispatches on ``latest.kind``).
     # ------------------------------------------------------------------
-
-    @app.get("/api/update-check")
-    async def update_check() -> dict[str, Any]:
-        """Check if a newer version of clarity-agent is available."""
-        from clarity_agent.setup.updater import check_for_updates
-
-        try:
-            status = await asyncio.to_thread(check_for_updates, clarity_agent_dir)
-        except Exception:
-            return {
-                "update_available": False,
-                "current_sha": None,
-                "remote_sha": None,
-                "commit_count": 0,
-                "frozen": False,
-            }
-        return {
-            "update_available": status.available,
-            "current_sha": status.local_sha[:8] if not status.frozen else status.current_version,
-            "remote_sha": (status.remote_sha[:8] if status.remote_sha and not status.frozen
-                           else status.latest_version),
-            "commit_count": status.commit_count,
-            "frozen": status.frozen,
-            "current_version": status.current_version,
-            "latest_version": status.latest_version,
-            "download_url": status.download_url,
-        }
 
     @app.post("/api/update/run")
     async def run_update_endpoint() -> dict[str, Any]:

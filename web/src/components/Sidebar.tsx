@@ -1,7 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  checkForUpdate,
   getSession,
   getVersion,
   restartServer,
@@ -314,7 +313,7 @@ function VersionLabel() {
   // itself stays narrow.
   const label = info.is_release ? info.version : "local";
   const tooltip = info.is_release
-    ? `Clarity ${info.version} (release build)`
+    ? `Clarity ${info.version}`
     : "Locally-built or source-run Clarity (no release version)";
 
   return (
@@ -327,36 +326,99 @@ function VersionLabel() {
   );
 }
 
+/**
+ * The update affordance in the sidebar.  Consumes ``/api/version``
+ * (the same endpoint :func:`VersionLabel` uses, so there's one
+ * cached round-trip per refresh) and dispatches on ``latest.kind``:
+ *
+ *   * ``"release"`` — release binary or PRETEND_TO_BE_VERSION run.
+ *     Click opens the GitHub release page in a new tab.  No modal;
+ *     v2 will replace this anchor with a Tauri-native install
+ *     button via tauri-plugin-updater.
+ *   * ``"git"`` — source checkout.  Click opens the modal-driven
+ *     ``git pull`` + reinstall + restart flow tracking
+ *     ``origin/<current-branch>`` (see :func:`run_update`).
+ *
+ * Hidden entirely unless ``update_status === "available"``.  The
+ * "no upstream / fetch error" cases come back as ``"unknown"`` and
+ * silently render nothing — :func:`VersionLabel` carries the
+ * tooltip reason for users who want to know why.
+ */
 function UpdateBadge({ collapsed }: { collapsed: boolean }) {
-  const [available, setAvailable] = useState(false);
-  const [commitCount, setCommitCount] = useState(0);
-  const [frozen, setFrozen] = useState(false);
-  const [latestVersion, setLatestVersion] = useState<string | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [version, setVersion] = useState<VersionPayload | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [result, setResult] = useState<UpdateRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const check = useCallback(() => {
-    checkForUpdate()
-      .then((info) => {
-        setAvailable(info.update_available);
-        setCommitCount(info.commit_count);
-        setFrozen(info.frozen);
-        setLatestVersion(info.latest_version);
-        setDownloadUrl(info.download_url);
-      })
-      .catch(() => {}); // silent — network may be unavailable
-  }, []);
-
   useEffect(() => {
+    const check = () => {
+      getVersion().then(setVersion).catch(() => {});
+    };
     check();
     const id = setInterval(check, UPDATE_CHECK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [check]);
+  }, []);
 
+  const latest = version?.latest ?? null;
+  // The badge only renders when there's something the user can act
+  // on right now.  "unknown" stays silent — the tooltip on
+  // VersionLabel explains why if anyone wonders.
+  if (
+    !version ||
+    version.update_status !== "available" ||
+    latest === null
+  ) {
+    return null;
+  }
+
+  // -- Release mode: link to the GitHub release page, no modal. --
+  if (latest.kind === "release") {
+    const href = latest.release_url;
+    if (collapsed) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Update available — ${latest.version}`}
+          title={`Open release notes for ${latest.version}`}
+          className="flex justify-center py-2"
+        >
+          <span className="w-6 h-6 rounded-md bg-accent-focus/20 flex items-center justify-center hover:bg-accent-focus/30 transition-colors">
+            <svg className="w-3.5 h-3.5 text-accent-focus" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+          </span>
+        </a>
+      );
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Open release notes for ${latest.version}`}
+        className="mx-3 mt-3 mb-2 flex items-center gap-2.5 px-3 py-2 rounded-lg
+          bg-accent-focus/15 text-accent-focus text-xs font-medium
+          hover:bg-accent-focus/25 transition-colors duration-150
+          border border-accent-focus/20"
+      >
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        <span>
+          Update available
+          <span className="text-accent-focus/70 font-normal">
+            {" "}&middot; {latest.version}
+          </span>
+        </span>
+      </a>
+    );
+  }
+
+  // -- Git mode: in-place modal flow. ---------------------------
   const handleUpdate = async () => {
     setUpdating(true);
     setError(null);
@@ -364,7 +426,6 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
     try {
       const res = await runUpdate();
       setResult(res);
-      if (res.success) setAvailable(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -401,7 +462,95 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
     poll();
   };
 
-  if (!available && !showModal) return null;
+  const branchLabel = latest.branch || "upstream";
+  const commitLabel = `${latest.commit_count} commit${latest.commit_count !== 1 ? "s" : ""}`;
+
+  const gitModal = !showModal ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 text-body">
+        <h2 className="text-lg font-display mb-4">Update Clarity</h2>
+
+        {!result && !error && !updating && (
+          <p className="text-sm text-body-muted mb-4">
+            Pull {commitLabel} from <code>origin/{branchLabel}</code>,
+            reinstall dependencies, and rebuild the web frontend.
+            You'll need to restart the server afterward.
+          </p>
+        )}
+
+        {(updating || restarting) && (
+          <div className="flex items-center gap-3 text-sm text-body-muted mb-4">
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+              <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            {restarting ? "Restarting... the page will reload automatically." : "Updating... this may take a minute."}
+          </div>
+        )}
+
+        {result && !restarting && (
+          <div className="mb-4 space-y-1">
+            {result.steps.map((step, i) => (
+              <div
+                key={i}
+                className={`text-xs font-mono px-2 py-1 rounded ${
+                  step.outcome === "ok"
+                    ? "text-status-ok-text bg-status-ok-bg"
+                    : step.outcome === "fail"
+                      ? "text-status-error-text bg-status-error-bg"
+                      : step.outcome === "warn"
+                        ? "text-status-warn-text bg-status-warn-bg"
+                        : "text-body-muted"
+                }`}
+              >
+                {step.outcome === "ok" ? "\u2713" : step.outcome === "fail" ? "\u2717" : "\u26a0"}{" "}
+                {step.message}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <p className="text-sm text-status-error-text bg-status-error-bg rounded-lg px-3 py-2 mb-4">Error: {error}</p>
+        )}
+
+        <div className="flex justify-end gap-3">
+          {!restarting && (
+            <button
+              onClick={() => {
+                setShowModal(false);
+                setResult(null);
+                setError(null);
+              }}
+              className="px-4 py-2 text-sm rounded-lg text-body-muted
+                hover:text-body hover:bg-surface-dim transition-colors"
+            >
+              {result?.success ? "Later" : "Cancel"}
+            </button>
+          )}
+          {!result?.success && !restarting && (
+            <button
+              onClick={handleUpdate}
+              disabled={updating}
+              className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
+                hover:brightness-110 disabled:opacity-50 transition-all"
+            >
+              {updating ? "Updating..." : "Update Now"}
+            </button>
+          )}
+          {result?.success && !restarting && (
+            <button
+              onClick={handleRestart}
+              className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
+                hover:brightness-110 transition-all"
+            >
+              Restart Now
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   if (collapsed) {
     return (
@@ -409,12 +558,13 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
         <button
           onClick={() => setShowModal(true)}
           className="w-6 h-6 rounded-md bg-accent-focus/20 flex items-center justify-center hover:bg-accent-focus/30 transition-colors"
-          aria-label="Update available"
+          aria-label={`Update available — ${commitLabel} behind ${branchLabel}`}
         >
           <svg className="w-3.5 h-3.5 text-accent-focus" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
         </button>
+        {gitModal}
       </div>
     );
   }
@@ -427,145 +577,19 @@ function UpdateBadge({ collapsed }: { collapsed: boolean }) {
           bg-accent-focus/15 text-accent-focus text-xs font-medium
           hover:bg-accent-focus/25 transition-colors duration-150
           border border-accent-focus/20"
-        title="Click to update"
+        title={`Pull ${commitLabel} from origin/${branchLabel}`}
       >
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
         </svg>
         <span>
           Update available
-          {frozen && latestVersion && (
-            <span className="text-accent-focus/70 font-normal">
-              {" "}&middot; v{latestVersion}
-            </span>
-          )}
-          {!frozen && commitCount > 0 && (
-            <span className="text-accent-focus/70 font-normal">
-              {" "}&middot; {commitCount} commit{commitCount !== 1 ? "s" : ""}
-            </span>
-          )}
+          <span className="text-accent-focus/70 font-normal">
+            {" "}&middot; {commitLabel}
+          </span>
         </span>
       </button>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 text-body">
-            <h2 className="text-lg font-display mb-4">Update Clarity</h2>
-
-            {frozen ? (
-              /* Frozen (desktop app) mode: can't update in-place, link to download */
-              <>
-                <p className="text-sm text-body-muted mb-4">
-                  Clarity v{latestVersion} is available.
-                  Download the new version to update.
-                </p>
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 text-sm rounded-lg text-body-muted
-                      hover:text-body hover:bg-surface-dim transition-colors"
-                  >
-                    Later
-                  </button>
-                  {downloadUrl && (
-                    <a
-                      href={downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
-                        hover:brightness-110 transition-all inline-block"
-                    >
-                      Download
-                    </a>
-                  )}
-                </div>
-              </>
-            ) : (
-              /* Dev (git checkout) mode: update in-place */
-              <>
-                {!result && !error && !updating && (
-                  <p className="text-sm text-body-muted mb-4">
-                    A new version is available. This will pull the latest code,
-                    reinstall dependencies, and rebuild the web frontend.
-                    You'll need to restart the server afterward.
-                  </p>
-                )}
-
-                {(updating || restarting) && (
-                  <div className="flex items-center gap-3 text-sm text-body-muted mb-4">
-                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
-                      <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    {restarting ? "Restarting... the page will reload automatically." : "Updating... this may take a minute."}
-                  </div>
-                )}
-
-                {result && !restarting && (
-                  <div className="mb-4 space-y-1">
-                    {result.steps.map((step, i) => (
-                      <div
-                        key={i}
-                        className={`text-xs font-mono px-2 py-1 rounded ${
-                          step.outcome === "ok"
-                            ? "text-status-ok-text bg-status-ok-bg"
-                            : step.outcome === "fail"
-                              ? "text-status-error-text bg-status-error-bg"
-                              : step.outcome === "warn"
-                                ? "text-status-warn-text bg-status-warn-bg"
-                                : "text-body-muted"
-                        }`}
-                      >
-                        {step.outcome === "ok" ? "\u2713" : step.outcome === "fail" ? "\u2717" : "\u26a0"}{" "}
-                        {step.message}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {error && (
-                  <p className="text-sm text-status-error-text bg-status-error-bg rounded-lg px-3 py-2 mb-4">Error: {error}</p>
-                )}
-
-                <div className="flex justify-end gap-3">
-                  {!restarting && (
-                    <button
-                      onClick={() => {
-                        setShowModal(false);
-                        setResult(null);
-                        setError(null);
-                      }}
-                      className="px-4 py-2 text-sm rounded-lg text-body-muted
-                        hover:text-body hover:bg-surface-dim transition-colors"
-                    >
-                      {result?.success ? "Later" : "Cancel"}
-                    </button>
-                  )}
-                  {!result?.success && !restarting && (
-                    <button
-                      onClick={handleUpdate}
-                      disabled={updating}
-                      className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
-                        hover:brightness-110 disabled:opacity-50 transition-all"
-                    >
-                      {updating ? "Updating..." : "Update Now"}
-                    </button>
-                  )}
-                  {result?.success && !restarting && (
-                    <button
-                      onClick={handleRestart}
-                      className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
-                        hover:brightness-110 transition-all"
-                    >
-                      Restart Now
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {gitModal}
     </>
   );
 }

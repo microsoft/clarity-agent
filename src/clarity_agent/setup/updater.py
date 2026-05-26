@@ -121,8 +121,27 @@ def _check_github_release() -> UpdateStatus:
 
 
 def _check_git_updates(agent_dir: Path) -> UpdateStatus:
-    """Check git origin/main for newer commits (used in dev checkouts)."""
+    """Check the current branch's upstream for newer commits.
+
+    Tracks ``origin/<current-branch>`` rather than always
+    ``origin/main`` — a contributor working on ``issue48-1`` wants
+    to know about updates on that branch, not on main.  When the
+    current branch has no remote counterpart (``rev-parse`` fails),
+    we return ``available=False`` with ``remote_sha=None``; the
+    endpoint surfaces this as ``update_status="unknown"`` with a
+    reason so the UI stays silent rather than guessing.
+
+    Detached HEAD is treated the same as "no upstream" — we don't
+    have a sensible branch to compare against.
+    """
     local_sha = _git_head(agent_dir)
+    branch = _git_current_branch(agent_dir)
+
+    if branch is None or branch == "HEAD":
+        # Detached HEAD — nothing to compare against.
+        return UpdateStatus(
+            available=False, local_sha=local_sha, remote_sha=None, commit_count=0,
+        )
 
     try:
         _git_fetch(agent_dir)
@@ -131,11 +150,16 @@ def _check_git_updates(agent_dir: Path) -> UpdateStatus:
             available=False, local_sha=local_sha, remote_sha=None, commit_count=0,
         )
 
+    upstream = f"origin/{branch}"
     try:
         remote_sha = subprocess.check_output(
-            ["git", "rev-parse", "origin/main"], cwd=agent_dir, text=True, timeout=10,
+            ["git", "rev-parse", upstream], cwd=agent_dir, text=True, timeout=10,
+            stderr=subprocess.DEVNULL,
         ).strip()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # Branch exists locally but isn't pushed (or its upstream
+        # has a different name).  Endpoint surfaces this as
+        # ``unknown`` — the badge stays silent.
         return UpdateStatus(
             available=False, local_sha=local_sha, remote_sha=None, commit_count=0,
         )
@@ -147,12 +171,22 @@ def _check_git_updates(agent_dir: Path) -> UpdateStatus:
 
     try:
         count_str = subprocess.check_output(
-            ["git", "rev-list", "--count", "HEAD..origin/main"],
+            ["git", "rev-list", "--count", f"HEAD..{upstream}"],
             cwd=agent_dir, text=True, timeout=10,
         ).strip()
         commit_count = int(count_str)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         commit_count = 0
+
+    # ``commit_count == 0`` means HEAD has diverged from origin
+    # (local has commits the remote doesn't, but the remote has none
+    # we don't).  Per the v1 design we surface a badge only when
+    # there are upstream commits to pull, so collapse this case to
+    # "not available."
+    if commit_count == 0:
+        return UpdateStatus(
+            available=False, local_sha=local_sha, remote_sha=remote_sha, commit_count=0,
+        )
 
     return UpdateStatus(
         available=True,
@@ -226,18 +260,16 @@ def run_update(
             on_step(result)
 
     # -- Branch check ----------------------------------------------------
+    # We update whichever branch the checkout is currently on,
+    # pulling from ``origin/<branch>``.  The detached-HEAD case is
+    # still a hard error because there's no sensible upstream to
+    # pull from.  Diverged-local-commits is caught downstream by
+    # ``git pull --ff-only`` refusing to fast-forward.
     branch = _git_current_branch(agent_dir)
-    if branch is None:
+    if branch is None or branch == "HEAD":
         _record(StepResult(
             Outcome.FAIL,
             "Detached HEAD state — cannot update. Check out a branch first.",
-        ))
-        return results
-    if branch != "main":
-        _record(StepResult(
-            Outcome.FAIL,
-            f"On branch '{branch}', not 'main'. "
-            "Switch to main before updating to avoid overwriting your work.",
         ))
         return results
 

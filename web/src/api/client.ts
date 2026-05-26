@@ -15,7 +15,6 @@ import type {
   SetupStatus,
   PacketStatusData,
   TranscriptEntry,
-  UpdateCheckInfo,
   UpdateRunResult,
 } from "../types";
 
@@ -77,13 +76,33 @@ export const getSession = () => fetchJson<SessionInfo>("/api/session");
  * in sync with that module — every field below has a counterpart
  * there.  ``version`` is a release tag (e.g. ``"v1.2.3"``) or the
  * literal ``"local"``.
+ *
+ * ``latest`` is a discriminated union: ``kind: "release"`` for
+ * release-binary builds (links to the GitHub release page), or
+ * ``kind: "git"`` for source-checkout builds (a "5 commits behind
+ * <branch>" badge).  Frontends should ``switch (latest.kind)``
+ * rather than re-derive the mode from ``source``.
  */
+export interface ReleaseLatest {
+  kind: "release";
+  version: string;
+  assets: Record<string, string>;
+  release_url: string;
+}
+
+export interface GitLatest {
+  kind: "git";
+  branch: string;
+  commit_count: number;
+  remote_sha: string;
+}
+
 export interface VersionPayload {
   version: string;
   source: "release" | "local";
   is_release: boolean;
   update_status: "available" | "up_to_date" | "unknown";
-  latest: { version: string; assets: Record<string, string> } | null;
+  latest: ReleaseLatest | GitLatest | null;
   reason: string | null;
 }
 
@@ -108,9 +127,9 @@ export const startNewChapter = () =>
 export const getCurrentChapter = () =>
   fetchJson<{ messages: ChatMessage[] }>("/api/thread/current-chapter");
 
-// Update check
-export const checkForUpdate = () => fetchJson<UpdateCheckInfo>("/api/update-check");
-
+// Update apply.  The *check* shape lives on ``getVersion()`` —
+// ``/api/version`` returns ``update_status`` + a discriminated
+// ``latest`` (release vs. git) that UpdateBadge dispatches on.
 export const runUpdate = () =>
   fetchJson<UpdateRunResult>("/api/update/run", { method: "POST" });
 

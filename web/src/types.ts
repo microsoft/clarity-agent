@@ -132,18 +132,10 @@ export interface ModelProfileInfo {
   active_tier: string;
 }
 
-// Update check
-export interface UpdateCheckInfo {
-  update_available: boolean;
-  current_sha: string | null;
-  remote_sha: string | null;
-  commit_count: number;
-  frozen: boolean;
-  current_version: string | null;
-  latest_version: string | null;
-  download_url: string | null;
-}
-
+// Update run.  The *check* shape lives in ``VersionPayload`` —
+// ``/api/version`` is now the single source of truth for both
+// release-mode and git-mode update info, dispatched on
+// ``latest.kind`` in the frontend.
 export interface UpdateRunResult {
   steps: { outcome: string; message: string }[];
   success: boolean;
