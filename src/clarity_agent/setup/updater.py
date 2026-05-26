@@ -16,7 +16,6 @@ import subprocess
 import sys
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from clarity_agent.setup.installer import (
@@ -27,23 +26,30 @@ from clarity_agent.setup.installer import (
 )
 from clarity_agent.setup.layout import EMBEDDED_AGENT_SUBDIR
 
+# Data shapes live in :mod:`setup.types`.  This module is the
+# producer of ``UpdateStatus`` and ``GitUpdate`` — re-exported here
+# so callers still doing ``from setup.updater import GitUpdate``
+# keep working.  Callers are encouraged to consume them through
+# ``setup.version.current_state`` rather than constructing them
+# directly.
+from clarity_agent.setup.types import GitUpdate, UpdateStatus
+
+# Re-exported via __all__ so static analyzers see them as part of
+# this module's public surface (otherwise they look unused-here).
+__all__ = [
+    "GitUpdate",
+    "Outcome",
+    "StepResult",
+    "UpdateStatus",
+    "build_web_frontend",
+    "check_for_updates",
+    "install_python_deps",
+    "run_update",
+    "schedule_restart",
+]
+
 # GitHub repo for release checks.
 _GITHUB_REPO = "microsoft/clarity-agent"
-
-
-@dataclass
-class UpdateStatus:
-    """Result of checking for available updates."""
-
-    available: bool
-    local_sha: str
-    remote_sha: str | None
-    commit_count: int  # number of commits behind origin/main
-    # Fields used only in frozen mode:
-    frozen: bool = False
-    current_version: str | None = None
-    latest_version: str | None = None
-    download_url: str | None = None
 
 
 def _git_head(cwd: Path) -> str:

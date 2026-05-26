@@ -408,9 +408,11 @@ def create_launcher(
         # ``clarity_agent_dir`` is needed for the local-mode git
         # check; release builds ignore it.  Hopped onto a worker
         # thread because the git fetch can run for a couple of
-        # seconds.
-        from clarity_agent.web.version_endpoint import get_version_payload
-        return await asyncio.to_thread(get_version_payload, None, clarity_agent_dir)
+        # seconds.  Caching + JSON shaping live in
+        # :mod:`~clarity_agent.setup.version`.
+        from clarity_agent.setup.version import current_state
+        state = await asyncio.to_thread(current_state, clarity_agent_dir)
+        return state.to_dict()
 
     # ------------------------------------------------------------------
     # REST: Project management

@@ -10,9 +10,9 @@ What this module does NOT do: download binaries, verify signatures,
 swap a running app's executable.  Those are the Tauri updater
 plugin's responsibility on the desktop binary path, and they're
 exercised end-to-end via the ``PRETEND_TO_BE_VERSION`` mechanism
-documented in :mod:`~clarity_agent.setup.version` — there's no point
-mocking them on the Python side because the production code that
-matters here lives in Rust.
+documented in :mod:`~clarity_agent.setup.version` — there's no
+point mocking them on the Python side because the production code
+that matters here lives in Rust.
 
 What this module *does* do, all of which is fully testable:
 
@@ -35,71 +35,18 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 
-from .version import VersionInfo, current_version
+# Data shapes live in :mod:`setup.types` so the modules that
+# produce/consume them don't form a load-time cycle.  This module
+# is the *producer* of ``ReleaseInfo`` and ``UpdateAvailability``;
+# ``VersionInfo`` rides along in annotations.
+from .types import ReleaseInfo, UpdateAvailability, VersionInfo
 
 #: The repository the production feed talks to.  Single source of
 #: truth — referenced by ``GitHubReleaseFeed`` as the default and by
 #: any external diagnostics that need to display the upstream URL.
 DEFAULT_REPO = "microsoft/clarity-agent"
-
-
-# ---------------------------------------------------------------------------
-# Result shapes
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ReleaseInfo:
-    """One release as seen on the feed.
-
-    ``version`` is the tag string verbatim (e.g. ``"v1.2.3"``); the
-    leading ``v`` is preserved so it matches what
-    :func:`~clarity_agent.setup.version.current_version` returns
-    for a stamped release.
-
-    ``release_url`` is the GitHub Release page (``html_url`` from
-    the API) — the human-facing URL the v1 update badge links to.
-    Defaulted to ``""`` so test fixtures that don't care about it
-    can keep constructing :class:`ReleaseInfo` with just the
-    version/assets pair.
-
-    ``assets`` maps a Tauri-updater-style platform key (e.g.
-    ``"darwin-aarch64"``, ``"windows-x86_64"``) to the asset's
-    download URL.  Callers that don't care about the per-platform
-    breakdown (the doctor check, the "you're behind" banner) can
-    ignore it.
-    """
-
-    version: str
-    assets: dict[str, str]
-    release_url: str = ""
-
-
-@dataclass(frozen=True)
-class UpdateAvailability:
-    """The result of asking "should I update?"
-
-    Three states encoded in ``status``:
-
-      * ``"available"`` — a newer release than the running version
-        exists.  ``latest`` is populated.
-      * ``"up_to_date"`` — running version is the latest (or newer
-        than the feed, which can happen with local pretend-tests).
-        ``latest`` is populated.
-      * ``"unknown"`` — couldn't ask (non-release build, feed error,
-        no releases yet).  ``latest`` may be ``None``.
-    """
-
-    status: Literal["available", "up_to_date", "unknown"]
-    current: VersionInfo
-    latest: ReleaseInfo | None = None
-    reason: str | None = None
-    """Free-text reason set when status is ``"unknown"`` — e.g.
-    ``"not a release build"`` or ``"network error: …"`` — so the
-    UI can render an informative tooltip."""
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +214,10 @@ def check_for_update(
       * A feed result that *is* strictly newer → ``status="available"``.
     """
     if current is None:
+        # Lazy import to break the cycle: ``setup.version``
+        # top-level imports this module, but we need
+        # ``current_version`` only at call time.
+        from .version import current_version
         current = current_version()
     if not current.is_release:
         return UpdateAvailability(

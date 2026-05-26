@@ -415,17 +415,20 @@ def create_app(
         """Return the running binary's version + cached update-check
         result.  Both the launcher and the per-project app expose
         this so the frontend can render the version badge regardless
-        of which one's serving the request.  See
-        :mod:`clarity_agent.web.version_endpoint` for the cache /
-        TTL / test-stub details.
+        of which one's serving the request.
 
         ``clarity_agent_dir`` is threaded through so the local-mode
         branch can run ``git fetch`` against the checkout; release
-        builds ignore it.  The git call goes through ``to_thread``
-        because it can take a couple of seconds.
+        builds ignore it.  The call goes through ``to_thread``
+        because the git path can take a couple of seconds and
+        ``current_state`` is sync.  Caching (and the
+        ``RuntimeState`` → JSON shaping) lives in
+        :mod:`~clarity_agent.setup.version` — this handler is
+        intentionally a one-liner.
         """
-        from clarity_agent.web.version_endpoint import get_version_payload
-        return await asyncio.to_thread(get_version_payload, None, clarity_agent_dir)
+        from clarity_agent.setup.version import current_state
+        state = await asyncio.to_thread(current_state, clarity_agent_dir)
+        return state.to_dict()
 
     # ------------------------------------------------------------------
     # REST: Process registry

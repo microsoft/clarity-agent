@@ -101,6 +101,13 @@ export interface VersionPayload {
   version: string;
   source: "release" | "local";
   is_release: boolean;
+  // Local-mode introspection — populated only when source === "local".
+  // Used by the sidebar's version label to render "<branch> @ <sha>"
+  // instead of the generic "local" string.  Either field may be null
+  // even in local mode if the git lookup failed (no .git/, no git
+  // binary, detached HEAD) — the UI falls back to "local" then.
+  branch: string | null;
+  local_sha: string | null;
   update_status: "available" | "up_to_date" | "unknown";
   latest: ReleaseLatest | GitLatest | null;
   reason: string | null;

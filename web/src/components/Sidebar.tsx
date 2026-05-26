@@ -306,15 +306,17 @@ function VersionLabel() {
 
   if (!info) return null;
 
-  // Released binaries show their version tag verbatim ("v1.2.3");
-  // anything else (source clone, locally-built binary, pretend
-  // mode without ``PRETEND_TO_BE_VERSION``) reports as "local".
-  // The tooltip carries the longer-form explanation so the badge
-  // itself stays narrow.
-  const label = info.is_release ? info.version : "local";
-  const tooltip = info.is_release
-    ? `Clarity ${info.version}`
-    : "Locally-built or source-run Clarity (no release version)";
+  // Three rendering cases:
+  //   * Release binaries → version tag ("v1.2.3")
+  //   * Source checkouts with git info → "<branch> @ <short-sha>"
+  //   * Source checkouts without git info → "local" fallback
+  //     (zip download, no .git/, no git binary on PATH)
+  // The tooltip carries the longer-form explanation so the label
+  // itself stays narrow.  The ``reason`` field rides along on
+  // "unknown" payloads — when present we append it to the tooltip
+  // so users can hover to see "no upstream branch (or git fetch
+  // failed)" without the badge having to render it.
+  const { label, tooltip } = describeVersion(info);
 
   return (
     <p
@@ -324,6 +326,36 @@ function VersionLabel() {
       {label}
     </p>
   );
+}
+
+function describeVersion(info: VersionPayload): {
+  label: string;
+  tooltip: string;
+} {
+  if (info.is_release) {
+    return {
+      label: info.version,
+      tooltip: `Clarity ${info.version} (release build)`,
+    };
+  }
+  if (info.branch && info.local_sha) {
+    // Short the SHA further for display — 7 chars is the git
+    // convention for human-readable references and keeps the
+    // label narrow.  Tooltip carries the full 12-char form for
+    // copy/paste.
+    const shortSha = info.local_sha.slice(0, 7);
+    const reasonSuffix = info.reason ? ` — ${info.reason}` : "";
+    return {
+      label: `${info.branch} @ ${shortSha}`,
+      tooltip: `Clarity from ${info.branch} @ ${info.local_sha}${reasonSuffix}`,
+    };
+  }
+  return {
+    label: "local",
+    tooltip:
+      "Locally-built or source-run Clarity (no git info available)" +
+      (info.reason ? ` — ${info.reason}` : ""),
+  };
 }
 
 /**
