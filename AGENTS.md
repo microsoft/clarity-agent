@@ -127,12 +127,7 @@ This project uses the Clarity Protocol for structured thinking about consequenti
 
 **Keep outputs narrative but brief.** All `.md` files in this project — protocol documents, process guides, and instructions — are repeatedly read by both humans and LLMs. They should read as smooth, concise narrative: easy to understand on first read, with nothing that wastes the reader's attention. A reader must immediately understand both the "what" and the "why." Cut anything that doesn't carry meaningful information. Since many of these files are instructions for LLMs which create further `.md` files, they should encourage the same discipline.
 
-### Static Text
-
-- Keep comments, docstrings, docs, and repo instructions durable.
-- Preserve contracts, traps, constraints, and decision rationale.
-- Remove volatile metrics, temporal qualifiers, stale references, code restatements, and narrative history.
-- Prefer relative paths in durable docs. Keep comments to the absolute minimum: only where the code genuinely cannot be understood without them. No comment is better than a wrong or redundant one.
+**Static text should be intentional.** Keep comments, docstrings, docs, and repo instructions durable. Preserve contracts, traps, constraints, and decision rationale. Remove volatile metrics, temporal qualifiers, stale references, code restatements, and narrative history. Prefer relative paths in durable docs. Keep comments to the absolute minimum: only where the code genuinely cannot be understood without them. No comment is better than a wrong or redundant one.
 
 **Use `.clarity-protocol/notes.md` as shared memory.** At the start of every process, read `.clarity-protocol/notes.md` for guiding principles and cross-phase observations. When you notice something worth remembering — a design philosophy, a team constraint, an insight relevant to a future phase — add it. Tag actionable items for a specific phase with `[for: <phase>]` (e.g., `[for: failure-analysis] Authentication is a single point of failure`). When acting on a tagged item, remove it. Keep the file compact: consolidate redundant entries and remove items that have been absorbed into the relevant protocol documents.
 
