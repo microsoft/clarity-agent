@@ -202,12 +202,15 @@ describe("API client", () => {
       expect(result).toEqual(data);
     });
 
-    it("removeProject sends DELETE with url-encoded name", async () => {
+    it("removeProject sends DELETE to /api/projects/{id}", async () => {
       mockFetch.mockReturnValue(jsonResponse({ status: "removed" }));
 
-      const result = await removeProject("my project/with space");
+      // Real ids are 8-char hex hashes; encodeURIComponent is a no-op
+      // on those, but the wrapper still calls it defensively, so the
+      // test passes a synthetic value to exercise the encoding path.
+      const result = await removeProject("ab/cd ef");
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/projects/my%20project%2Fwith%20space",
+        "/api/projects/ab%2Fcd%20ef",
         { method: "DELETE" },
       );
       expect(result).toEqual({ status: "removed" });

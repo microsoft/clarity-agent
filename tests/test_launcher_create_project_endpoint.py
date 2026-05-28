@@ -317,3 +317,168 @@ class TestValidation:
         })
         assert r.status_code == 400
         assert "not found" in r.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Registry is path-keyed: same path → idempotent ok, same name OK at
+# different paths.
+# ---------------------------------------------------------------------------
+
+
+class TestAlreadyRegistered:
+    """Regression for the silent-409 bug.  Path is the registry's
+    primary key; the display ``name`` is not a uniqueness constraint
+    (two projects in different directories are genuinely different
+    projects, even if a user wants to call them the same thing)."""
+
+    def test_same_path_is_idempotent_ok(
+        self, client: TestClient, tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "raas2"
+        project.mkdir()
+        (project / PROTOCOL_DIR_VISIBLE).mkdir()
+
+        # First open registers it.
+        first = client.post("/api/projects", json={
+            "name": "raas2", "path": str(project),
+            "intent": "open_existing",
+        })
+        assert first.status_code == 200
+        first_id = first.json()["id"]
+
+        # Second open (same path) — used to silently 409.  Now an
+        # idempotent ok returning the same registry entry.
+        second = client.post("/api/projects", json={
+            "name": "raas2", "path": str(project),
+            "intent": "open_existing",
+        })
+        assert second.status_code == 200, second.text
+        assert second.json()["status"] == "ok"
+        assert second.json()["id"] == first_id
+
+    def test_same_name_different_path_both_register(
+        self, client: TestClient, tmp_path: Path,
+    ) -> None:
+        # Two clean projects at different paths, same display name —
+        # both should register successfully.  The launcher
+        # disambiguates by ``id`` for activation.
+        first_path = tmp_path / "alpha"
+        first_path.mkdir()
+        (first_path / PROTOCOL_DIR_VISIBLE).mkdir()
+        second_path = tmp_path / "beta"
+        second_path.mkdir()
+        (second_path / PROTOCOL_DIR_VISIBLE).mkdir()
+
+        first = client.post("/api/projects", json={
+            "name": "ws", "path": str(first_path),
+            "intent": "open_existing",
+        })
+        assert first.status_code == 200
+        first_id = first.json()["id"]
+
+        second = client.post("/api/projects", json={
+            "name": "ws", "path": str(second_path),
+            "intent": "open_existing",
+        })
+        assert second.status_code == 200, second.text
+        assert second.json()["status"] == "ok"
+        # Different paths produce different ids — they're genuinely
+        # different entries despite the shared display name.
+        assert second.json()["id"] != first_id
+        assert second.json()["path"] == str(second_path)
+
+    def test_same_path_different_name_renames(
+        self, client: TestClient, tmp_path: Path,
+    ) -> None:
+        # Re-opening the same path with a new name should update
+        # the display label rather than refusing — same project,
+        # the user is just relabeling it.
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / PROTOCOL_DIR_VISIBLE).mkdir()
+
+        first = client.post("/api/projects", json={
+            "name": "old-name", "path": str(project),
+            "intent": "open_existing",
+        })
+        assert first.status_code == 200
+
+        second = client.post("/api/projects", json={
+            "name": "new-name", "path": str(project),
+            "intent": "open_existing",
+        })
+        assert second.status_code == 200, second.text
+        assert second.json()["name"] == "new-name"
+        # Same path means same id — it's the same project entry.
+        assert second.json()["id"] == first.json()["id"]
+
+
+# ---------------------------------------------------------------------------
+# Id-keyed routes: 404 on unknown id; idempotent delete/deactivate
+# ---------------------------------------------------------------------------
+
+
+class TestIdKeyedRoutes:
+    """All routes that take a project identifier in the URL use the
+    stable id (path-derived hash), never the display name.  These
+    tests pin down both the 404 contract for activate (where the
+    caller really does need to know the project exists) and the
+    idempotent succeed-on-missing contract for delete/deactivate
+    (where surfacing a 404 would just race with stale UI views)."""
+
+    def test_activate_404_when_unknown_id(
+        self, client: TestClient,
+    ) -> None:
+        # The activate route needs to look the project up to spawn
+        # its server — there's no sensible "proceed anyway" when
+        # the id doesn't exist, so 404 is the right answer.
+        r = client.post("/api/projects/bogus-id-123/activate")
+        assert r.status_code == 404
+        assert "not found" in r.json()["detail"].lower()
+
+    def test_delete_unknown_id_is_idempotent(
+        self, client: TestClient,
+    ) -> None:
+        # The frontend issues DELETE during cleanup paths (e.g.
+        # confirming removal of a project the user picked from the
+        # list).  By the time the request lands the user's view
+        # may already be stale — a 404 here would force the
+        # frontend to special-case "the project went away while I
+        # was deleting it", which is the same outcome as success.
+        # Always 200; remove() is silent on unknown ids by design.
+        r = client.delete("/api/projects/bogus-id-123")
+        assert r.status_code == 200
+        assert r.json()["status"] == "removed"
+
+    def test_deactivate_unknown_id_is_idempotent(
+        self, client: TestClient,
+    ) -> None:
+        # Same logic as delete — deactivate is fundamentally a
+        # "ensure not running" operation; an unknown id is
+        # trivially "already not running."
+        r = client.post("/api/projects/bogus-id-123/deactivate")
+        assert r.status_code == 200
+        assert r.json()["status"] == "deactivated"
+
+    def test_delete_actual_id_works(
+        self, client: TestClient, tmp_path: Path,
+    ) -> None:
+        # Round-trip: create → delete by id → confirm it's gone.
+        # Pins down that the id from the create response is what
+        # the DELETE route expects.
+        project = tmp_path / "doomed"
+        project.mkdir()
+        (project / PROTOCOL_DIR_VISIBLE).mkdir()
+
+        created = client.post("/api/projects", json={
+            "name": "doomed", "path": str(project),
+            "intent": "open_existing",
+        })
+        assert created.status_code == 200
+        project_id = created.json()["id"]
+
+        r = client.delete(f"/api/projects/{project_id}")
+        assert r.status_code == 200
+
+        listed = client.get("/api/projects").json()["projects"]
+        assert project_id not in {p["id"] for p in listed}

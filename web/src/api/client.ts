@@ -210,6 +210,18 @@ export type CreateProjectResult =
   | { status: "broken_install"; brokenness: string; path: string }
   | { status: "embedded_install_required"; command: string; path: string };
 
+// Set of recognized status discriminators, kept next to the union
+// so the runtime guard below can't drift from the type.  Name
+// collisions are NOT a status — the registry is path-keyed and
+// allows duplicate display names; same-path reopens come back as
+// "ok".
+const KNOWN_CREATE_PROJECT_STATUSES = new Set([
+  "ok",
+  "needs_setup",
+  "broken_install",
+  "embedded_install_required",
+]);
+
 /**
  * Register / set up a project.  See the server-side docstring on
  * ``create_project`` for the per-(intent, mode, disk-state)
@@ -229,9 +241,12 @@ export async function createProject(args: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
-  // The launcher returns 409 with structured bodies for the two
-  // setup-decision-needed cases; everything else is either a
-  // success (200) or a genuine error.
+  // The launcher returns 409 with structured bodies whose
+  // ``status`` field discriminates the case (broken_install,
+  // needs_setup, name_conflict, …).  Anything else — 4xx without
+  // a recognised status, 5xx, network — throws so the caller's
+  // catch block surfaces it instead of the UI silently swallowing
+  // a body it doesn't understand.
   if (res.status === 200 || res.status === 409) {
     const body = await res.json();
     if (res.status === 200 && !body.status) {
@@ -242,32 +257,40 @@ export async function createProject(args: {
       const { status: _s, ...entry } = body;
       return { status: "ok", entry: entry as ProjectEntry };
     }
-    return body as CreateProjectResult;
+    if (KNOWN_CREATE_PROJECT_STATUSES.has(body?.status)) {
+      return body as CreateProjectResult;
+    }
+    // Unrecognised body — most often FastAPI's ``{"detail": ...}``
+    // from a bare ``HTTPException``.  Throw with the most useful
+    // string we can pull out so the caller's catch surfaces it.
+    const reason = body?.detail || body?.message || JSON.stringify(body);
+    throw new Error(`${res.status}: ${reason}`);
   }
   const errorBody = await res.text();
   throw new Error(`${res.status}: ${errorBody}`);
 }
 
-export const removeProject = (name: string) =>
-  fetchJson<{ status: string }>(`/api/projects/${encodeURIComponent(name)}`, {
-    method: "DELETE",
-  });
-
-export const activateProject = (name: string) =>
-  fetchJson<{ id: string; name: string; path: string; port: number; session: SessionInfo }>(
-    `/api/projects/${encodeURIComponent(name)}/activate`,
-    { method: "POST" },
-  );
-
-export const activateProjectById = (id: string) =>
-  fetchJson<{ id: string; name: string; path: string; port: number; session: SessionInfo }>(
-    `/api/projects/activate-by-id/${encodeURIComponent(id)}`,
-    { method: "POST" },
-  );
-
-export const deactivateProject = (name: string) =>
+// Project lifecycle routes are all id-keyed.  Display names aren't
+// unique (the registry deliberately allows two projects with the
+// same label in different directories), so routing by name would
+// produce ambiguous outcomes; the launcher dropped its name-keyed
+// routes when the registry switched to path-as-identity.  Always
+// pass the ``id`` from the project list / create-project response.
+export const removeProject = (projectId: string) =>
   fetchJson<{ status: string }>(
-    `/api/projects/${encodeURIComponent(name)}/deactivate`,
+    `/api/projects/${encodeURIComponent(projectId)}`,
+    { method: "DELETE" },
+  );
+
+export const activateProject = (projectId: string) =>
+  fetchJson<{ id: string; name: string; path: string; port: number; session: SessionInfo }>(
+    `/api/projects/${encodeURIComponent(projectId)}/activate`,
+    { method: "POST" },
+  );
+
+export const deactivateProject = (projectId: string) =>
+  fetchJson<{ status: string }>(
+    `/api/projects/${encodeURIComponent(projectId)}/deactivate`,
     { method: "POST" },
   );
 

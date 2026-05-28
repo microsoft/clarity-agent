@@ -89,7 +89,10 @@ describe("ProjectSwitcher remove flow", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
 
     await waitFor(() => {
-      expect(removeProjectMock).toHaveBeenCalledWith("alpha");
+      // Routes are id-keyed now — name lookup would be ambiguous
+      // (the registry allows duplicate display labels).  The id
+      // comes from ``makeProject``'s default ("abc12345").
+      expect(removeProjectMock).toHaveBeenCalledWith("abc12345");
     });
     await waitFor(() => {
       expect(screen.queryByText("alpha")).not.toBeInTheDocument();

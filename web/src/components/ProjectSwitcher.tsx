@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   activateProject,
@@ -79,6 +80,13 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
   const [submittingMode, setSubmittingMode] = useState<
     "userspace" | "embedded" | null
   >(null);
+  // The setup dialog only exposes a choice for code-repo
+  // directories, presented as a single "coding agent-friendly
+  // setup" checkbox.  Defaults to true (= embedded install) when
+  // the server suggested ``embedded``, which is the code-repo
+  // case.  Non-code dirs get a single button and never see this
+  // state.  Re-synced whenever a new prompt opens.
+  const [codingAgentSetup, setCodingAgentSetup] = useState(true);
 
   const newInputRef = useRef<HTMLInputElement>(null);
   const openInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +110,21 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     if (showOpenForm) openInputRef.current?.focus();
   }, [showOpenForm]);
 
+  // Re-sync the coding-agent-friendly default whenever a new
+  // setup prompt opens — otherwise the checkbox would persist
+  // from a previous dialog (e.g. user opened a code repo, then a
+  // plain folder, then a code repo again).  The server's
+  // ``suggested_mode`` is the source of truth for what should be
+  // pre-selected: "embedded" → checked.  set-state-in-effect is
+  // legitimate here: the new prompt is an external input, not
+  // derived from existing state.
+  useEffect(() => {
+    if (prompt?.kind === "needs_setup") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCodingAgentSetup(prompt.suggested_mode === "embedded");
+    }
+  }, [prompt]);
+
   // Escape-key dismiss for any open prompt — the modal's
   // click-outside-to-dismiss has its keyboard equivalent here, so
   // the backdrop's onClick isn't the only way to close.
@@ -118,7 +141,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     setActivating(project.name);
     setError(null);
     try {
-      await activateProject(project.name);
+      await activateProject(project.id);
       setOpen(false);
       refreshRecentMenu();
       navigate(`/p/${project.id}/`);
@@ -141,7 +164,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
     setRemoving(project.name);
     setError(null);
     try {
-      await removeProject(project.name);
+      await removeProject(project.id);
       setConfirmRemove(null);
       refresh();
       void refreshRecentMenu();
@@ -196,7 +219,48 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
       });
       return;
     }
+    // Defensive: an unhandled discriminator means the wire shape
+    // grew a new case without UI wiring.  Throwing surfaces it via
+    // the caller's catch block instead of silently swallowing —
+    // which is exactly the failure mode the launcher's bare
+    // ``HTTPException`` 409 used to produce.
+    const exhaustive: never = result;
+    throw new Error(
+      `Unhandled create-project result: ${JSON.stringify(exhaustive)}`,
+    );
   };
+
+  // Bridge for the native "File → Open Project…" menu path.  When
+  // the menu handler in :file:`Layout.tsx` calls ``createProject``
+  // on a directory that isn't a clean Clarity project (needs_setup
+  // / broken_install / embedded_install_required), it dispatches a
+  // ``clarity-show-create-prompt`` event with the result so this
+  // component can surface its existing setup dialog instead of
+  // each call site rebuilding the prompt UI.  Layout uncollapses
+  // the sidebar first so ProjectSwitcher is mounted to receive.
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        name: string;
+        path: string;
+        result: CreateProjectResult;
+      };
+      // Expand the switcher so the user sees what's happening (the
+      // prompt is a fixed overlay, but expanding gives context if
+      // they cancel).
+      setOpen(true);
+      void handleCreateResult(detail.result, {
+        name: detail.name, path: detail.path,
+      });
+    };
+    window.addEventListener("clarity-show-create-prompt", onPrompt);
+    return () =>
+      window.removeEventListener("clarity-show-create-prompt", onPrompt);
+    // handleCreateResult closes over component state, but the
+    // dispatch is rare (menu-driven only) and the closure capture
+    // is intentional — we want whatever the latest closure sees.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Browser-mode fallback (inline form) -------------------------------
 
@@ -574,9 +638,13 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
 
       {/* Flow-3 SetupPromptDialog (needs_setup / broken_install) and
           the EmbeddedCommandDialog all render as fixed-position
-          modal overlays so they sit above the sidebar UI without
-          fighting its layout. */}
-      {prompt && (
+          modal overlays.  Rendered via a portal to ``document.body``
+          so the overlay escapes the sidebar's animated
+          ``<aside>`` — that container creates a stacking context
+          (transform on collapse) that traps ``position: fixed``
+          descendants, which made the dialog appear behind the
+          main route's chat content. */}
+      {prompt && createPortal(
         // Backdrop is presentation-only; its click-to-dismiss has a
         // keyboard equivalent via the Escape-key effect above, so
         // the a11y click-events-have-key-events guidance is met at
@@ -610,37 +678,50 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
                   {prompt.path}
                 </p>
                 <p className="text-xs text-body-muted mb-4">
-                  This directory doesn't have a Clarity setup yet.
                   {prompt.looks_like_code
-                    ? " It looks like a code repository — an embedded install (with the agent inside the repo) is the natural fit."
-                    : " A userspace project will create a Clarity Protocol/ folder here and manage Clarity from the app."}
+                    ? "This directory looks like a code repository. Clarity will manage your project's notes and conversations here."
+                    : "Clarity will create a folder here for your project's notes and conversations."}
                 </p>
+                {/* Only code-repo directories get a choice; non-code
+                    directories get a single button.  Without
+                    context, "userspace" / "embedded" jargon
+                    confuses users — the checkbox phrases it in
+                    terms of what they actually get (coding-agent
+                    files inside the repo). */}
+                {prompt.looks_like_code && (
+                  <label className="flex items-start gap-2 mb-4 cursor-pointer
+                    py-2 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={codingAgentSetup}
+                      onChange={(e) => setCodingAgentSetup(e.target.checked)}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <span className="text-xs text-body-muted">
+                      <span className="font-medium text-body">
+                        Coding agent-friendly setup
+                      </span>
+                      <br />
+                      Install Clarity inside this repo so coding agents
+                      (like Claude Code) can read its files alongside
+                      your code.
+                    </span>
+                  </label>
+                )}
                 <div className="space-y-2">
-                  {prompt.looks_like_code && (
-                    <button
-                      disabled={submittingMode !== null}
-                      onClick={() => resolveSetup("embedded")}
-                      className="w-full py-2 text-xs rounded bg-accent text-white
-                        hover:bg-accent-hover disabled:opacity-50 transition-colors"
-                    >
-                      {submittingMode === "embedded"
-                        ? "Working…"
-                        : "Set up as embedded install (recommended)"}
-                    </button>
-                  )}
                   <button
                     disabled={submittingMode !== null}
-                    onClick={() => resolveSetup("userspace")}
-                    className={`w-full py-2 text-xs rounded transition-colors
-                      disabled:opacity-50 ${
-                        prompt.looks_like_code
-                          ? "border border-border text-body hover:bg-surface-hover"
-                          : "bg-accent text-white hover:bg-accent-hover"
-                      }`}
+                    onClick={() => resolveSetup(
+                      prompt.looks_like_code && codingAgentSetup
+                        ? "embedded"
+                        : "userspace",
+                    )}
+                    className="w-full py-2 text-xs rounded bg-accent text-white
+                      hover:bg-accent-hover disabled:opacity-50 transition-colors"
                   >
-                    {submittingMode === "userspace"
+                    {submittingMode !== null
                       ? "Working…"
-                      : "Set up as userspace project"}
+                      : "Set up a Clarity project"}
                   </button>
                   <button
                     onClick={() => setPrompt(null)}
@@ -719,7 +800,8 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

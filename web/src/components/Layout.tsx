@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { activateProject, activateProjectById, createProject, getProjects, removeProject, getSession, getSettings, getSetupStatus } from "../api/client";
+import { activateProject, createProject, getProjects, removeProject, getSession, getSettings, getSetupStatus } from "../api/client";
 import { ChatProvider } from "../hooks/useChat";
 import type { SessionInfo } from "../types";
 import FeedbackDialog from "./FeedbackDialog";
@@ -79,7 +79,7 @@ export default function Layout() {
     }
     activatingRef.current = projectId;
     setSessionLoading(true);
-    activateProjectById(projectId)
+    activateProject(projectId)
       .then(() => fetchSession())
       .catch((err: unknown) => {
         // The launcher returns 410 when a project's directory no longer
@@ -126,22 +126,43 @@ export default function Layout() {
       try {
         const result = await createProject({ name, path, intent });
         if (result.status === "ok") {
-          await activateProject(result.entry.name);
+          // Activate by id rather than name — display names can
+          // collide across projects, and name-keyed activation
+          // would first-match the wrong one.  Id is the stable
+          // path-derived hash.
+          await activateProject(result.entry.id);
           id = result.entry.id;
         } else {
-          // Menu-driven open hit a needs_setup / broken / embedded-
-          // required branch; the menu UI has no place to host the
-          // SetupPromptDialog, so the user has to use the in-app
-          // ProjectSwitcher flow.  Surface nothing; the directory
-          // simply doesn't activate.
+          // The directory needs a setup decision (needs_setup,
+          // broken_install) or an external action (embedded
+          // install).  Defer to ProjectSwitcher's existing setup
+          // dialog rather than rebuilding the prompt UI here:
+          // uncollapse the sidebar so ProjectSwitcher is mounted
+          // and the dialog overlay is visible, then dispatch a
+          // custom event on the next tick (so the re-render that
+          // mounts the listener completes first).  ProjectSwitcher
+          // calls its own ``handleCreateResult`` and the user gets
+          // the same userspace / embedded prompt they'd see from
+          // the in-app "Open Project" button.
+          setSidebarCollapsed(false);
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent("clarity-show-create-prompt", {
+                detail: { name, path, result },
+              }),
+            );
+          }, 0);
           return;
         }
-      } catch {
-        const data = await getProjects();
-        const existing = data.projects.find((p) => p.path === path);
-        if (!existing) return;
-        await activateProject(existing.name);
-        id = existing.id;
+      } catch (err) {
+        // ``createProject`` throws on unknown 409 bodies and on
+        // other HTTP errors.  Surface the message and bail rather
+        // than guessing — silent failure was what got us here in
+        // the first place.
+        setActivationError(
+          err instanceof Error ? err.message : String(err),
+        );
+        return;
       }
       await refreshRecentMenu();
       navigate(`/p/${id}/`);
@@ -154,7 +175,7 @@ export default function Layout() {
     const onActivate = async (e: Event) => {
       const projectId = (e as CustomEvent).detail;
       try {
-        await activateProjectById(projectId);
+        await activateProject(projectId);
         await refreshRecentMenu();
         navigate(`/p/${projectId}/`);
       } catch (err) {
@@ -173,7 +194,7 @@ export default function Layout() {
       try {
         const data = await getProjects();
         for (const p of data.projects) {
-          await removeProject(p.name);
+          await removeProject(p.id);
         }
         await refreshRecentMenu();
       } catch {
