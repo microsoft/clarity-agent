@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { activateProject, activateProjectById, createProject, getProjects, removeProject, getSession, getSettings, getSetupStatus } from "../api/client";
+import { activateProjectById, createProject, getProjects, removeProject, getSession, getSettings, getSetupStatus } from "../api/client";
 import { ChatProvider } from "../hooks/useChat";
 import type { SessionInfo } from "../types";
 import FeedbackDialog from "./FeedbackDialog";
@@ -126,22 +126,42 @@ export default function Layout() {
       try {
         const result = await createProject({ name, path, intent });
         if (result.status === "ok") {
-          await activateProject(result.entry.name);
+          // Activate by id rather than name — display names can
+          // collide across projects, and name-keyed activation
+          // would first-match the wrong one.  Id is the stable
+          // path-derived hash.
+          await activateProjectById(result.entry.id);
           id = result.entry.id;
         } else {
-          // Menu-driven open hit a needs_setup / broken / embedded-
-          // required branch; the menu UI has no place to host the
-          // SetupPromptDialog, so the user has to use the in-app
-          // ProjectSwitcher flow.  Surface nothing; the directory
-          // simply doesn't activate.
+          // Menu-driven open hit a needs_setup / broken_install /
+          // embedded_install_required branch.  The native-menu
+          // path has no place to host the SetupPromptDialog (it
+          // lives inside ProjectSwitcher, not the routed app
+          // shell), so we surface a banner the user can act on
+          // instead of silently doing nothing.  This was the
+          // "no clear UI behavior" symptom when a perfectly fine-
+          // looking directory came back with broken_install or
+          // needs_setup.
+          const reason =
+            result.status === "needs_setup"
+              ? "directory needs setup — use \"New Project…\" in the picker"
+              : result.status === "broken_install"
+              ? `installation looks broken (${result.brokenness})`
+              : result.status === "embedded_install_required"
+              ? "needs an embedded install: " + result.command
+              : `couldn't open (${(result satisfies never as { status: string }).status})`;
+          setActivationError(`Couldn't open ${path}: ${reason}`);
           return;
         }
-      } catch {
-        const data = await getProjects();
-        const existing = data.projects.find((p) => p.path === path);
-        if (!existing) return;
-        await activateProject(existing.name);
-        id = existing.id;
+      } catch (err) {
+        // ``createProject`` throws on unknown 409 bodies and on
+        // other HTTP errors.  Surface the message and bail
+        // rather than guessing — silent failure was what got us
+        // here in the first place.
+        setActivationError(
+          err instanceof Error ? err.message : String(err),
+        );
+        return;
       }
       await refreshRecentMenu();
       navigate(`/p/${id}/`);

@@ -196,6 +196,15 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
       });
       return;
     }
+    // Defensive: an unhandled discriminator means the wire shape
+    // grew a new case without UI wiring.  Throwing surfaces it via
+    // the caller's catch block instead of silently swallowing —
+    // which is exactly the failure mode the launcher's bare
+    // ``HTTPException`` 409 used to produce.
+    const exhaustive: never = result;
+    throw new Error(
+      `Unhandled create-project result: ${JSON.stringify(exhaustive)}`,
+    );
   };
 
   // ---- Browser-mode fallback (inline form) -------------------------------

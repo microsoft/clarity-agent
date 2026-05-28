@@ -110,8 +110,14 @@ from clarity_agent.projects import ProjectEntry, ProjectRegistry
 
 @dataclass
 class ProcessEntry:
-    """A running per-project server subprocess."""
+    """A running per-project server subprocess.
 
+    Keyed by ``project_id`` (the registry's path-derived hash) so
+    that two projects sharing a display ``project_name`` can coexist
+    without overwriting each other in the process table.
+    """
+
+    project_id: str
     project_name: str
     pid: int
     port: int
@@ -120,32 +126,36 @@ class ProcessEntry:
 
 
 class ProcessTable:
-    """In-memory table of running project server subprocesses."""
+    """In-memory table of running project server subprocesses, keyed
+    by project id.  Display names are not unique (the registry
+    allows duplicate labels at different paths) — keying by id
+    means two same-named projects can run side-by-side without
+    overwriting each other's entries."""
 
     def __init__(self) -> None:
         self._entries: dict[str, ProcessEntry] = {}
 
-    def get(self, name: str) -> ProcessEntry | None:
-        entry = self._entries.get(name)
+    def get(self, project_id: str) -> ProcessEntry | None:
+        entry = self._entries.get(project_id)
         if entry is not None and not self._is_alive(entry):
-            del self._entries[name]
+            del self._entries[project_id]
             return None
         return entry
 
     def add(self, entry: ProcessEntry) -> None:
-        self._entries[entry.project_name] = entry
+        self._entries[entry.project_id] = entry
 
-    def remove(self, name: str) -> ProcessEntry | None:
-        return self._entries.pop(name, None)
+    def remove(self, project_id: str) -> ProcessEntry | None:
+        return self._entries.pop(project_id, None)
 
     def all(self) -> list[ProcessEntry]:
         self.prune_dead()
         return list(self._entries.values())
 
     def prune_dead(self) -> None:
-        dead = [n for n, e in self._entries.items() if not self._is_alive(e)]
-        for n in dead:
-            del self._entries[n]
+        dead = [pid for pid, e in self._entries.items() if not self._is_alive(e)]
+        for pid in dead:
+            del self._entries[pid]
 
     def kill_all(self) -> None:
         for entry in self._entries.values():
@@ -155,8 +165,8 @@ class ProcessTable:
                 pass
         self._entries.clear()
 
-    def touch(self, name: str) -> None:
-        entry = self._entries.get(name)
+    def touch(self, project_id: str) -> None:
+        entry = self._entries.get(project_id)
         if entry is not None:
             entry.last_activity = time.time()
 
@@ -220,15 +230,20 @@ def create_launcher(
     """
     registry = ProjectRegistry()
     processes = ProcessTable()
-    active_project: dict[str, str | None] = {"name": None}
+    # ``id`` (the registry's stable path-derived hash) — unique
+    # even when two projects share a display name.  See the
+    # ProcessEntry docstring for why this matters.
+    active_project: dict[str, str | None] = {"id": None}
 
     # Discover projects in the default workspace on startup.
     registry.discover()
 
-    # Restore last-active project name from the persistent registry.
-    _persisted_active = registry.get_active()
-    if _persisted_active and registry.get(_persisted_active) is not None:
-        active_project["name"] = _persisted_active
+    # Restore last-active project id from the persistent registry.
+    # ``get_active`` reads the new ``active_id`` key with a legacy
+    # fallback to the old name-keyed ``active`` field.
+    _persisted_active_id = registry.get_active()
+    if _persisted_active_id and registry.get_by_id(_persisted_active_id) is not None:
+        active_project["id"] = _persisted_active_id
 
     from clarity_agent.app_paths import clarity_env_path
     _env_path = env_path or clarity_env_path()
@@ -248,10 +263,10 @@ def create_launcher(
             await asyncio.sleep(60)
             for entry in processes.idle_entries(_IDLE_TIMEOUT_SECONDS):
                 # Don't reap the active project
-                if entry.project_name == active_project["name"]:
+                if entry.project_id == active_project["id"]:
                     continue
                 entry.process.terminate()
-                processes.remove(entry.project_name)
+                processes.remove(entry.project_id)
 
     app = FastAPI(title="Clarity Launcher", lifespan=lifespan)
 
@@ -341,6 +356,7 @@ def create_launcher(
             t.start()
 
         entry = ProcessEntry(
+            project_id=project.id,
             project_name=project.name,
             pid=proc.pid,
             port=port,
@@ -351,16 +367,16 @@ def create_launcher(
 
     async def _ensure_running(project: ProjectEntry) -> ProcessEntry:
         """Return a running ProcessEntry, spawning if needed."""
-        entry = processes.get(project.name)
+        entry = processes.get(project.id)
         if entry is not None:
-            processes.touch(project.name)
+            processes.touch(project.id)
             return entry
 
         entry = await asyncio.to_thread(_spawn_server, project)
         ok = await _wait_for_server(entry.port)
         if not ok:
             entry.process.terminate()
-            processes.remove(project.name)
+            processes.remove(project.id)
             raise RuntimeError(
                 f"Project server for {project.name!r} failed to start"
             )
@@ -371,22 +387,22 @@ def create_launcher(
 
         Returns the ProcessEntry if the server is (now) running, or None
         if there's no active project.  This handles the common case of a
-        launcher restart: the active project name is persisted but the
+        launcher restart: the active project id is persisted but the
         subprocess is gone.
         """
-        name = active_project["name"]
-        if name is None:
+        project_id = active_project["id"]
+        if project_id is None:
             return None
-        entry = processes.get(name)
+        entry = processes.get(project_id)
         if entry is not None:
-            processes.touch(name)
+            processes.touch(project_id)
             return entry
         # Server not running — try to (re)start it.
-        project = registry.get(name)
+        project = registry.get_by_id(project_id)
         if project is None or not Path(project.path).is_dir():
             if project is not None:
                 registry.remove(project.name)
-            active_project["name"] = None
+            active_project["id"] = None
             registry.clear_active()
             return None
         try:
@@ -425,12 +441,12 @@ def create_launcher(
         gone = [p for p in projects if not Path(p.path).is_dir()]
         for p in gone:
             registry.remove(p.name)
-            if p.name == active_project["name"]:
-                active_project["name"] = None
+            if p.id == active_project["id"]:
+                active_project["id"] = None
                 registry.clear_active()
         if gone:
             projects = [p for p in projects if Path(p.path).is_dir()]
-        running_names = {e.project_name for e in processes.all()}
+        running_ids = {e.project_id for e in processes.all()}
         return {
             "projects": [
                 {
@@ -439,8 +455,8 @@ def create_launcher(
                     "path": p.path,
                     "last_opened": p.last_opened,
                     "has_protocol": p.has_protocol,
-                    "running": p.name in running_names,
-                    "active": p.name == active_project["name"],
+                    "running": p.id in running_ids,
+                    "active": p.id == active_project["id"],
                 }
                 for p in projects
             ],
@@ -571,10 +587,12 @@ def create_launcher(
                         "path": str(project_path),
                     }
 
-        try:
-            entry = registry.add(name, project_path)
-        except ValueError as e:
-            raise HTTPException(status_code=409, detail=str(e)) from e
+        # ``registry.add`` is now path-keyed and idempotent — same
+        # path returns the existing entry, duplicate display names
+        # are allowed (two projects in different directories are
+        # genuinely different projects).  The old name-conflict 409
+        # path is unreachable.
+        entry = registry.add(name, project_path)
 
         return {
             "status": "ok",
@@ -587,12 +605,16 @@ def create_launcher(
 
     @app.delete("/api/projects/{name}")
     async def remove_project(name: str) -> dict[str, str]:
-        # Stop the server if running
-        proc = processes.remove(name)
-        if proc is not None:
-            proc.process.terminate()
-        if active_project["name"] == name:
-            active_project["name"] = None
+        # Resolve via registry so we can stop the right subprocess
+        # and clear active state when there are duplicate names.
+        project = registry.get(name)
+        if project is not None:
+            proc = processes.remove(project.id)
+            if proc is not None:
+                proc.process.terminate()
+            if active_project["id"] == project.id:
+                active_project["id"] = None
+                registry.clear_active()
         registry.remove(name)
         return {"status": "removed"}
 
@@ -600,17 +622,17 @@ def create_launcher(
         """Activate a project: start its server and mark it active."""
         if not Path(project.path).is_dir():
             registry.remove(project.name)
-            if active_project["name"] == project.name:
-                active_project["name"] = None
+            if active_project["id"] == project.id:
+                active_project["id"] = None
                 registry.clear_active()
             raise HTTPException(
                 status_code=410,
                 detail=f"Project directory no longer exists: {project.path}",
             )
         entry = await _ensure_running(project)
-        active_project["name"] = project.name
+        active_project["id"] = project.id
         registry.touch(project.name)
-        registry.set_active(project.name)
+        registry.set_active(project.id)
 
         # Fetch session info from the project server
         async with httpx.AsyncClient() as client:
@@ -633,6 +655,9 @@ def create_launcher(
 
     @app.post("/api/projects/{name}/activate")
     async def activate_project(name: str) -> dict[str, Any]:
+        # Name-keyed activation is first-match across duplicates;
+        # frontends with a known id should prefer
+        # ``activate-by-id`` to disambiguate.
         project = registry.get(name)
         if project is None:
             raise HTTPException(status_code=404, detail=f"Project not found: {name}")
@@ -647,24 +672,27 @@ def create_launcher(
 
     @app.post("/api/projects/{name}/deactivate")
     async def deactivate_project(name: str) -> dict[str, str]:
-        proc = processes.remove(name)
-        if proc is not None:
-            proc.process.terminate()
-        if active_project["name"] == name:
-            active_project["name"] = None
-            registry.clear_active()
+        project = registry.get(name)
+        if project is not None:
+            proc = processes.remove(project.id)
+            if proc is not None:
+                proc.process.terminate()
+            if active_project["id"] == project.id:
+                active_project["id"] = None
+                registry.clear_active()
         return {"status": "deactivated"}
 
     @app.get("/api/projects/active")
     async def get_active_project() -> dict[str, Any]:
-        name = active_project["name"]
-        if name is None:
+        project_id = active_project["id"]
+        if project_id is None:
             return {"active": False}
-        project = registry.get(name)
-        entry = processes.get(name) if name else None
+        project = registry.get_by_id(project_id)
+        entry = processes.get(project_id)
         return {
             "active": True,
-            "name": name,
+            "id": project_id,
+            "name": project.name if project else None,
             "path": project.path if project else None,
             "running": entry is not None,
         }
@@ -720,22 +748,28 @@ def create_launcher(
                         # if we got here.  Preserve the chat-session
                         # flag separately so the UI can distinguish.
                         data["active"] = True
-                        # Include project ID so the frontend can build
-                        # project-scoped URLs.
-                        name = active_project["name"]
-                        if name:
-                            proj = registry.get(name)
-                            if proj:
-                                data["project_id"] = proj.id
+                        # Include project id + path so the frontend
+                        # can build project-scoped URLs and so the
+                        # ProjectSwitcher's ``isCurrent`` comparison
+                        # matches the right entry even when display
+                        # names collide.  Resolve via id so duplicates
+                        # don't fall back to first-match.
+                        project_id = active_project["id"]
+                        proj = (
+                            registry.get_by_id(project_id)
+                            if project_id else None
+                        )
+                        if proj:
+                            data["project_id"] = proj.id
+                            data["project_dir"] = proj.path
                         # Persist SDK session ID so we can resume after
                         # a launcher restart.
                         new_sid = data.get("llm_session_id")
-                        name = active_project["name"]
-                        if new_sid and name:
+                        if new_sid and proj and proj.llm_session_id != new_sid:
                             try:
-                                proj = registry.get(name)
-                                if proj and proj.llm_session_id != new_sid:
-                                    registry.update(name, llm_session_id=new_sid)
+                                registry.update(
+                                    proj.name, llm_session_id=new_sid,
+                                )
                             except Exception:
                                 pass  # don't break the proxy
                         return data
@@ -775,10 +809,10 @@ def create_launcher(
             await ws.close()
             return
 
-        name = active_project["name"]
-        assert name is not None  # guaranteed by _ensure_active_running success
+        project_id = active_project["id"]
+        assert project_id is not None  # guaranteed by _ensure_active_running success
 
-        processes.touch(name)
+        processes.touch(project_id)
 
         # Connect to the project server's WebSocket.
         # websockets 13+ uses websockets.asyncio.client.

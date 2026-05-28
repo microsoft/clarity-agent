@@ -13,13 +13,21 @@ from clarity_agent.web.launcher import ProcessEntry, ProcessTable, _find_free_po
 # ProcessTable tests
 # ---------------------------------------------------------------------------
 
-def _make_entry(name: str, alive: bool = True) -> ProcessEntry:
-    """Create a ProcessEntry with a mocked subprocess."""
+def _make_entry(
+    id_: str, name: str | None = None, alive: bool = True,
+) -> ProcessEntry:
+    """Create a ProcessEntry with a mocked subprocess.
+
+    The table is keyed by ``project_id``; ``project_name`` is kept
+    around as metadata for display.  Tests default ``name`` to the
+    id so collision-free cases stay terse.
+    """
     proc = MagicMock(spec=subprocess.Popen)
     proc.poll.return_value = None if alive else 1
     proc.pid = 12345
     return ProcessEntry(
-        project_name=name,
+        project_id=id_,
+        project_name=name if name is not None else id_,
         pid=proc.pid,
         port=9000,
         process=proc,
@@ -61,7 +69,7 @@ class TestProcessTable:
         table.add(_make_entry("dead", alive=False))
         entries = table.all()
         assert len(entries) == 1
-        assert entries[0].project_name == "alive"
+        assert entries[0].project_id == "alive"
 
     def test_kill_all(self) -> None:
         table = ProcessTable()
@@ -95,7 +103,20 @@ class TestProcessTable:
         table.add(new)
         idle = table.idle_entries(1800)
         assert len(idle) == 1
-        assert idle[0].project_name == "old"
+        assert idle[0].project_id == "old"
+
+    def test_duplicate_names_at_different_ids_coexist(self) -> None:
+        # The whole reason for keying by id: two projects sharing
+        # a display name shouldn't overwrite each other in the
+        # process table.
+        table = ProcessTable()
+        a = _make_entry("id-a", name="raas2")
+        b = _make_entry("id-b", name="raas2")
+        table.add(a)
+        table.add(b)
+        assert table.get("id-a") is a
+        assert table.get("id-b") is b
+        assert len(table.all()) == 2
 
 
 # ---------------------------------------------------------------------------

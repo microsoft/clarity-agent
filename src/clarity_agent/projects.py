@@ -73,14 +73,44 @@ class ProjectRegistry:
         return sorted(entries, key=lambda e: e.last_opened, reverse=True)
 
     def add(self, name: str, path: str | Path) -> ProjectEntry:
-        """Register a new project.  Raises ``ValueError`` if the name is taken."""
-        path = str(Path(path).resolve())
+        """Register (or re-open) a project.
+
+        Path is the primary identity — a project directory is the
+        thing that uniquely identifies a project.  Re-adding the
+        same path is idempotent: returns the existing entry without
+        touching disk, so "open project" is safe to call against an
+        already-registered directory.
+
+        The display ``name`` is *not* a uniqueness constraint.  Two
+        projects in different directories can share the same name —
+        the launcher disambiguates by ``id`` (a stable hash of the
+        path) for activation and process-table lookups.  A caller
+        re-registering an existing path with a *different* name
+        wins: the entry is renamed.
+
+        The launcher's runtime state is id-keyed throughout —
+        ``active_project["id"]``, the ``processes`` table, and the
+        proxy-routing path all dispatch on id.  The legacy
+        name-keyed routes (``activate_project``,
+        ``deactivate_project``, ``remove_project``) resolve via
+        registry first and then dispatch by id; with duplicate
+        names they still fall back to first-match.  Frontends with
+        a known id should prefer the id-keyed variants
+        (``activate-by-id``, ``getActiveProject``-returned ids).
+        """
+        path_str = str(Path(path).resolve())
         entries = self._read()
 
-        if any(e.name == name for e in entries):
-            raise ValueError(f"Project name already exists: {name!r}")
+        for e in entries:
+            if e.path == path_str:
+                # Idempotent reopen.  Honor a name change if the
+                # caller supplied a different one.
+                if e.name != name:
+                    e.name = name
+                    self._write(entries)
+                return e
 
-        entry = ProjectEntry(name=name, path=path)
+        entry = ProjectEntry(name=name, path=path_str)
         entry.refresh()
         entries.append(entry)
         self._write(entries)
@@ -161,19 +191,39 @@ class ProjectRegistry:
     # -- Active project persistence ----------------------------------------
 
     def get_active(self) -> str | None:
-        """Return the name of the last-active project, or ``None``."""
-        data = self._read_raw()
-        return data.get("active")
+        """Return the *id* of the last-active project, or ``None``.
 
-    def set_active(self, name: str) -> None:
-        """Persist *name* as the active project."""
+        Persisted under the ``"active_id"`` key.  Legacy registries
+        stored ``"active"`` as a project *name*; we read both forms
+        for compat (preferring id when present) and migrate to id on
+        the next :meth:`set_active`.  The migration is silent so
+        startup never blocks on a registry rewrite.
+        """
         data = self._read_raw()
-        data["active"] = name
+        active_id = data.get("active_id")
+        if active_id:
+            return active_id
+        # Legacy name-keyed value — try to resolve to an id so
+        # consumers don't have to know about the format change.
+        legacy_name = data.get("active")
+        if legacy_name:
+            existing = self.get(legacy_name)
+            if existing is not None:
+                return existing.id
+        return None
+
+    def set_active(self, project_id: str) -> None:
+        """Persist *project_id* as the active project.  Clears any
+        legacy ``"active"`` name field so it doesn't drift."""
+        data = self._read_raw()
+        data["active_id"] = project_id
+        data.pop("active", None)
         self._write_raw(data)
 
     def clear_active(self) -> None:
-        """Clear the persisted active project."""
+        """Clear the persisted active project (both id and legacy name)."""
         data = self._read_raw()
+        data.pop("active_id", None)
         data.pop("active", None)
         self._write_raw(data)
 

@@ -210,6 +210,18 @@ export type CreateProjectResult =
   | { status: "broken_install"; brokenness: string; path: string }
   | { status: "embedded_install_required"; command: string; path: string };
 
+// Set of recognized status discriminators, kept next to the union
+// so the runtime guard below can't drift from the type.  Name
+// collisions are NOT a status — the registry is path-keyed and
+// allows duplicate display names; same-path reopens come back as
+// "ok".
+const KNOWN_CREATE_PROJECT_STATUSES = new Set([
+  "ok",
+  "needs_setup",
+  "broken_install",
+  "embedded_install_required",
+]);
+
 /**
  * Register / set up a project.  See the server-side docstring on
  * ``create_project`` for the per-(intent, mode, disk-state)
@@ -229,9 +241,12 @@ export async function createProject(args: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
-  // The launcher returns 409 with structured bodies for the two
-  // setup-decision-needed cases; everything else is either a
-  // success (200) or a genuine error.
+  // The launcher returns 409 with structured bodies whose
+  // ``status`` field discriminates the case (broken_install,
+  // needs_setup, name_conflict, …).  Anything else — 4xx without
+  // a recognised status, 5xx, network — throws so the caller's
+  // catch block surfaces it instead of the UI silently swallowing
+  // a body it doesn't understand.
   if (res.status === 200 || res.status === 409) {
     const body = await res.json();
     if (res.status === 200 && !body.status) {
@@ -242,7 +257,14 @@ export async function createProject(args: {
       const { status: _s, ...entry } = body;
       return { status: "ok", entry: entry as ProjectEntry };
     }
-    return body as CreateProjectResult;
+    if (KNOWN_CREATE_PROJECT_STATUSES.has(body?.status)) {
+      return body as CreateProjectResult;
+    }
+    // Unrecognised body — most often FastAPI's ``{"detail": ...}``
+    // from a bare ``HTTPException``.  Throw with the most useful
+    // string we can pull out so the caller's catch surfaces it.
+    const reason = body?.detail || body?.message || JSON.stringify(body);
+    throw new Error(`${res.status}: ${reason}`);
   }
   const errorBody = await res.text();
   throw new Error(`${res.status}: ${errorBody}`);

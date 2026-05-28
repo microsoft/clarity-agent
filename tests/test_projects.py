@@ -56,16 +56,46 @@ class TestRegistryBasics:
         assert len(entries) == 1
         assert entries[0].name == "proj"
 
-    def test_add_duplicate_name_raises(
+    def test_add_duplicate_name_at_different_paths_both_register(
         self, registry: ProjectRegistry, tmp_path: Path,
     ) -> None:
+        # Path is the registry's primary key — display ``name`` is
+        # not a uniqueness constraint.  Two genuinely-different
+        # projects in different directories can share a display
+        # label; the entries are still distinguishable by ``id``.
         d1 = tmp_path / "a"
         d1.mkdir()
         d2 = tmp_path / "b"
         d2.mkdir()
-        registry.add("same", d1)
-        with pytest.raises(ValueError, match="already exists"):
-            registry.add("same", d2)
+        e1 = registry.add("same", d1)
+        e2 = registry.add("same", d2)
+        assert e1.id != e2.id
+        assert {e.path for e in registry.list()} == {str(d1), str(d2)}
+
+    def test_add_same_path_is_idempotent(
+        self, registry: ProjectRegistry, tmp_path: Path,
+    ) -> None:
+        # Re-adding the same path returns the existing entry — no
+        # duplicate row, no exception.  This is what makes "open
+        # project" safe to call against an already-registered dir.
+        d = tmp_path / "proj"
+        d.mkdir()
+        first = registry.add("proj", d)
+        second = registry.add("proj", d)
+        assert first.id == second.id
+        assert len(registry.list()) == 1
+
+    def test_add_same_path_different_name_renames(
+        self, registry: ProjectRegistry, tmp_path: Path,
+    ) -> None:
+        # User re-opening the same path with a new label: relabel
+        # the existing entry rather than creating a duplicate.
+        d = tmp_path / "proj"
+        d.mkdir()
+        registry.add("old-label", d)
+        updated = registry.add("new-label", d)
+        assert updated.name == "new-label"
+        assert len(registry.list()) == 1
 
     def test_remove(
         self, registry: ProjectRegistry, sample_project: Path,
