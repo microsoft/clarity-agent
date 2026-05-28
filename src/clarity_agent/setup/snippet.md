@@ -16,7 +16,7 @@ This project uses the Clarity Protocol for structured thinking about consequenti
 
 **Before building — think when it matters.** Two triggers:
 
-1. *The user asks.* When they want to explore what to build, clarify requirements, brainstorm risks, or work through a decision: call the `run_clarity` MCP tool, or read and follow `{{PROCESSES_DIR}}/clarity-agent.md` if MCP isn't available.
+1. *The user asks.* When they want to explore what to build, clarify requirements, brainstorm risks, or work through a decision: first check whether the `run_clarity` MCP tool is in your available tools. If it is, use the MCP tools. If it isn't, read and follow `{{PROCESSES_DIR}}/clarity-agent.md` directly. Don't ask the user which to use; make this determination yourself.
 
 2. *You recognize an inflection point.* Before making choices that would be expensive to reverse — new services, auth/trust models, data schemas, external integrations, significant API contracts — call `check_decision` with what you plan to do. It returns existing decisions, requirements, and architecture so you can check for conflicts. Don't interrupt for routine implementation. The test: "If this turns out wrong, is it a 5-minute fix or a multi-day rework?" Interrupt for the latter.
 

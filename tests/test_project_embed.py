@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from clarity_agent.setup.layout import (
 )
 from clarity_agent.setup.project import (
     _is_pip_installed,
+    _mcp_json_pip,
     _mcp_json_uv,
     create_mcp_json,
 )
@@ -32,7 +34,11 @@ def _layout(project: Path, agent: Path) -> ProjectLayout:
 
 
 class TestIsPipInstalled:
-    """Detection of pip vs. uv install mode."""
+    """Deterministic detection of pip vs. uv install mode.
+
+    No runtime interpreter probing — the result is a pure function of
+    the agent directory's contents, so the chosen mode is reproducible.
+    """
 
     def test_returns_false_when_pyproject_has_tool_uv(self, tmp_path: Path) -> None:
         """A pyproject.toml with [tool.uv] signals a uv-managed checkout."""
@@ -40,34 +46,24 @@ class TestIsPipInstalled:
         pyproject.write_text("[project]\nname = 'test'\n\n[tool.uv]\n")
         assert _is_pip_installed(tmp_path) is False
 
+    def test_returns_false_when_uv_lock_present(self, tmp_path: Path) -> None:
+        """A uv.lock alone signals a uv-managed checkout."""
+        (tmp_path / "uv.lock").write_text("")
+        assert _is_pip_installed(tmp_path) is False
+
     def test_returns_true_when_pyproject_lacks_tool_uv(self, tmp_path: Path) -> None:
-        """No [tool.uv] section means pip mode, if subprocess succeeds."""
+        """No [tool.uv] section and no uv.lock means pip mode."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text("[project]\nname = 'test'\n")
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            assert _is_pip_installed(tmp_path) is True
+        assert _is_pip_installed(tmp_path) is True
 
-    def test_returns_false_when_no_python_on_path(self, tmp_path: Path) -> None:
-        """No python binary on PATH means not pip-installed."""
-        with patch("shutil.which", return_value=None):
-            assert _is_pip_installed(tmp_path) is False
+    def test_returns_true_when_no_uv_markers(self, tmp_path: Path) -> None:
+        """An agent dir with neither pyproject nor uv.lock means pip mode."""
+        assert _is_pip_installed(tmp_path) is True
 
-    def test_returns_false_when_subprocess_fails(self, tmp_path: Path) -> None:
-        """Subprocess returning non-zero means not pip-installed."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 1
-            assert _is_pip_installed(tmp_path) is False
-
-    def test_returns_false_when_subprocess_times_out(self, tmp_path: Path) -> None:
-        """Subprocess timeout means not pip-installed."""
-        with patch("subprocess.run", side_effect=Exception("timeout")):
-            assert _is_pip_installed(tmp_path) is False
-
-    def test_none_agent_dir_skips_pyproject_check(self) -> None:
-        """When agent_dir is None, skip pyproject check and probe system."""
-        with patch("shutil.which", return_value=None):
-            assert _is_pip_installed(None) is False
+    def test_none_agent_dir_defaults_to_pip(self) -> None:
+        """When agent_dir is unknown, default to the pinned pip invocation."""
+        assert _is_pip_installed(None) is True
 
 
 class TestMcpJsonUv:
@@ -104,14 +100,83 @@ class TestCreateMcpJson:
         assert (project / ".vscode" / "mcp.json").exists()
         assert "pip" in result.message
 
-    def test_skips_when_exists(self, tmp_path: Path) -> None:
+    def test_merges_into_empty_existing_file(self, tmp_path: Path) -> None:
+        """An existing empty-object mcp.json gets clarity-agent added."""
         project = self._make_project(tmp_path)
         vscode = project / ".vscode"
         vscode.mkdir()
         (vscode / "mcp.json").write_text("{}")
-        result = create_mcp_json(_layout(project, tmp_path))
+        with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
+            result = create_mcp_json(_layout(project, tmp_path))
         assert result.outcome == Outcome.OK
-        assert "already exists" in result.message
+        assert "Added" in result.message
+        content = json.loads((vscode / "mcp.json").read_text())
+        assert "clarity-agent" in content["servers"]
+
+    def test_preserves_other_servers(self, tmp_path: Path) -> None:
+        """Other MCP servers in the file survive the merge."""
+        project = self._make_project(tmp_path)
+        vscode = project / ".vscode"
+        vscode.mkdir()
+        existing = {
+            "servers": {
+                "other-tool": {"type": "stdio", "command": "other"}
+            },
+            "inputs": [{"id": "foo"}],
+        }
+        (vscode / "mcp.json").write_text(json.dumps(existing, indent=2))
+        with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
+            result = create_mcp_json(_layout(project, tmp_path))
+        assert result.outcome == Outcome.OK
+        content = json.loads((vscode / "mcp.json").read_text())
+        # Our server added.
+        assert "clarity-agent" in content["servers"]
+        # Their server preserved.
+        assert content["servers"]["other-tool"]["command"] == "other"
+        # Top-level keys preserved.
+        assert content["inputs"] == [{"id": "foo"}]
+
+    def test_idempotent_when_already_current(self, tmp_path: Path) -> None:
+        """Re-running embed when clarity-agent is already correct is a no-op."""
+        project = self._make_project(tmp_path)
+        agent_dir = tmp_path / "agent"
+        agent_dir.mkdir()
+        with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
+            create_mcp_json(_layout(project, agent_dir))
+            mtime = (project / ".vscode" / "mcp.json").stat().st_mtime_ns
+            result = create_mcp_json(_layout(project, agent_dir))
+        assert result.outcome == Outcome.OK
+        assert "already has current" in result.message
+        assert (project / ".vscode" / "mcp.json").stat().st_mtime_ns == mtime
+
+    def test_updates_stale_entry(self, tmp_path: Path) -> None:
+        """A stale clarity-agent entry is replaced on re-embed."""
+        project = self._make_project(tmp_path)
+        vscode = project / ".vscode"
+        vscode.mkdir()
+        stale = {"servers": {"clarity-agent": {"command": "python", "args": []}}}
+        (vscode / "mcp.json").write_text(json.dumps(stale))
+        with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
+            result = create_mcp_json(_layout(project, tmp_path))
+        assert result.outcome == Outcome.OK
+        assert "Updated" in result.message
+        content = json.loads((vscode / "mcp.json").read_text())
+        assert content["servers"]["clarity-agent"]["command"] != "python"
+
+    def test_warns_on_unparseable_jsonc(self, tmp_path: Path) -> None:
+        """JSONC with comments is left untouched; a WARN shows the block."""
+        project = self._make_project(tmp_path)
+        vscode = project / ".vscode"
+        vscode.mkdir()
+        original = '// This is a JSONC comment\n{"servers": {}}'
+        (vscode / "mcp.json").write_text(original)
+        with patch("clarity_agent.setup.project._is_pip_installed", return_value=True):
+            result = create_mcp_json(_layout(project, tmp_path))
+        assert result.outcome == Outcome.WARN
+        assert "not strict JSON" in result.message
+        assert "clarity-agent" in result.message
+        # File untouched.
+        assert (vscode / "mcp.json").read_text() == original
 
     def test_uv_mode_includes_path_warning(self, tmp_path: Path) -> None:
         project = self._make_project(tmp_path)
@@ -131,7 +196,11 @@ class TestCreateMcpJson:
             create_mcp_json(_layout(project, agent_dir))
         content = json.loads((project / ".vscode" / "mcp.json").read_text())
         server = content["servers"]["clarity-agent"]
-        assert server["command"] == "python"
+        # Pinned to the resolved absolute interpreter, never the bare string "python".
+        expected = str(Path(sys.executable).resolve())
+        assert server["command"] == expected
+        assert server["command"] != "python"
+        assert server["args"] == ["-m", "clarity_agent.mcp"]
 
     def test_uv_mode_content(self, tmp_path: Path) -> None:
         project = self._make_project(tmp_path)
@@ -142,3 +211,51 @@ class TestCreateMcpJson:
         content = json.loads((project / ".vscode" / "mcp.json").read_text())
         server = content["servers"]["clarity-agent"]
         assert server["command"] == "uv"
+
+
+
+class TestMcpJsonPipEdgeCases:
+    """Stress tests for _mcp_json_pip across sys.executable variants."""
+
+    @staticmethod
+    def _server(raw: str) -> dict:
+        return json.loads(raw)["servers"]["clarity-agent"]
+
+    @staticmethod
+    def _noop_resolve(p: Path) -> Path:
+        """Stub out Path.resolve so fake Windows paths aren't mangled on Linux."""
+        return p
+
+    def test_path_with_spaces(self) -> None:
+        with patch.object(sys, "executable", "C:\\Program Files\\Python311\\python.exe"), \
+             patch.object(Path, "resolve", self._noop_resolve):
+            s = self._server(_mcp_json_pip())
+            assert s["command"] == "C:\\Program Files\\Python311\\python.exe"
+
+    def test_unicode_path(self) -> None:
+        with patch.object(sys, "executable", "C:\\Users\\\u00e9v\u00e9\\python.exe"), \
+             patch.object(Path, "resolve", self._noop_resolve):
+            s = self._server(_mcp_json_pip())
+            assert s["command"] == "C:\\Users\\\u00e9v\u00e9\\python.exe"
+
+    def test_empty_executable(self) -> None:
+        """Empty sys.executable (embedded Python) doesn't crash."""
+        with patch.object(sys, "executable", ""), \
+             patch.object(Path, "resolve", self._noop_resolve):
+            s = self._server(_mcp_json_pip())
+            assert s["command"] == "."
+
+    def test_native_separators_preserved(self) -> None:
+        """Path.resolve() returns native separators; no slash conversion."""
+        with patch.object(sys, "executable", "C:\\Users\\eve\\.venv\\Scripts\\python.exe"), \
+             patch.object(Path, "resolve", self._noop_resolve):
+            s = self._server(_mcp_json_pip())
+            # On Windows the backslashes would be native; we no longer convert.
+            assert s["command"] == "C:\\Users\\eve\\.venv\\Scripts\\python.exe"
+
+    def test_json_structure(self) -> None:
+        """Output is always valid JSON with expected keys."""
+        parsed = json.loads(_mcp_json_pip())
+        server = parsed["servers"]["clarity-agent"]
+        assert server["type"] == "stdio"
+        assert server["env"]["CLARITY_PROJECT_DIR"] == "${workspaceFolder}"

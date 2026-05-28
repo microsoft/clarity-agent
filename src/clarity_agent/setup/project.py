@@ -77,20 +77,30 @@ if %errorlevel% == 0 (
 )
 """
 
-_MCP_JSON_PIP = """\
-{
-  "servers": {
-    "clarity-agent": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["-m", "clarity_agent.mcp"],
-      "env": {
-        "CLARITY_PROJECT_DIR": "${workspaceFolder}"
-      }
+def _mcp_json_pip() -> str:
+    """Generate mcp.json content for pip-style installs.
+
+    Pins the absolute interpreter that owns ``clarity_agent``
+    (``sys.executable``) rather than the bare string ``"python"``, so
+    VS Code can't resolve a different interpreter on PATH at launch
+    time.
+    """
+    import json as _json
+
+    python = str(Path(sys.executable).resolve())
+    config = {
+        "servers": {
+            "clarity-agent": {
+                "type": "stdio",
+                "command": python,
+                "args": ["-m", "clarity_agent.mcp"],
+                "env": {
+                    "CLARITY_PROJECT_DIR": "${workspaceFolder}"
+                },
+            }
+        }
     }
-  }
-}
-"""
+    return _json.dumps(config, indent=2)
 
 
 def _mcp_json_uv(agent_dir: Path) -> str:
@@ -113,42 +123,31 @@ def _mcp_json_uv(agent_dir: Path) -> str:
             }
         }
     }
-    return _json.dumps(config, indent=2) + "\n"
+    return _json.dumps(config, indent=2)
 
 
 def _is_pip_installed(agent_dir: Path | None = None) -> bool:
-    """Check if clarity-agent is globally pip-installed.
+    """Return True when embed should use the pip-style MCP invocation.
 
-    Returns False (defaulting to uv mode) when the agent directory
-    contains a pyproject.toml with a ``[tool.uv]`` section, which
-    indicates a uv-managed source checkout rather than a pip install.
-    Otherwise probes the system Python to verify the MCP module is
-    importable.
+    Deterministic, no runtime interpreter probing — the chosen mode
+    must be reproducible. A uv-managed source checkout (``agent_dir``
+    has a ``uv.lock`` or a ``pyproject.toml`` with a ``[tool.uv]``
+    section) uses the uv invocation (returns False); anything else,
+    including the case where ``agent_dir`` is unknown, uses the
+    pip invocation pinned to :data:`sys.executable` (returns True).
     """
-    import shutil
-    import subprocess
-
-    if agent_dir is not None:
-        pyproject = agent_dir / "pyproject.toml"
-        if pyproject.exists():
-            try:
-                content = pyproject.read_text(encoding="utf-8")
-                if "[tool.uv]" in content:
-                    return False
-            except OSError:
-                pass
-
-    python = shutil.which("python")
-    if not python:
+    if agent_dir is None:
+        return True
+    if (agent_dir / "uv.lock").exists():
         return False
-    try:
-        r = subprocess.run(
-            [python, "-m", "clarity_agent.mcp", "--help"],
-            capture_output=True, timeout=3,
-        )
-        return r.returncode == 0
-    except Exception:
-        return False
+    pyproject = agent_dir / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            if "[tool.uv]" in pyproject.read_text(encoding="utf-8"):
+                return False
+        except OSError:
+            pass
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -244,28 +243,68 @@ def create_project_wrapper(layout: ProjectLayout) -> StepResult:
 
 
 def create_mcp_json(layout: ProjectLayout) -> StepResult:
-    """Create .vscode/mcp.json for MCP server integration.
+    """Create or update .vscode/mcp.json for MCP server integration.
 
-    Detects whether clarity is pip-installed or running from a local
-    clone (via :func:`_is_pip_installed`), and generates the
-    appropriate MCP server configuration.
+    Merges the ``clarity-agent`` server entry into any existing
+    ``.vscode/mcp.json``, preserving other servers and top-level keys
+    (e.g. ``inputs``).  Behavior per edge case:
+
+    - **No file**: writes a fresh config.
+    - **Existing file, parseable JSON**: merges only the
+      ``clarity-agent`` key under ``servers``, keeping everything
+      else.  Writes only when the content would change (idempotent).
+    - **Existing file, unparseable** (JSONC with comments, malformed):
+      leaves the file untouched and returns a WARN with the block to
+      paste manually.  We never reformat or clobber a file we can't
+      round-trip safely.
     """
+    import json as _json
+
     project_dir = layout.project_dir
     agent_dir = layout.clarity_agent_dir
     vscode_dir = project_dir / ".vscode"
     mcp_json = vscode_dir / "mcp.json"
-    if mcp_json.exists():
-        return StepResult(Outcome.OK, ".vscode/mcp.json already exists")
+
+    # Build the clarity-agent server entry for the detected mode.
+    if _is_pip_installed(agent_dir):
+        our_full = _json.loads(_mcp_json_pip())
+        mode = "pip"
+    else:
+        our_full = _json.loads(_mcp_json_uv(agent_dir))
+        mode = "uv"
+    our_entry = our_full["servers"]["clarity-agent"]
+
     try:
-        vscode_dir.mkdir(exist_ok=True)
-        if _is_pip_installed(agent_dir):
-            content = _MCP_JSON_PIP
-            mode = "pip"
+        if mcp_json.exists():
+            raw = mcp_json.read_text(encoding="utf-8")
+            try:
+                existing = _json.loads(raw)
+            except (ValueError, _json.JSONDecodeError):
+                # Unparseable (JSONC comments, malformed, etc.).
+                # Don't touch; show the user what to add manually.
+                block = _json.dumps({"clarity-agent": our_entry}, indent=2)
+                return StepResult(
+                    Outcome.WARN,
+                    f".vscode/mcp.json exists but is not strict JSON; "
+                    f"add this to the \"servers\" object manually:\n{block}",
+                )
+            # Merge: ensure "servers" exists, then set our key.
+            servers = existing.setdefault("servers", {})
+            if servers.get("clarity-agent") == our_entry:
+                return StepResult(
+                    Outcome.OK,
+                    ".vscode/mcp.json already has current clarity-agent config",
+                )
+            servers["clarity-agent"] = our_entry
+            content = _json.dumps(existing, indent=2) + "\n"
+            verb = "Updated" if "clarity-agent" in raw else "Added"
         else:
-            content = _mcp_json_uv(agent_dir)
-            mode = "uv"
+            vscode_dir.mkdir(exist_ok=True)
+            content = _json.dumps(our_full, indent=2) + "\n"
+            verb = "Created"
+
         mcp_json.write_text(content, encoding="utf-8")
-        msg = f"Created .vscode/mcp.json (MCP config, {mode} mode)"
+        msg = f"{verb} .vscode/mcp.json (clarity-agent, {mode} mode)"
         if mode == "uv":
             dir_str = str(agent_dir).replace("\\", "/")
             msg += f". Note: references {dir_str}, re-run embed if you move it"
