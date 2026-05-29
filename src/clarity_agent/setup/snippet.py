@@ -39,7 +39,7 @@ END_DELIMITER = "<!-- clarity-end -->"
 # the per-project values (mode / protocol_dir_name / processes_dir)
 # have moved.  Resist bumping for cosmetic copy edits; the resulting
 # in-place rewrites are an upgrade-time tax on every user.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _META_BEGIN = "<!-- clarity-meta"
 _META_END = "-->"

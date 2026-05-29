@@ -334,7 +334,7 @@ class TestEnsureAgentsMd:
 
         # Force a rewrite via meta drift.
         tampered = layout.agents_md.read_text().replace(
-            "schema_version: 1", "schema_version: 0",
+            f"schema_version: {SCHEMA_VERSION}", "schema_version: 0",
         )
         layout.agents_md.write_text(tampered)
 

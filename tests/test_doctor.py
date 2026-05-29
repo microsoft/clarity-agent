@@ -162,7 +162,7 @@ class TestCheckInstallationType:
             Mode,
             ProjectLayout,
         )
-        from clarity_agent.setup.snippet import ensure_agents_md
+        from clarity_agent.setup.snippet import SCHEMA_VERSION, ensure_agents_md
 
         host = tmp_path / "myproject"
         host.mkdir()
@@ -181,7 +181,7 @@ class TestCheckInstallationType:
         agents_md = host / "AGENTS.md"
         agents_md.write_text(
             agents_md.read_text().replace(
-                "schema_version: 1", "schema_version: 999",
+                f"schema_version: {SCHEMA_VERSION}", "schema_version: 999",
             ),
         )
 
@@ -191,7 +191,7 @@ class TestCheckInstallationType:
         assert results[1].fix_fn is not None
         # The fix_fn must restore the current rendering.
         assert results[1].fix_fn() is True
-        assert "schema_version: 1" in agents_md.read_text()
+        assert f"schema_version: {SCHEMA_VERSION}" in agents_md.read_text()
 
     def test_embedded_no_clarity_reference(self, tmp_path: Path) -> None:
         host = tmp_path / "myproject"
