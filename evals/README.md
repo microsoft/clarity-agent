@@ -1,9 +1,29 @@
 # Clarity Agent evaluation framework
 
+> **Migrating to RAMPART.**  This in-tree framework is being replaced by
+> [microsoft/RAMPART](https://github.com/microsoft/RAMPART), a pytest-native
+> safety-testing framework with an active dev team.  The 21 cases under
+> `evals/cases/` are **frozen** on the legacy framework — keep working, but
+> don't add new ones here.  **New cases go in `evals/cases_rampart/`** against
+> RAMPART directly.  The legacy framework + `evals/cases/` will be deleted
+> once the directory empties.
+
 An integration test framework for evaluating Clarity Agent's safety
 and functionality through simulated conversations.
 
 Evals are not just a framework to assess quality and safety, they improve Clarity-Agent in fundamental ways for real users. Good evals are acts of empathy written in code.
+
+## Dependencies
+
+The legacy framework uses the project's `dev` extras only.  The
+RAMPART path adds an `evals` extras group with a strict pin:
+
+```bash
+uv sync --extra evals       # installs rampart==0.1.0 alongside dev
+```
+
+The pin is intentional — bumps are a deliberate PR-time decision,
+not auto-resolution.
 
 ## How it works
 
