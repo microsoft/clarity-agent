@@ -149,13 +149,12 @@ async function cmdRestart(): Promise<void> {
     return;
   }
 
+  await backend.restart();
   const projectDir = getProjectDir();
-  if (!projectDir) {
-    vscode.window.showErrorMessage("No workspace folder open.");
-    return;
-  }
-
-  await backend.restart(projectDir);
+  const backendUrl = projectDir
+    ? await resolveBackendUrl(projectDir)
+    : backend.baseUrl;
+  sidebarProvider?.updateUrl(backendUrl);
 }
 
 // -----------------------------------------------------------------------
@@ -185,12 +184,12 @@ async function startAndShow(
   if (currentState !== "running") {
     sidebarProvider?.showStarting();
 
-    await backend.start(projectDir);
+    await backend.start();
 
     // Re-check state after async start — it may now be "running"
     const newState: BackendState = backend.state;
     if (newState === "running") {
-      sidebarProvider?.updateUrl(backend.baseUrl);
+      sidebarProvider?.updateUrl(await resolveBackendUrl(projectDir));
     } else {
       sidebarProvider?.showError(
         "The Clarity backend failed to start. Check the Clarity Agent output panel for details.",
@@ -198,7 +197,26 @@ async function startAndShow(
       backend.showOutput();
     }
   } else {
-    sidebarProvider?.updateUrl(backend.baseUrl);
+    sidebarProvider?.updateUrl(await resolveBackendUrl(projectDir));
+  }
+}
+
+async function resolveBackendUrl(projectDir: string): Promise<string> {
+  if (!backend) {
+    throw new Error("Backend is not initialized.");
+  }
+  try {
+    const projectId = await backend.tryActivateProject(projectDir);
+    return projectId
+      ? `${backend.baseUrl}/p/${encodeURIComponent(projectId)}/`
+      : backend.baseUrl;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showWarningMessage(
+      `Clarity opened the launcher, but couldn't activate the selected folder: ${message}`,
+    );
+    backend.showOutput();
+    return backend.baseUrl;
   }
 }
 

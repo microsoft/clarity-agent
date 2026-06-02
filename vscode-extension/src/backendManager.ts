@@ -1,8 +1,8 @@
 /**
  * Manages the Clarity Agent FastAPI backend as a child process.
  *
- * Spawns `python clarity.py web <project-dir> --port <port>`, polls
- * until the server is ready, and provides start/stop/restart lifecycle.
+ * Spawns `python clarity.py web --port <port>`, polls until the launcher
+ * server is ready, and provides start/stop/restart lifecycle.
  *
  * When dependencies are missing, automatically installs them via pip.
  */
@@ -19,6 +19,29 @@ export interface BackendManagerEvents {
   onStateChange: (state: BackendState) => void;
   onLog: (message: string) => void;
 }
+
+
+export type CreateProjectResult =
+  | { status: "ok"; id: string }
+  | { status: "needs_setup" | "broken_install" | "embedded_install_required" };
+
+const PYTHON_IMPORT_CHECKS = [
+  "fastapi",
+  "uvicorn",
+  "prompt_toolkit",
+  "keyring",
+  "yaml",
+  "anthropic",
+  "openai",
+  "aiohttp",
+  "azure.ai.inference",
+  "azure.identity",
+  "copilot",
+  "google.genai",
+  "claude_agent_sdk",
+];
+
+const PYTHON_EXTRAS = "cli,web";
 
 export class BackendManager {
   private process: ChildProcess | null = null;
@@ -54,17 +77,14 @@ export class BackendManager {
     this.events.onStateChange(state);
   }
 
-  /**
-   * Start the backend server for a given project directory.
-   */
-  async start(projectDir: string): Promise<void> {
+  async start(): Promise<void> {
     if (this._state === "running" || this._state === "starting") {
       return;
     }
 
     this.setState("starting");
     this.stderrBuffer = "";
-    this.outputChannel.appendLine(`Starting Clarity backend for: ${projectDir}`);
+    this.outputChannel.appendLine("Starting Clarity launcher backend.");
 
     // Ensure Python dependencies are installed
     if (!this.depsInstalled) {
@@ -86,13 +106,13 @@ export class BackendManager {
       const clarityPy = path.join(this.clarityAgentDir, "clarity.py");
 
       this.outputChannel.appendLine(
-        `Command: ${pythonPath} ${clarityPy} web ${projectDir} --port ${this._port}`,
+        `Command: ${pythonPath} ${clarityPy} web --port ${this._port}`,
       );
 
       // Spawn the process
       this.process = spawn(
         pythonPath,
-        [clarityPy, "web", projectDir, "--port", String(this._port), "--host", "127.0.0.1"],
+        [clarityPy, "web", "--port", String(this._port), "--host", "127.0.0.1"],
         {
           cwd: this.clarityAgentDir,
           env: {
@@ -154,7 +174,7 @@ export class BackendManager {
           this.stop();
           this.depsInstalled = false;
           // Try again — ensureDependencies will run
-          await this.start(projectDir);
+          await this.start();
           return;
         }
 
@@ -187,13 +207,10 @@ export class BackendManager {
     this.setState("stopped");
   }
 
-  /**
-   * Restart the backend for a project directory.
-   */
-  async restart(projectDir: string): Promise<void> {
+  async restart(): Promise<void> {
     this.stop();
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await this.start(projectDir);
+    await this.start();
   }
 
   /**
@@ -208,6 +225,32 @@ export class BackendManager {
     this.outputChannel.dispose();
   }
 
+  async tryActivateProject(projectDir: string): Promise<string | undefined> {
+    const name = path.basename(projectDir) || "project";
+    const result = await this.postJson<CreateProjectResult>(
+      "/api/projects",
+      {
+        name,
+        path: projectDir,
+        intent: "open_existing",
+      },
+      [409],
+    );
+    if (result.status !== "ok") {
+      this.outputChannel.appendLine(
+        `Project registration returned ${result.status}; leaving setup to the launcher UI.`,
+      );
+      return undefined;
+    }
+
+    const projectId = result.id;
+    await this.postJson(
+      `/api/projects/${encodeURIComponent(projectId)}/activate`,
+      {},
+    );
+    return projectId;
+  }
+
   // -- Private helpers --
 
   /**
@@ -217,10 +260,14 @@ export class BackendManager {
   private async ensureDependencies(): Promise<boolean> {
     const pythonPath = this.getPythonPath();
 
-    // Quick check: can we import the critical modules?
+    // Quick check: can we import the modules required by the web app and
+    // every configured provider/auth mode.
     try {
+      const importScript = PYTHON_IMPORT_CHECKS.map((moduleName) =>
+        `import ${moduleName}`,
+      ).join("; ");
       execSync(
-        `${pythonPath} -c "import fastapi; import uvicorn; import prompt_toolkit"`,
+        `${pythonPath} -c "${importScript}"`,
         {
           cwd: this.clarityAgentDir,
           env: {
@@ -240,7 +287,7 @@ export class BackendManager {
     this.outputChannel.appendLine("Python dependencies not found. Installing...");
 
     const choice = await vscode.window.showInformationMessage(
-      "Clarity Agent needs to install Python dependencies (fastapi, uvicorn, etc.). Install now?",
+      "Clarity Agent needs to install Python dependencies for the web app and LLM providers. Install now?",
       { modal: true },
       "Install",
       "Cancel",
@@ -261,10 +308,11 @@ export class BackendManager {
         try {
           progress.report({ message: "Running pip install..." });
 
-          // Install from the bundled pyproject.toml with the web extra
+          // Install from the bundled pyproject.toml with extras needed by
+          // the launcher/web UI and provider setup.
           const pyprojectDir = this.clarityAgentDir;
           execSync(
-            `${pythonPath} -m pip install --quiet "${pyprojectDir}[web]"`,
+            `${pythonPath} -m pip install --quiet "${pyprojectDir}[${PYTHON_EXTRAS}]"`,
             {
               cwd: this.clarityAgentDir,
               env: {
@@ -285,7 +333,7 @@ export class BackendManager {
           const msg = err instanceof Error ? err.message : String(err);
           this.outputChannel.appendLine(`Failed to install dependencies: ${msg}`);
           vscode.window.showErrorMessage(
-            `Failed to install dependencies: ${msg}\n\nTry running manually: ${pythonPath} -m pip install "${this.clarityAgentDir}[web]"`,
+            `Failed to install dependencies: ${msg}\n\nTry running manually: ${pythonPath} -m pip install "${this.clarityAgentDir}[${PYTHON_EXTRAS}]"`,
           );
           return false;
         }
@@ -364,6 +412,58 @@ export class BackendManager {
       };
 
       poll();
+    });
+  }
+
+  private postJson<T = unknown>(
+    apiPath: string,
+    body: unknown,
+    acceptedStatusCodes: number[] = [],
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const payload = JSON.stringify(body);
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: this._port,
+          path: apiPath,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+          timeout: 10_000,
+        },
+        (res) => {
+          let responseBody = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => {
+            responseBody += chunk;
+          });
+          res.on("end", () => {
+            const statusCode = res.statusCode ?? 0;
+            if (
+              (statusCode >= 200 && statusCode < 300) ||
+              acceptedStatusCodes.includes(statusCode)
+            ) {
+              try {
+                resolve(JSON.parse(responseBody) as T);
+              } catch (err) {
+                reject(err);
+              }
+              return;
+            }
+            reject(new Error(`${res.statusCode}: ${responseBody}`));
+          });
+        },
+      );
+
+      req.on("error", reject);
+      req.on("timeout", () => {
+        req.destroy(new Error("Request timed out"));
+      });
+      req.write(payload);
+      req.end();
     });
   }
 }
