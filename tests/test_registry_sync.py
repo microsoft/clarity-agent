@@ -440,6 +440,10 @@ class TestProviderSync:
         assert {"cli", "web"} <= install_extras, (
             "VS Code dependency install must include the web server and CLI provider extras."
         )
+        for package in ("dotenv", "fastapi", "httpx", "prompt_toolkit", "uvicorn", "websockets"):
+            assert f'"{package}"' in source, (
+                f"VS Code dependency probe must check shared runtime package {package!r}."
+            )
 
     def test_vscode_readme_uses_shared_provider_language(self) -> None:
         """The README should not duplicate a partial provider list."""

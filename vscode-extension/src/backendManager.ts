@@ -27,11 +27,14 @@ const RUNTIME_DEPENDENCY_IMPORTS = [
   "azure.identity",
   "claude_agent_sdk",
   "copilot",
+  "dotenv",
   "fastapi",
   "google.genai",
+  "httpx",
   "openai",
   "prompt_toolkit",
   "uvicorn",
+  "websockets",
 ];
 
 export class BackendManager {
