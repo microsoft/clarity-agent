@@ -86,11 +86,12 @@
     }
   },
   "scripts": {
+    "build:web": "npm --prefix ../web ci && npm --prefix ../web run build",
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "bundle": "node bundle.js",
-    "package": "npm run bundle && npx @vscode/vsce package --allow-missing-repository",
-    "vscode:prepublish": "node bundle.js && node esbuild.js --production"
+    "package": "npx @vscode/vsce package --allow-missing-repository",
+    "vscode:prepublish": "npm run build:web && node bundle.js && node esbuild.js --production"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -6,7 +6,7 @@
  * Usage: node bundle.js
  *
  * Creates vscode-extension/bundled/ with everything needed to run
- * `python clarity.py web <project>` without a separate clone.
+ * `python clarity.py web` without a separate clone.
  */
 
 const fs = require("fs");
@@ -73,8 +73,9 @@ function bundle() {
     const dest = path.join(BUNDLED, item);
 
     if (!fs.existsSync(src)) {
-      console.warn(`  SKIP (not found): ${item}`);
-      continue;
+      throw new Error(
+        `Required bundle item not found: ${item}. Run npm run build:web before bundling.`,
+      );
     }
 
     console.log(`  COPY: ${item}`);
