@@ -56,6 +56,10 @@
         "title": "Clarity: Open Project..."
       },
       {
+        "command": "clarity.openLauncher",
+        "title": "Clarity: Open Launcher"
+      },
+      {
         "command": "clarity.doctor",
         "title": "Clarity: Doctor (Diagnose Installation)"
       },

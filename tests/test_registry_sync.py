@@ -12,6 +12,7 @@ documentation and process guides that tests can't check).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -226,6 +227,8 @@ THINKERS_DIR = REPO_ROOT / "thinkers"
 PROCESSES_DIR = REPO_ROOT / "processes"
 README_DEV = REPO_ROOT / "CONTRIBUTING.md"
 VSCODE_BACKEND_MANAGER = REPO_ROOT / "vscode-extension" / "src" / "backendManager.ts"
+VSCODE_EXTENSION = REPO_ROOT / "vscode-extension" / "src" / "extension.ts"
+VSCODE_PACKAGE_JSON = REPO_ROOT / "vscode-extension" / "package.json"
 VSCODE_README = REPO_ROOT / "vscode-extension" / "README.md"
 
 
@@ -437,13 +440,40 @@ class TestProviderSync:
         extras_match = re.search(r'RUNTIME_INSTALL_EXTRAS = "([^"]+)"', source)
         assert extras_match is not None, "RUNTIME_INSTALL_EXTRAS is not declared"
         install_extras = set(extras_match.group(1).split(","))
-        assert {"cli", "web"} <= install_extras, (
-            "VS Code dependency install must include the web server and CLI provider extras."
+        assert {"cli", "web", "mcp"} <= install_extras, (
+            "VS Code dependency install must include web, CLI provider, and MCP extras."
         )
-        for package in ("dotenv", "fastapi", "httpx", "prompt_toolkit", "uvicorn", "websockets"):
+        for package in (
+            "dotenv",
+            "fastapi",
+            "httpx",
+            "mcp.server.fastmcp",
+            "prompt_toolkit",
+            "pydantic_settings",
+            "uvicorn",
+            "websockets",
+        ):
             assert f'"{package}"' in source, (
                 f"VS Code dependency probe must check shared runtime package {package!r}."
             )
+
+    def test_vscode_extension_exposes_core_web_modes(self) -> None:
+        """VS Code should expose the same project and launcher web modes as clarity web."""
+        package_json = json.loads(VSCODE_PACKAGE_JSON.read_text(encoding="utf-8"))
+        commands = {
+            entry["command"]
+            for entry in package_json["contributes"]["commands"]
+        }
+        assert {"clarity.open", "clarity.openProject", "clarity.openLauncher"} <= commands
+
+        extension_source = VSCODE_EXTENSION.read_text(encoding="utf-8")
+        assert "mode: \"launcher\"" in extension_source
+        assert "mode: \"project\"" in extension_source
+
+        backend_source = VSCODE_BACKEND_MANAGER.read_text(encoding="utf-8")
+        assert 'target.mode === "project"' in backend_source
+        assert "args.push(target.projectDir)" in backend_source
+        assert "/api/version" in backend_source
 
     def test_vscode_readme_uses_shared_provider_language(self) -> None:
         """The README should not duplicate a partial provider list."""

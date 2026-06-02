@@ -13,7 +13,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { BackendManager, BackendState } from "./backendManager";
+import {
+  BackendManager,
+  BackendState,
+  BackendStartTarget,
+} from "./backendManager";
 import { ClarityStatusBar } from "./statusBar";
 import { ClarityViewProvider } from "./webviewViewProvider";
 
@@ -88,12 +92,11 @@ async function cmdOpen(): Promise<void> {
 
   const projectDir = getProjectDir();
   if (!projectDir) {
-    // No workspace folder — fall through to the project picker
-    await cmdOpenProject();
+    await cmdOpenLauncher();
     return;
   }
 
-  await startAndShow(agentDir, projectDir);
+  await startAndShow(agentDir, { mode: "project", projectDir });
 }
 
 async function cmdOpenProject(): Promise<void> {
@@ -117,7 +120,20 @@ async function cmdOpenProject(): Promise<void> {
     return;
   }
 
-  await startAndShow(agentDir, uris[0].fsPath);
+  await startAndShow(agentDir, { mode: "project", projectDir: uris[0].fsPath });
+}
+
+async function cmdOpenLauncher(): Promise<void> {
+  const agentDir = resolveAgentDir();
+  if (!agentDir) {
+    vscode.window.showErrorMessage(
+      "Cannot find the Clarity Agent files. " +
+        "Set 'clarity.agentDir' in settings to point to a clarity-agent clone.",
+    );
+    return;
+  }
+
+  await startAndShow(agentDir, { mode: "launcher" });
 }
 
 async function cmdDoctor(): Promise<void> {
@@ -149,13 +165,21 @@ async function cmdRestart(): Promise<void> {
     return;
   }
 
-  const projectDir = getProjectDir();
-  if (!projectDir) {
-    vscode.window.showErrorMessage("No workspace folder open.");
-    return;
+  try {
+    sidebarProvider?.showStarting();
+    await backend.restart();
+    if (backend.state === "running") {
+      sidebarProvider?.updateUrl(backend.baseUrl);
+    } else {
+      sidebarProvider?.showError(
+        "The Clarity backend failed to restart. Check the Clarity Agent output panel for details.",
+      );
+      backend.showOutput();
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(message);
   }
-
-  await backend.restart(projectDir);
 }
 
 // -----------------------------------------------------------------------
@@ -164,7 +188,7 @@ async function cmdRestart(): Promise<void> {
 
 async function startAndShow(
   agentDir: string,
-  projectDir: string,
+  target: BackendStartTarget,
 ): Promise<void> {
   if (!backend) {
     backend = new BackendManager(agentDir, {
@@ -180,25 +204,19 @@ async function startAndShow(
   // Reveal the sidebar
   sidebarProvider?.reveal();
 
-  // Start backend if not already running
-  const currentState = backend.state;
-  if (currentState !== "running") {
-    sidebarProvider?.showStarting();
+  sidebarProvider?.showStarting();
 
-    await backend.start(projectDir);
+  await backend.start(target);
 
-    // Re-check state after async start — it may now be "running"
-    const newState: BackendState = backend.state;
-    if (newState === "running") {
-      sidebarProvider?.updateUrl(backend.baseUrl);
-    } else {
-      sidebarProvider?.showError(
-        "The Clarity backend failed to start. Check the Clarity Agent output panel for details.",
-      );
-      backend.showOutput();
-    }
-  } else {
+  // Re-check state after async start because dependency install or spawn can fail.
+  const newState: BackendState = backend.state;
+  if (newState === "running") {
     sidebarProvider?.updateUrl(backend.baseUrl);
+  } else {
+    sidebarProvider?.showError(
+      "The Clarity backend failed to start. Check the Clarity Agent output panel for details.",
+    );
+    backend.showOutput();
   }
 }
 
@@ -234,6 +252,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("clarity.open", cmdOpen),
     vscode.commands.registerCommand("clarity.openProject", cmdOpenProject),
+    vscode.commands.registerCommand("clarity.openLauncher", cmdOpenLauncher),
     vscode.commands.registerCommand("clarity.doctor", cmdDoctor),
     vscode.commands.registerCommand("clarity.restart", cmdRestart),
   );

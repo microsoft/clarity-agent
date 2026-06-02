@@ -11,7 +11,7 @@ Clarity Agent guides you through structured problem clarification, solution desi
    code --install-extension clarity-agent-1.0.0.vsix
    ```
 2. **Click the Clarity icon** in the Activity Bar (left sidebar).
-3. **Click "Start Clarity"** — the extension will prompt you to install Python dependencies if needed.
+3. **Click "Start Clarity"**. With a workspace open, Clarity starts for that project. Without one, it opens the multi-project launcher. The extension will prompt you to install Python dependencies if needed.
 4. **Follow the setup wizard** to configure any LLM provider supported by Clarity Agent.
 
 That's it. Start describing what you're building and Clarity will walk you through it.
@@ -25,8 +25,9 @@ That's it. Start describing what you're building and Clarity will walk you throu
 
 | Command | What it does |
 |---|---|
-| **Clarity: Open** | Start Clarity for the current workspace (or pick a folder) |
+| **Clarity: Open** | Start Clarity for the current workspace, or open the launcher when no workspace is open |
 | **Clarity: Open Project...** | Choose a specific project directory |
+| **Clarity: Open Launcher** | Open the same multi-project launcher used by `clarity web` |
 | **Clarity: Doctor** | Run diagnostics if something isn't working |
 | **Clarity: Restart Backend** | Restart the backend process |
 

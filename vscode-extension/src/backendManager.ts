@@ -1,7 +1,7 @@
 /**
  * Manages the Clarity Agent FastAPI backend as a child process.
  *
- * Spawns `python clarity.py web <project-dir> --port <port>`, polls
+ * Spawns `python clarity.py web [project-dir] --port <port>`, polls
  * until the server is ready, and provides start/stop/restart lifecycle.
  *
  * When dependencies are missing, automatically installs them via pip.
@@ -14,13 +14,16 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 export type BackendState = "stopped" | "starting" | "running" | "error";
+export type BackendStartTarget =
+  | { mode: "launcher" }
+  | { mode: "project"; projectDir: string };
 
 export interface BackendManagerEvents {
   onStateChange: (state: BackendState) => void;
   onLog: (message: string) => void;
 }
 
-const RUNTIME_INSTALL_EXTRAS = "cli,web";
+const RUNTIME_INSTALL_EXTRAS = "cli,web,mcp";
 const RUNTIME_DEPENDENCY_IMPORTS = [
   "anthropic",
   "azure.ai.inference",
@@ -31,7 +34,9 @@ const RUNTIME_DEPENDENCY_IMPORTS = [
   "fastapi",
   "google.genai",
   "httpx",
+  "mcp.server.fastmcp",
   "openai",
+  "pydantic_settings",
   "prompt_toolkit",
   "uvicorn",
   "websockets",
@@ -45,6 +50,7 @@ export class BackendManager {
   private outputChannel: vscode.OutputChannel;
   private events: BackendManagerEvents;
   private depsInstalled = false;
+  private startTarget: BackendStartTarget | undefined;
 
   constructor(
     private readonly clarityAgentDir: string,
@@ -72,16 +78,24 @@ export class BackendManager {
   }
 
   /**
-   * Start the backend server for a given project directory.
+   * Start the backend server for a launcher or project target.
    */
-  async start(projectDir: string): Promise<void> {
+  async start(target: BackendStartTarget): Promise<void> {
     if (this._state === "running" || this._state === "starting") {
-      return;
+      if (this.isSameTarget(target)) {
+        return;
+      }
+      this.outputChannel.appendLine("Switching Clarity backend target...");
+      this.stop();
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     this.setState("starting");
     this.stderrBuffer = "";
-    this.outputChannel.appendLine(`Starting Clarity backend for: ${projectDir}`);
+    this.startTarget = target;
+    this.outputChannel.appendLine(
+      `Starting Clarity backend for: ${this.describeTarget(target)}`,
+    );
 
     // Ensure Python dependencies are installed
     if (!this.depsInstalled) {
@@ -102,14 +116,14 @@ export class BackendManager {
       const pythonPath = this.getPythonPath();
       const clarityPy = path.join(this.clarityAgentDir, "clarity.py");
 
-      this.outputChannel.appendLine(
-        `Command: ${pythonPath} ${clarityPy} web ${projectDir} --port ${this._port}`,
-      );
+      const args = this.buildWebArgs(clarityPy, target);
+
+      this.outputChannel.appendLine(`Command: ${pythonPath} ${args.join(" ")}`);
 
       // Spawn the process
       this.process = spawn(
         pythonPath,
-        [clarityPy, "web", projectDir, "--port", String(this._port), "--host", "127.0.0.1"],
+        args,
         {
           cwd: this.clarityAgentDir,
           env: {
@@ -171,7 +185,7 @@ export class BackendManager {
           this.stop();
           this.depsInstalled = false;
           // Try again — ensureDependencies will run
-          await this.start(projectDir);
+          await this.start(target);
           return;
         }
 
@@ -205,12 +219,15 @@ export class BackendManager {
   }
 
   /**
-   * Restart the backend for a project directory.
+   * Restart the backend for the last launcher or project target.
    */
-  async restart(projectDir: string): Promise<void> {
+  async restart(target = this.startTarget): Promise<void> {
+    if (!target) {
+      throw new Error("Cannot restart before the Clarity backend has been started.");
+    }
     this.stop();
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await this.start(projectDir);
+    await this.start(target);
   }
 
   /**
@@ -261,7 +278,7 @@ export class BackendManager {
     this.outputChannel.appendLine("Python dependencies not found. Installing...");
 
     const choice = await vscode.window.showInformationMessage(
-      "Clarity Agent needs to install Python dependencies for the backend and LLM providers. Install now?",
+      "Clarity Agent needs to install Python dependencies for the backend, MCP tools, and LLM providers. Install now?",
       { modal: true },
       "Install",
       "Cancel",
@@ -282,7 +299,7 @@ export class BackendManager {
         try {
           progress.report({ message: "Running pip install..." });
 
-          // Install from the bundled pyproject.toml with the web UI and CLI provider extras.
+          // Install from the bundled pyproject.toml with web UI, CLI provider, and MCP extras.
           const pyprojectDir = this.clarityAgentDir;
           execFileSync(
             pythonPath,
@@ -355,7 +372,7 @@ export class BackendManager {
 
   private waitForServer(timeoutMs: number): Promise<boolean> {
     const start = Date.now();
-    const url = `http://127.0.0.1:${this._port}/api/session`;
+    const url = `http://127.0.0.1:${this._port}/api/version`;
 
     return new Promise((resolve) => {
       const poll = () => {
@@ -393,5 +410,31 @@ export class BackendManager {
 
       poll();
     });
+  }
+
+  private buildWebArgs(clarityPy: string, target: BackendStartTarget): string[] {
+    const args = [clarityPy, "web"];
+    if (target.mode === "project") {
+      args.push(target.projectDir);
+    }
+    args.push("--port", String(this._port), "--host", "127.0.0.1");
+    return args;
+  }
+
+  private isSameTarget(target: BackendStartTarget): boolean {
+    if (!this.startTarget || this.startTarget.mode !== target.mode) {
+      return false;
+    }
+    if (target.mode === "launcher") {
+      return true;
+    }
+    return this.startTarget.mode === "project" &&
+      this.startTarget.projectDir === target.projectDir;
+  }
+
+  private describeTarget(target: BackendStartTarget): string {
+    return target.mode === "launcher"
+      ? "launcher"
+      : target.projectDir;
   }
 }
