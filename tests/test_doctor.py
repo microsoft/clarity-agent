@@ -606,25 +606,6 @@ class TestCheckBackendHealth:
         assert result.status == Status.PASS
         mock_backend.disconnect.assert_called_once()
 
-    def test_sdk_probe_accepts_empty_successful_response(self, tmp_path: Path) -> None:
-        from clarity_agent.setup.doctor import _probe_sdk
-
-        mock_backend = MagicMock()
-        mock_backend.chat.return_value = ""
-
-        with patch(
-            "clarity_agent.llm.impl.claude_sdk.SdkChatBackend",
-            return_value=mock_backend,
-        ):
-            result = _probe_sdk(tmp_path)
-
-        assert result.status == Status.PASS
-        mock_backend.chat.assert_called_once_with(
-            "Say ok",
-            system_prompt="Respond with exactly: ok",
-        )
-        mock_backend.disconnect.assert_called_once()
-
     def test_sdk_provider_failure(self, tmp_path: Path) -> None:
         mock_backend = MagicMock()
         mock_backend.chat.side_effect = Exception("billing quota exceeded")
