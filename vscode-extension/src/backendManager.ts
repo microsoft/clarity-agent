@@ -7,7 +7,7 @@
  * When dependencies are missing, automatically installs them via pip.
  */
 
-import { ChildProcess, execSync, spawn } from "child_process";
+import { ChildProcess, execFileSync, spawn } from "child_process";
 import * as http from "http";
 import * as net from "net";
 import * as path from "path";
@@ -19,6 +19,20 @@ export interface BackendManagerEvents {
   onStateChange: (state: BackendState) => void;
   onLog: (message: string) => void;
 }
+
+const RUNTIME_INSTALL_EXTRAS = "cli,web";
+const RUNTIME_DEPENDENCY_IMPORTS = [
+  "anthropic",
+  "azure.ai.inference",
+  "azure.identity",
+  "claude_agent_sdk",
+  "copilot",
+  "fastapi",
+  "google.genai",
+  "openai",
+  "prompt_toolkit",
+  "uvicorn",
+];
 
 export class BackendManager {
   private process: ChildProcess | null = null;
@@ -217,10 +231,14 @@ export class BackendManager {
   private async ensureDependencies(): Promise<boolean> {
     const pythonPath = this.getPythonPath();
 
-    // Quick check: can we import the critical modules?
+    // Quick check: can we import the web server and shared provider runtime?
     try {
-      execSync(
-        `${pythonPath} -c "import fastapi; import uvicorn; import prompt_toolkit"`,
+      const importChecks = RUNTIME_DEPENDENCY_IMPORTS.map(
+        (moduleName) => `import ${moduleName}`,
+      ).join("; ");
+      execFileSync(
+        pythonPath,
+        ["-c", importChecks],
         {
           cwd: this.clarityAgentDir,
           env: {
@@ -234,13 +252,13 @@ export class BackendManager {
       this.outputChannel.appendLine("Python dependencies are available.");
       return true;
     } catch {
-      // Dependencies missing — install them
+      // Dependency check failed, prompt to install.
     }
 
     this.outputChannel.appendLine("Python dependencies not found. Installing...");
 
     const choice = await vscode.window.showInformationMessage(
-      "Clarity Agent needs to install Python dependencies (fastapi, uvicorn, etc.). Install now?",
+      "Clarity Agent needs to install Python dependencies for the backend and LLM providers. Install now?",
       { modal: true },
       "Install",
       "Cancel",
@@ -261,10 +279,17 @@ export class BackendManager {
         try {
           progress.report({ message: "Running pip install..." });
 
-          // Install from the bundled pyproject.toml with the web extra
+          // Install from the bundled pyproject.toml with the web UI and CLI provider extras.
           const pyprojectDir = this.clarityAgentDir;
-          execSync(
-            `${pythonPath} -m pip install --quiet "${pyprojectDir}[web]"`,
+          execFileSync(
+            pythonPath,
+            [
+              "-m",
+              "pip",
+              "install",
+              "--quiet",
+              `${pyprojectDir}[${RUNTIME_INSTALL_EXTRAS}]`,
+            ],
             {
               cwd: this.clarityAgentDir,
               env: {
@@ -285,7 +310,7 @@ export class BackendManager {
           const msg = err instanceof Error ? err.message : String(err);
           this.outputChannel.appendLine(`Failed to install dependencies: ${msg}`);
           vscode.window.showErrorMessage(
-            `Failed to install dependencies: ${msg}\n\nTry running manually: ${pythonPath} -m pip install "${this.clarityAgentDir}[web]"`,
+            `Failed to install dependencies: ${msg}\n\nTry running manually: ${pythonPath} -m pip install "${this.clarityAgentDir}[${RUNTIME_INSTALL_EXTRAS}]"`,
           );
           return false;
         }

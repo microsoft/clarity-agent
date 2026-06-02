@@ -12,14 +12,14 @@ Clarity Agent guides you through structured problem clarification, solution desi
    ```
 2. **Click the Clarity icon** in the Activity Bar (left sidebar).
 3. **Click "Start Clarity"** — the extension will prompt you to install Python dependencies if needed.
-4. **Follow the setup wizard** to configure your LLM provider (Azure OpenAI, OpenAI, or Anthropic).
+4. **Follow the setup wizard** to configure any LLM provider supported by Clarity Agent.
 
 That's it. Start describing what you're building and Clarity will walk you through it.
 
 ## Requirements
 
-- **Python 3.10+** on your PATH
-- An API key for at least one LLM provider (the setup wizard will guide you)
+- **Python 3.12+** on your PATH
+- Credentials for at least one supported LLM provider. Some providers can use local CLI sign-in instead of an API key.
 
 ## Commands
 

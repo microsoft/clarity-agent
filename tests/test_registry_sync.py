@@ -12,6 +12,7 @@ documentation and process guides that tests can't check).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -224,6 +225,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 THINKERS_DIR = REPO_ROOT / "thinkers"
 PROCESSES_DIR = REPO_ROOT / "processes"
 README_DEV = REPO_ROOT / "CONTRIBUTING.md"
+VSCODE_BACKEND_MANAGER = REPO_ROOT / "vscode-extension" / "src" / "backendManager.ts"
+VSCODE_README = REPO_ROOT / "vscode-extension" / "README.md"
 
 
 class TestThinkerSync:
@@ -411,6 +414,39 @@ class TestProviderSync:
             f"Add a branch in llm/factory.py, or add to CHAT_ONLY_PROVIDERS "
             f"in this test if the provider only supports ChatBackend."
         )
+
+    def test_vscode_extension_installs_provider_runtime(self) -> None:
+        """The VS Code backend dependency probe must cover provider packages."""
+        source = VSCODE_BACKEND_MANAGER.read_text(encoding="utf-8")
+        provider_packages = {
+            str(mode["package"])
+            for info in _PROVIDERS.values()
+            for mode in info["auth_modes"]
+            if mode.get("package")
+        }
+        missing = [
+            package for package in sorted(provider_packages)
+            if f'"{package}"' not in source
+        ]
+        assert not missing, (
+            f"VS Code dependency probe is missing provider packages: {missing}\n"
+            f"Add them to RUNTIME_DEPENDENCY_IMPORTS in "
+            f"vscode-extension/src/backendManager.ts."
+        )
+
+        extras_match = re.search(r'RUNTIME_INSTALL_EXTRAS = "([^"]+)"', source)
+        assert extras_match is not None, "RUNTIME_INSTALL_EXTRAS is not declared"
+        install_extras = set(extras_match.group(1).split(","))
+        assert {"cli", "web"} <= install_extras, (
+            "VS Code dependency install must include the web server and CLI provider extras."
+        )
+
+    def test_vscode_readme_uses_shared_provider_language(self) -> None:
+        """The README should not duplicate a partial provider list."""
+        readme = VSCODE_README.read_text(encoding="utf-8")
+        assert "Azure OpenAI, OpenAI, or Anthropic" not in readme
+        assert "any LLM provider supported by Clarity Agent" in readme
+        assert "Python 3.12+" in readme
 
 
 # ---------------------------------------------------------------------------
