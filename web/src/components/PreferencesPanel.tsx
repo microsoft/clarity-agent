@@ -8,6 +8,7 @@ import {
   activateProvider,
 } from "../api/client";
 import type { AppSettings, ProviderInfo, AuthModeInfo } from "../types";
+import { openExternalUrl } from "../data/externalLinks";
 import ProviderFieldList from "./ProviderFieldList";
 
 type Tab = "provider" | "models" | "appearance" | "accessibility";
@@ -202,16 +203,10 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {/* Status indicator: checkmark = configured, filled dot = active */}
+                  {/* Status indicator: only the active provider gets a checkmark. */}
                   {active ? (
                     <span className="w-4 h-4 rounded-full bg-accent-focus flex items-center justify-center flex-shrink-0">
                       <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                  ) : configured ? (
-                    <span className="w-4 h-4 rounded-full border-2 border-green-500/60 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-2.5 h-2.5 text-green-500/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </span>
@@ -221,6 +216,11 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
                   <span className="font-medium text-sm text-body-heading">{p.display_name}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {configured && !active && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-dim text-body-muted font-medium">
+                      Configured
+                    </span>
+                  )}
                   {/* Quick-switch for configured-but-not-active providers */}
                   {configured && !active && settings.provider_auth_modes[p.name] && (
                     <button
@@ -317,7 +317,11 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
                                   {mode.setup_url && (
                                     <>
                                       {" "}
-                                      <a href={mode.setup_url} target="_blank" rel="noopener noreferrer"
+                                      <a
+                                        href={mode.setup_url}
+                                        onClick={(event) => openExternalUrl(mode.setup_url!, event)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="text-accent-focus hover:underline">
                                         Open dashboard &rarr;
                                       </a>
@@ -345,7 +349,11 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
                         {selectedMode.setup_url && (
                           <>
                             {" "}
-                            <a href={selectedMode.setup_url} target="_blank" rel="noopener noreferrer"
+                            <a
+                              href={selectedMode.setup_url}
+                              onClick={(event) => openExternalUrl(selectedMode.setup_url!, event)}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="text-accent-focus hover:underline">
                               Open dashboard &rarr;
                             </a>

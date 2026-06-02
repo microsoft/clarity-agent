@@ -6,6 +6,11 @@
  */
 
 import * as vscode from "vscode";
+import {
+  isOpenExternalMessage,
+  OPEN_EXTERNAL_MESSAGE_TYPE,
+  openExternalUrl,
+} from "./externalLinks";
 
 export class ClarityWebviewPanel {
   public static readonly viewType = "clarity.panel";
@@ -20,6 +25,11 @@ export class ClarityWebviewPanel {
   ) {
     this.panel = panel;
     this.panel.webview.html = this.getHtml(backendUrl);
+    this.panel.webview.onDidReceiveMessage((msg: unknown) => {
+      if (isOpenExternalMessage(msg)) {
+        void openExternalUrl(msg.url);
+      }
+    });
 
     this.panel.onDidDispose(() => {
       this._disposed = true;
@@ -140,8 +150,15 @@ export class ClarityWebviewPanel {
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
   ></iframe>
   <script>
+    const vscode = acquireVsCodeApi();
     const iframe = document.getElementById('clarity-frame');
     const loading = document.getElementById('loading');
+    window.addEventListener('message', (event) => {
+      if (event.source !== iframe.contentWindow) return;
+      const message = event.data;
+      if (!message || message.type !== '${OPEN_EXTERNAL_MESSAGE_TYPE}') return;
+      vscode.postMessage(message);
+    });
     iframe.addEventListener('load', () => {
       loading.classList.add('hidden');
       setTimeout(() => loading.remove(), 500);

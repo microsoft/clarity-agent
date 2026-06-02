@@ -228,8 +228,14 @@ PROCESSES_DIR = REPO_ROOT / "processes"
 README_DEV = REPO_ROOT / "CONTRIBUTING.md"
 VSCODE_BACKEND_MANAGER = REPO_ROOT / "vscode-extension" / "src" / "backendManager.ts"
 VSCODE_EXTENSION = REPO_ROOT / "vscode-extension" / "src" / "extension.ts"
+VSCODE_EXTERNAL_LINKS = REPO_ROOT / "vscode-extension" / "src" / "externalLinks.ts"
 VSCODE_PACKAGE_JSON = REPO_ROOT / "vscode-extension" / "package.json"
 VSCODE_README = REPO_ROOT / "vscode-extension" / "README.md"
+VSCODE_WEBVIEW_PANEL = REPO_ROOT / "vscode-extension" / "src" / "webviewPanel.ts"
+VSCODE_WEBVIEW_VIEW = REPO_ROOT / "vscode-extension" / "src" / "webviewViewProvider.ts"
+WEB_EXTERNAL_LINKS = REPO_ROOT / "web" / "src" / "data" / "externalLinks.ts"
+WEB_PREFERENCES_PANEL = REPO_ROOT / "web" / "src" / "components" / "PreferencesPanel.tsx"
+WEB_SETUP_WIZARD = REPO_ROOT / "web" / "src" / "components" / "SetupWizard.tsx"
 
 
 class TestThinkerSync:
@@ -482,6 +488,37 @@ class TestProviderSync:
         assert "Azure OpenAI, OpenAI, or Anthropic" not in readme
         assert "any LLM provider supported by Clarity Agent" in readme
         assert "Python 3.12+" in readme
+
+    def test_vscode_embedded_dashboard_links_open_externally(self) -> None:
+        """Provider setup links in the VS Code iframe must open through VS Code."""
+        web_helper = WEB_EXTERNAL_LINKS.read_text(encoding="utf-8")
+        assert "clarity.openExternal" in web_helper
+        assert "window.parent.postMessage" in web_helper
+        assert "window.open" in web_helper
+
+        for path in (WEB_PREFERENCES_PANEL, WEB_SETUP_WIZARD):
+            source = path.read_text(encoding="utf-8")
+            assert "openExternalUrl" in source
+
+        extension_helper = VSCODE_EXTERNAL_LINKS.read_text(encoding="utf-8")
+        assert "vscode.env.openExternal" in extension_helper
+        assert '"http", "https"' in extension_helper
+        assert "showWarningMessage" in extension_helper
+
+        for path in (VSCODE_WEBVIEW_VIEW, VSCODE_WEBVIEW_PANEL):
+            source = path.read_text(encoding="utf-8")
+            assert "OPEN_EXTERNAL_MESSAGE_TYPE" in source
+            assert "event.source !== iframe.contentWindow" in source
+            assert "vscode.postMessage(message)" in source
+            assert "openExternalUrl(msg.url)" in source
+
+    def test_preferences_active_state_is_not_reused_for_configured_providers(self) -> None:
+        """Configured providers should not show the same checkmark as the active one."""
+        source = WEB_PREFERENCES_PANEL.read_text(encoding="utf-8")
+        assert "Configured" in source
+        assert "configured && !active" in source
+        assert "bg-accent-focus flex items-center justify-center" in source
+        assert "border-green-500/60" not in source
 
 
 # ---------------------------------------------------------------------------

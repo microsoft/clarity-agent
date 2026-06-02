@@ -7,6 +7,11 @@
  */
 
 import * as vscode from "vscode";
+import {
+  isOpenExternalMessage,
+  OPEN_EXTERNAL_MESSAGE_TYPE,
+  openExternalUrl,
+} from "./externalLinks";
 
 export interface WebviewMessage {
   command: string;
@@ -39,6 +44,10 @@ export class ClarityViewProvider implements vscode.WebviewViewProvider {
 
     // Forward messages from webview to the event emitter
     webviewView.webview.onDidReceiveMessage((msg: WebviewMessage) => {
+      if (isOpenExternalMessage(msg)) {
+        void openExternalUrl(msg.url);
+        return;
+      }
       this._onMessage.fire(msg);
     });
 
@@ -158,8 +167,15 @@ export class ClarityViewProvider implements vscode.WebviewViewProvider {
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
   ></iframe>
   <script>
+    const vscode = acquireVsCodeApi();
     const iframe = document.getElementById('clarity-frame');
     const loading = document.getElementById('loading');
+    window.addEventListener('message', (event) => {
+      if (event.source !== iframe.contentWindow) return;
+      const message = event.data;
+      if (!message || message.type !== '${OPEN_EXTERNAL_MESSAGE_TYPE}') return;
+      vscode.postMessage(message);
+    });
     iframe.addEventListener('load', () => {
       loading.classList.add('hidden');
       setTimeout(() => loading.remove(), 500);

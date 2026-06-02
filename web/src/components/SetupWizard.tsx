@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSetupProviders, configureProvider, testConnection } from "../api/client";
 import type { ProviderInfo, AuthModeInfo, ProviderField } from "../types";
+import { openExternalUrl } from "../data/externalLinks";
 import ProviderFieldList from "./ProviderFieldList";
 
 type Step = "provider" | "auth_mode" | "credentials" | "test";
@@ -266,6 +267,7 @@ export default function SetupWizard({ onComplete, onCancel }: SetupWizardProps) 
                     {" "}
                     <a
                       href={setupUrl}
+                      onClick={(event) => openExternalUrl(setupUrl, event)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-accent-focus hover:underline"
@@ -333,6 +335,7 @@ export default function SetupWizard({ onComplete, onCancel }: SetupWizardProps) 
                     {" "}
                     <a
                       href={setupUrl}
+                      onClick={(event) => openExternalUrl(setupUrl, event)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-accent-focus hover:underline"
