@@ -214,7 +214,12 @@ def create_app(
     from clarity_agent.web.setup_routes import init as setup_init
     from clarity_agent.web.setup_routes import router as setup_router
     _env_path = env_path if env_path is not None else clarity_env_path()
-    setup_init(env_path=_env_path, clarity_agent_dir=clarity_agent_dir, app_state=state)
+    setup_init(
+        env_path=_env_path,
+        clarity_agent_dir=clarity_agent_dir,
+        project_dir=project_dir,
+        app_state=state,
+    )
     settings_init(app_state=state)
     app.include_router(setup_router)
     app.include_router(settings_router)

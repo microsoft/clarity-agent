@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/setup", tags=["setup"])
 # Set during app startup via init().
 _env_path: Path = clarity_env_path()
 _clarity_agent_dir: Path = Path(".")
+_project_dir: Path | None = None
 _app_state: dict[str, Any] | None = None
 _kill_children_fn: Any | None = None  # callable to kill child processes (launcher mode)
 
@@ -27,13 +28,15 @@ _kill_children_fn: Any | None = None  # callable to kill child processes (launch
 def init(
     env_path: Path,
     clarity_agent_dir: Path,
+    project_dir: Path | None = None,
     app_state: dict[str, Any] | None = None,
     kill_children: Any | None = None,
 ) -> None:
     """Configure module-level paths. Called once from create_app()."""
-    global _env_path, _clarity_agent_dir, _app_state, _kill_children_fn
+    global _env_path, _clarity_agent_dir, _project_dir, _app_state, _kill_children_fn
     _env_path = env_path
     _clarity_agent_dir = clarity_agent_dir
+    _project_dir = project_dir
     _app_state = app_state
     _kill_children_fn = kill_children
 
@@ -126,7 +129,7 @@ def _test_connection(provider: str, auth_mode: str) -> dict[str, Any]:
 
     try:
         if provider == "anthropic" and auth_mode == "claude_sdk":
-            result = _probe_sdk(_clarity_agent_dir)
+            result = _probe_sdk(_project_dir or _clarity_agent_dir)
         elif provider == "github":
             from clarity_agent.setup.doctor import _probe_copilot
             result = _probe_copilot(_clarity_agent_dir)

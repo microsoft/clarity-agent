@@ -474,6 +474,7 @@ class TestProviderSync:
         assert 'target.mode === "project"' in backend_source
         assert "args.push(target.projectDir)" in backend_source
         assert "/api/version" in backend_source
+        assert "delete backendEnv.CLAUDECODE" in backend_source
 
     def test_vscode_readme_uses_shared_provider_language(self) -> None:
         """The README should not duplicate a partial provider list."""

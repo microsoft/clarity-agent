@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
+import types
 from datetime import UTC
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1694,6 +1697,54 @@ class TestSdkToolCallParsing:
     def _get_cls(self) -> type:
         from clarity_agent.llm.impl.claude_sdk import SdkChatBackend
         return SdkChatBackend
+
+    def test_chat_uses_result_message_text_when_assistant_text_is_absent(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_sdk = types.ModuleType("claude_agent_sdk")
+
+        class AssistantMessage:
+            pass
+
+        class TextBlock:
+            pass
+
+        class ToolUseBlock:
+            pass
+
+        class ResultMessage:
+            session_id = "session-1"
+            total_cost_usd = None
+            usage = None
+            result = "ok"
+
+        class ClaudeAgentOptions:
+            def __init__(self, **kwargs: Any) -> None:
+                self.kwargs = kwargs
+
+        class HookMatcher:
+            def __init__(self, **kwargs: Any) -> None:
+                self.kwargs = kwargs
+
+        async def query(prompt: str, options: ClaudeAgentOptions) -> Any:
+            del prompt, options
+            yield ResultMessage()
+
+        fake_sdk.AssistantMessage = AssistantMessage
+        fake_sdk.TextBlock = TextBlock
+        fake_sdk.ToolUseBlock = ToolUseBlock
+        fake_sdk.ResultMessage = ResultMessage
+        fake_sdk.ClaudeAgentOptions = ClaudeAgentOptions
+        fake_sdk.HookMatcher = HookMatcher
+        fake_sdk.query = query
+        monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+        backend = self._get_cls()(project_dir=tmp_path, clarity_agent_dir=tmp_path)
+
+        assert backend.chat("Say ok", model="fast") == "ok"
+        assert backend.llm_session_id == "session-1"
 
     def test_format_tools_for_prompt_basic(self) -> None:
         cls = self._get_cls()

@@ -616,6 +616,31 @@ class TestCheckBackendHealth:
         assert result.status == Status.FAIL
         mock_backend.disconnect.assert_called_once()
 
+    def test_setup_connection_uses_project_dir_for_sdk_probe(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from clarity_agent.web import setup_routes
+
+        install_dir = tmp_path / "install"
+        project_dir = tmp_path / "project"
+        install_dir.mkdir()
+        project_dir.mkdir()
+        setup_routes.init(
+            env_path=tmp_path / ".env",
+            clarity_agent_dir=install_dir,
+            project_dir=project_dir,
+        )
+
+        with patch(
+            "clarity_agent.setup.doctor._probe_sdk",
+            return_value=CheckResult("Backend health", Status.PASS, "ok"),
+        ) as probe:
+            result = setup_routes._test_connection("anthropic", "claude_sdk")
+
+        assert result == {"ok": True, "message": "ok"}
+        probe.assert_called_once_with(project_dir)
+
 
 # ---------------------------------------------------------------------------
 # run_all_checks

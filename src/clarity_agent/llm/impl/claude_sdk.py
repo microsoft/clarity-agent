@@ -90,6 +90,13 @@ def _parse_sdk_usage(usage: dict[str, Any]) -> TokenUsage:
     return TokenUsage(input_tokens=input_t, output_tokens=output_t)
 
 
+def _extract_result_text(message: Any) -> str | None:
+    result = getattr(message, "result", None)
+    if isinstance(result, str) and result.strip():
+        return result
+    return None
+
+
 class SdkChatBackend(ChatBackend):
     """Chat backend using the Claude Agent SDK.
 
@@ -353,6 +360,7 @@ class SdkChatBackend(ChatBackend):
         )
 
         text_parts: list[str] = []
+        result_text: str | None = None
         try:
             async for message in self._sdk.query(
                 prompt=user_message,
@@ -388,6 +396,7 @@ class SdkChatBackend(ChatBackend):
                                 ))
                 elif isinstance(message, self._sdk.ResultMessage):
                     self._session_id = message.session_id
+                    result_text = _extract_result_text(message)
                     if message.total_cost_usd is not None:
                         print(f"  [Cost] ${message.total_cost_usd:.4f}")
                         if self.on_cost:
@@ -397,7 +406,7 @@ class SdkChatBackend(ChatBackend):
         except Exception as e:
             # If we were resuming a stale session, clear it and let the
             # caller retry from scratch rather than raising immediately.
-            if had_session and not text_parts:
+            if had_session and not text_parts and result_text is None:
                 print(f"  [Session] Resume failed ({e}) — will retry fresh", flush=True)
                 self._session_id = None
                 return ""
@@ -405,7 +414,7 @@ class SdkChatBackend(ChatBackend):
             # The Claude CLI sometimes crashes during cleanup *after*
             # delivering a complete response (text + ResultMessage).
             # If we already have a response, treat it as successful.
-            if text_parts and self._session_id is not None:
+            if (text_parts or result_text is not None) and self._session_id is not None:
                 warn_msg = f"CLI exited with error after delivering response: {e}"
                 print(f"  [Warning] {warn_msg}", flush=True)
                 if self.on_warning:
@@ -440,7 +449,7 @@ class SdkChatBackend(ChatBackend):
             finally:
                 self._pending_compact_transcript_path = None
 
-        return "\n".join(text_parts)
+        return "\n".join(text_parts) if text_parts else (result_text or "")
 
     def chat(
         self,
@@ -706,6 +715,7 @@ class SdkChatBackend(ChatBackend):
         )
 
         text_parts: list[str] = []
+        result_text: str | None = None
         async for message in self._sdk.query(
             prompt=enhanced_prompt, options=options,
         ):
@@ -714,13 +724,14 @@ class SdkChatBackend(ChatBackend):
                     if isinstance(block, self._sdk.TextBlock):
                         text_parts.append(block.text)
             elif isinstance(message, self._sdk.ResultMessage):
+                result_text = _extract_result_text(message)
                 if message.total_cost_usd is not None:
                     if self.on_cost:
                         self.on_cost(message.total_cost_usd)
                 if message.usage and self.on_usage:
                     self.on_usage(_parse_sdk_usage(message.usage))
 
-        response_text = "\n".join(text_parts)
+        response_text = "\n".join(text_parts) if text_parts else (result_text or "")
 
         # Parse tool calls from the text output.
         parsed_calls = self._parse_text_tool_calls(response_text)

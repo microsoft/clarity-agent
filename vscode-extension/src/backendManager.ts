@@ -117,6 +117,8 @@ export class BackendManager {
       const clarityPy = path.join(this.clarityAgentDir, "clarity.py");
 
       const args = this.buildWebArgs(clarityPy, target);
+      const backendEnv = { ...process.env };
+      delete backendEnv.CLAUDECODE;
 
       this.outputChannel.appendLine(`Command: ${pythonPath} ${args.join(" ")}`);
 
@@ -127,7 +129,7 @@ export class BackendManager {
         {
           cwd: this.clarityAgentDir,
           env: {
-            ...process.env,
+            ...backendEnv,
             // Ensure clarity_agent is importable
             PYTHONPATH: path.join(this.clarityAgentDir, "src"),
           },
