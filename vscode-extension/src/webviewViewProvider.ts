@@ -13,6 +13,9 @@ export interface WebviewMessage {
   [key: string]: unknown;
 }
 
+const EMBEDDED_APP_SCALE = 0.85;
+const EMBEDDED_APP_VIEWPORT_PERCENT = `${100 / EMBEDDED_APP_SCALE}%`;
+
 export class ClarityViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "clarity.sidebarView";
 
@@ -129,9 +132,11 @@ export class ClarityViewProvider implements vscode.WebviewViewProvider {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; background: var(--vscode-editor-background, #1a1a2e); }
     iframe {
-      width: 100%;
-      height: 100%;
+      width: ${EMBEDDED_APP_VIEWPORT_PERCENT};
+      height: ${EMBEDDED_APP_VIEWPORT_PERCENT};
       border: none;
+      transform: scale(${EMBEDDED_APP_SCALE});
+      transform-origin: top left;
     }
     .loading-overlay {
       position: absolute;

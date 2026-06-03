@@ -206,10 +206,7 @@ async function resolveBackendUrl(projectDir: string): Promise<string> {
     throw new Error("Backend is not initialized.");
   }
   try {
-    const projectId = await backend.tryActivateProject(projectDir);
-    return projectId
-      ? `${backend.baseUrl}/p/${encodeURIComponent(projectId)}/`
-      : backend.baseUrl;
+    return await backend.resolveProjectUrl(projectDir);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showWarningMessage(

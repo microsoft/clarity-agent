@@ -225,7 +225,7 @@ export class BackendManager {
     this.outputChannel.dispose();
   }
 
-  async tryActivateProject(projectDir: string): Promise<string | undefined> {
+  async resolveProjectUrl(projectDir: string): Promise<string> {
     const name = path.basename(projectDir) || "project";
     const result = await this.postJson<CreateProjectResult>(
       "/api/projects",
@@ -238,9 +238,9 @@ export class BackendManager {
     );
     if (result.status !== "ok") {
       this.outputChannel.appendLine(
-        `Project registration returned ${result.status}; leaving setup to the launcher UI.`,
+        `Project registration returned ${result.status}; opening launcher root for setup handling.`,
       );
-      return undefined;
+      return this.baseUrl;
     }
 
     const projectId = result.id;
@@ -248,7 +248,7 @@ export class BackendManager {
       `/api/projects/${encodeURIComponent(projectId)}/activate`,
       {},
     );
-    return projectId;
+    return `${this.baseUrl}/p/${encodeURIComponent(projectId)}/`;
   }
 
   // -- Private helpers --
