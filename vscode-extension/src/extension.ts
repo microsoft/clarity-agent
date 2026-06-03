@@ -151,10 +151,10 @@ async function cmdRestart(): Promise<void> {
 
   await backend.restart();
   const projectDir = getProjectDir();
-  const backendUrl = projectDir
-    ? await resolveBackendUrl(projectDir)
-    : backend.baseUrl;
-  sidebarProvider?.updateUrl(backendUrl);
+  const webviewUrl = projectDir
+    ? await resolveWebviewUrl(projectDir)
+    : backend.launcherUrl;
+  sidebarProvider?.updateUrl(webviewUrl);
 }
 
 // -----------------------------------------------------------------------
@@ -189,7 +189,7 @@ async function startAndShow(
     // Re-check state after async start — it may now be "running"
     const newState: BackendState = backend.state;
     if (newState === "running") {
-      sidebarProvider?.updateUrl(await resolveBackendUrl(projectDir));
+      sidebarProvider?.updateUrl(await resolveWebviewUrl(projectDir));
     } else {
       sidebarProvider?.showError(
         "The Clarity backend failed to start. Check the Clarity Agent output panel for details.",
@@ -197,11 +197,11 @@ async function startAndShow(
       backend.showOutput();
     }
   } else {
-    sidebarProvider?.updateUrl(await resolveBackendUrl(projectDir));
+    sidebarProvider?.updateUrl(await resolveWebviewUrl(projectDir));
   }
 }
 
-async function resolveBackendUrl(projectDir: string): Promise<string> {
+async function resolveWebviewUrl(projectDir: string): Promise<string> {
   if (!backend) {
     throw new Error("Backend is not initialized.");
   }
@@ -213,7 +213,7 @@ async function resolveBackendUrl(projectDir: string): Promise<string> {
       `Clarity opened the launcher, but couldn't activate the selected folder: ${message}`,
     );
     backend.showOutput();
-    return backend.baseUrl;
+    return backend.launcherUrl;
   }
 }
 
