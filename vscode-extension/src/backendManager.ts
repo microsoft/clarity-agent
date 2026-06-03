@@ -68,7 +68,7 @@ export class BackendManager {
     return this._port;
   }
 
-  get baseUrl(): string {
+  get launcherUrl(): string {
     return `http://127.0.0.1:${this._port}`;
   }
 
@@ -240,7 +240,7 @@ export class BackendManager {
       this.outputChannel.appendLine(
         `Project registration returned ${result.status}; opening launcher root for setup handling.`,
       );
-      return this.baseUrl;
+      return this.launcherUrl;
     }
 
     const projectId = result.id;
@@ -248,7 +248,7 @@ export class BackendManager {
       `/api/projects/${encodeURIComponent(projectId)}/activate`,
       {},
     );
-    return `${this.baseUrl}/p/${encodeURIComponent(projectId)}/`;
+    return `${this.launcherUrl}/p/${encodeURIComponent(projectId)}/`;
   }
 
   // -- Private helpers --
