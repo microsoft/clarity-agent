@@ -22,16 +22,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          uv pip install --system -e ".[dev]"
+          # `uv sync` honors uv.lock — `uv pip install` does NOT, which
+          # is how we previously ended up with stale transitive deps
+          # (notably github-copilot-sdk 0.1.0 instead of the locked 0.3.0,
+          # missing SubprocessConfig).  `--locked` makes a stale lock
+          # fail loudly rather than silently re-resolving.
+          uv sync --extra dev --locked
 
       - name: Lint (ruff)
-        run: ruff check src/ tests/ dev-tools/ evals/
+        run: uv run ruff check src/ tests/ dev-tools/ evals/
 
       - name: Type check (pyright)
-        run: pyright src/ evals/
+        run: uv run pyright src/ evals/
 
       - name: Run tests
-        run: pytest tests/ -q
+        run: uv run pytest tests/ -q
 
   tauri-build:
     strategy:
@@ -83,7 +88,19 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install Python dependencies
-        run: pip install -e ".[web,cli,brainstorm,docx,openai,azure,bundle]"
+        # `uv sync --locked` so we get the same versions resolved in
+        # uv.lock (notably github-copilot-sdk 0.3.0, which `uv pip` /
+        # bare `pip` would silently downgrade to 0.1.0 and break the
+        # SubprocessConfig import).
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          # `dev` self-references [cli,web,mcp] and adds pyinstaller,
+          # which clarity.py install --release needs.  The previous
+          # bare-pip command referenced 5 non-existent extras
+          # (brainstorm/docx/openai/azure/bundle); pip silently
+          # ignored them, uv (correctly) errors.
+          uv sync --extra dev --locked
 
       - name: Install web dependencies
         run: cd web && npm ci
@@ -102,7 +119,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build desktop app
-        run: python clarity.py install --release
+        run: uv run python clarity.py install --release
         env:
           CI: true
           # Ad-hoc sign on macOS CI (no signing identity available).

@@ -27,10 +27,12 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
+        # `uv sync --locked` honors uv.lock; `uv pip` does NOT, which
+        # is how we previously ended up with stale transitive deps.
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          uv pip install --system -e ".[dev]"
+          uv sync --extra dev --locked
 
       - name: Run evals
         env:
@@ -42,9 +44,9 @@ jobs:
           FILTER="${{ github.event.inputs.case_filter }}"
           COMMON_ARGS=(-v --tb=short --junit-xml=evals-results.xml --output-dir=./eval-artifacts)
           if [ -n "$FILTER" ]; then
-            pytest evals/cases/ "${COMMON_ARGS[@]}" -k "$FILTER"
+            uv run pytest evals/cases/ "${COMMON_ARGS[@]}" -k "$FILTER"
           else
-            pytest evals/cases/ "${COMMON_ARGS[@]}"
+            uv run pytest evals/cases/ "${COMMON_ARGS[@]}"
           fi
 
       - name: Upload results

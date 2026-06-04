@@ -203,11 +203,28 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "endpoint_env_var": None,
         "auth_modes": [
             {
+                "name": "sdk_native",
+                "display_name": "Copilot login (recommended)",
+                "description": (
+                    "Zero-config via the bundled Copilot CLI's own login. "
+                    "No external tools to install."
+                ),
+                "package": "copilot",
+                "env_var": None,
+                "setup_help": (
+                    "Run 'copilot auth login' in a terminal to sign in. "
+                    "The Copilot CLI is bundled with the Python package, "
+                    "so no separate install is required."
+                ),
+                "setup_url": "https://docs.github.com/en/copilot",
+                "fields": [],
+            },
+            {
                 "name": "gh_cli",
                 "display_name": "GitHub CLI",
                 "description": (
-                    "Zero-config via the gh CLI — uses your existing "
-                    "GitHub login. No token needed."
+                    "Use the gh CLI's stored token — convenient if you "
+                    "already have 'gh auth login' set up."
                 ),
                 "package": "copilot",
                 "env_var": None,
@@ -368,9 +385,20 @@ def _auto_detect_provider() -> tuple[str, str] | None:
     if os.environ.get("CLAUDECODE") and _has_package("claude_agent_sdk"):
         return ("anthropic", "claude_sdk")
 
-    # GitHub Copilot via gh CLI — most ambient fallback (almost any
-    # developer has `gh` installed), so check last.
-    from clarity_agent.llm.impl.github_copilot import get_gh_cli_token
+    # GitHub Copilot via the SDK's own logged-in user — the
+    # recommended path.  Requires that the user has already run
+    # ``copilot auth login``; the bundled CLI manages its own
+    # credential store.  Probed by spawning a transient client.
+    from clarity_agent.llm.impl.github_copilot import (
+        get_gh_cli_token,
+        probe_sdk_native_auth,
+    )
+    if _has_package("copilot") and probe_sdk_native_auth():
+        return ("github", "sdk_native")
+
+    # GitHub Copilot via gh CLI — ambient fallback for users who have
+    # ``gh auth login`` but haven't done ``copilot auth login``.  The
+    # SDK accepts the gh token via ``SubprocessConfig.github_token``.
     if get_gh_cli_token():
         return ("github", "gh_cli")
 

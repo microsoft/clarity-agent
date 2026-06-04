@@ -548,6 +548,9 @@ class TestLLMConfigCLI:
         with patch(
             "clarity_agent.llm.impl.github_copilot.get_gh_cli_token",
             return_value=None,
+        ), patch(
+            "clarity_agent.llm.impl.github_copilot.probe_sdk_native_auth",
+            return_value=False,
         ), pytest.raises(LLMConfigError):
             LLMConfig.create(args)
 
@@ -765,12 +768,61 @@ class TestAutoDetectProvider:
     def test_returns_none_when_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from clarity_agent.llm.config import _auto_detect_provider
         self._clear_all_keys(monkeypatch)
-        # Mock away the gh CLI probe so it doesn't detect a local login.
+        # Mock away BOTH Copilot probes — gh CLI and the bundled
+        # SDK login — so the test environment doesn't accidentally
+        # detect a real local setup.
         with patch(
             "clarity_agent.llm.impl.github_copilot.get_gh_cli_token",
             return_value=None,
+        ), patch(
+            "clarity_agent.llm.impl.github_copilot.probe_sdk_native_auth",
+            return_value=False,
         ):
             assert _auto_detect_provider() is None
+
+    def test_detects_github_sdk_native(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SDK-native auth (Copilot login) is picked when the probe succeeds."""
+        from clarity_agent.llm.config import _auto_detect_provider
+        self._clear_all_keys(monkeypatch)
+        with patch("clarity_agent.llm.config._has_package", return_value=True), \
+             patch(
+                "clarity_agent.llm.impl.github_copilot.probe_sdk_native_auth",
+                return_value=True,
+             ), patch(
+                "clarity_agent.llm.impl.github_copilot.get_gh_cli_token",
+                return_value="should-not-be-used",
+             ):
+            assert _auto_detect_provider() == ("github", "sdk_native")
+
+    def test_detects_github_gh_cli_fallback(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """gh CLI fires when the SDK-native probe says we aren't logged in."""
+        from clarity_agent.llm.config import _auto_detect_provider
+        self._clear_all_keys(monkeypatch)
+        with patch("clarity_agent.llm.config._has_package", return_value=True), \
+             patch(
+                "clarity_agent.llm.impl.github_copilot.probe_sdk_native_auth",
+                return_value=False,
+             ), patch(
+                "clarity_agent.llm.impl.github_copilot.get_gh_cli_token",
+                return_value="gh-token",
+             ):
+            assert _auto_detect_provider() == ("github", "gh_cli")
+
+    def test_github_token_beats_sdk_native(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Explicit GITHUB_TOKEN wins over the SDK-native probe."""
+        from clarity_agent.llm.config import _auto_detect_provider
+        self._clear_all_keys(monkeypatch)
+        monkeypatch.setenv("GITHUB_TOKEN", "explicit")
+        with patch("clarity_agent.llm.config._has_package", return_value=True), \
+             patch(
+                "clarity_agent.llm.impl.github_copilot.probe_sdk_native_auth",
+                return_value=True,
+             ):
+            assert _auto_detect_provider() == ("github", "token")
 
     def test_anthropic_takes_priority_over_claudecode(
         self, monkeypatch: pytest.MonkeyPatch,

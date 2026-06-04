@@ -60,7 +60,19 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-release-
 
       - name: Install Python dependencies
-        run: pip install -e ".[web,cli,brainstorm,docx,openai,azure,bundle]"
+        # `uv sync --locked` honors uv.lock; `pip install` does NOT,
+        # which is how we previously ended up with stale transitive
+        # deps (notably github-copilot-sdk 0.1.0, missing
+        # SubprocessConfig).
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          # `dev` self-references [cli,web,mcp] and adds pyinstaller,
+          # which clarity.py install --release needs.  The previous
+          # bare-pip command referenced 5 non-existent extras
+          # (brainstorm/docx/openai/azure/bundle); pip silently
+          # ignored them, uv (correctly) errors.
+          uv sync --extra dev --locked
 
       - name: Install web dependencies
         run: cd web && npm ci
@@ -135,7 +147,7 @@ jobs:
           echo "Stamped _version.py with version=${GITHUB_REF_NAME}, source=release"
 
       - name: Build release
-        run: python clarity.py install --release
+        run: uv run python clarity.py install --release
         env:
           CI: true
           # Use configured signing identity if available, otherwise ad-hoc sign.
