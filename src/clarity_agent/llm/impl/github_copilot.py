@@ -37,8 +37,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from clarity_agent.transcript import Transcript
 
-from copilot import CopilotClient
-from copilot.client import SubprocessConfig
+from copilot import CopilotClient, SubprocessConfig
 from copilot.generated.session_events import SessionEvent, SessionEventType
 from copilot.session import (
     CopilotSession,
