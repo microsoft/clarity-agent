@@ -345,7 +345,7 @@ wheels = [
 
 [[package]]
 name = "clarity-agent"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -401,7 +401,7 @@ requires-dist = [
     { name = "clarity-agent", extras = ["cli", "web", "mcp"], marker = "extra == 'dev'" },
     { name = "claude-agent-sdk", marker = "extra == 'cli'", specifier = ">=0.1.0" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.104.0" },
-    { name = "github-copilot-sdk", specifier = ">=0.1.0" },
+    { name = "github-copilot-sdk", specifier = ">=0.3.0" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", marker = "extra == 'web'", specifier = ">=0.27.0" },
     { name = "keyring", specifier = ">=25.0" },
