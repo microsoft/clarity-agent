@@ -155,6 +155,7 @@ class TestPlatformKeys:
             ("clarity_arm64.dmg", {"darwin-aarch64"}),
             ("clarity_x86_64.dmg", {"darwin-x86_64"}),
             ("clarity_x64.dmg", {"darwin-x86_64"}),
+            ("clarity.exe", {"windows-x86_64"}),
             ("clarity.msi", {"windows-x86_64"}),
             ("clarity.AppImage", {"linux-x86_64"}),
             ("clarity.app.tar.gz", {"darwin-aarch64", "darwin-x86_64"}),

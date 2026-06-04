@@ -4,7 +4,7 @@ Builds a native desktop application for the current platform using
 PyInstaller (Python backend sidecar) and Tauri (native shell).
 
   macOS   → .app bundle + .dmg
-  Windows → .msi installer
+  Windows → .exe (NSIS) installer
   Linux   → .AppImage / .deb
 
 Entry point: ``clarity install [--release]``
@@ -435,8 +435,8 @@ def _open_installer(persisted_dist: Path) -> StepResult:
     """Hand off to the platform's standard install flow.
 
     macOS: ``open Clarity.dmg`` (Finder shows the drag-to-Applications
-    window).  Windows: ``start Clarity.msi`` (MSI wizard with its own
-    UAC prompt).  Linux: print the install commands — there's no
+    window).  Windows: ``start Clarity.exe`` (or ``.msi`` fallback).
+    Linux: print the install commands — there's no
     universal Linux installer GUI, and silently auto-installing would
     need ``sudo``.
 
@@ -463,21 +463,23 @@ def _open_installer(persisted_dist: Path) -> StepResult:
             )
 
     if sys.platform == "win32":
+        exe = next(iter(persisted_dist.glob("*.exe")), None)
         msi = next(iter(persisted_dist.glob("*.msi")), None)
-        if msi is None:
+        installer = exe or msi
+        if installer is None:
             return StepResult(
                 Outcome.WARN,
-                f"No .msi found in {persisted_dist}",
+                f"No .exe or .msi found in {persisted_dist}",
             )
         try:
-            subprocess.run(["cmd", "/c", "start", "", str(msi)], check=True, timeout=30)
+            subprocess.run(["cmd", "/c", "start", "", str(installer)], check=True, timeout=30)
             return StepResult(
-                Outcome.OK, f"Launched {msi.name} installer wizard",
+                Outcome.OK, f"Launched {installer.name} installer wizard",
             )
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return StepResult(
                 Outcome.WARN,
-                f"Could not launch installer — run {msi} manually",
+                f"Could not launch installer — run {installer} manually",
             )
 
     # Linux: print instructions for whatever's in the dist.
@@ -507,9 +509,8 @@ def _auto_install(persisted_dist: Path) -> StepResult:
     ``com.apple.quarantine`` attr so the app launches without the
     "downloaded from internet" Gatekeeper prompt.
 
-    Windows: ``msiexec /i <file>.msi /qb`` for a basic-UI silent
-    install.  May trigger a UAC prompt; if elevation is denied the
-    msiexec exit code surfaces in the FAIL message.
+    Windows: run NSIS ``<file>.exe /S`` when available (per-user silent
+    install), falling back to ``msiexec /i <file>.msi /qb``.
 
     Linux: ``sudo dpkg -i <file>.deb`` (errors out if no sudo /
     user is not in sudoers — that's the operator's problem to
@@ -545,11 +546,27 @@ def _auto_install(persisted_dist: Path) -> StepResult:
         )
 
     if sys.platform == "win32":
+        exe = next(iter(persisted_dist.glob("*.exe")), None)
         msi = next(iter(persisted_dist.glob("*.msi")), None)
-        if msi is None:
-            return StepResult(Outcome.FAIL, f"No .msi found in {persisted_dist}")
+        installer = exe or msi
+        if installer is None:
+            return StepResult(Outcome.FAIL, f"No .exe or .msi found in {persisted_dist}")
+
+        if exe is not None:
+            r = subprocess.run(
+                [str(installer), "/S"],
+                capture_output=True, text=True, timeout=300,
+            )
+            if r.returncode != 0:
+                return StepResult(
+                    Outcome.FAIL,
+                    f"installer exit {r.returncode}: "
+                    f"{(r.stderr or r.stdout or '').strip() or 'no output'}",
+                )
+            return StepResult(Outcome.OK, f"Installed {installer.name}")
+
         r = subprocess.run(
-            ["msiexec", "/i", str(msi), "/qb"],
+            ["msiexec", "/i", str(installer), "/qb"],
             capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
@@ -558,7 +575,7 @@ def _auto_install(persisted_dist: Path) -> StepResult:
                 f"msiexec exit {r.returncode}: "
                 f"{(r.stderr or r.stdout or '').strip() or 'no output'}",
             )
-        return StepResult(Outcome.OK, f"Installed {msi.name}")
+        return StepResult(Outcome.OK, f"Installed {installer.name}")
 
     # Linux
     deb = next(iter(persisted_dist.glob("*.deb")), None)

@@ -9,7 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from clarity_agent.setup.desktop import (
+    _auto_install,
     _build_tauri,
+    _open_installer,
     _persist_dist,
     _persistence_target,
     run_desktop_install,
@@ -284,3 +286,48 @@ class TestPersistDist:
 
         assert (target / "Clarity-new.dmg").exists()
         assert not (target / "Clarity-old.dmg").exists()
+
+
+class TestWindowsInstallerSelection:
+    def test_open_installer_prefers_nsis_exe(self, tmp_path: Path) -> None:
+        exe = tmp_path / "Clarity.exe"
+        exe.write_bytes(b"fake")
+        (tmp_path / "Clarity.msi").write_bytes(b"fake")
+
+        with patch("clarity_agent.setup.desktop.sys") as mock_sys, \
+             patch("clarity_agent.setup.desktop.subprocess.run") as mock_run:
+            mock_sys.platform = "win32"
+            mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            result = _open_installer(tmp_path)
+
+        assert result.outcome == Outcome.OK
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["cmd", "/c", "start", "", str(exe)]
+
+    def test_auto_install_uses_nsis_silent(self, tmp_path: Path) -> None:
+        exe = tmp_path / "Clarity.exe"
+        exe.write_bytes(b"fake")
+
+        with patch("clarity_agent.setup.desktop.sys") as mock_sys, \
+             patch("clarity_agent.setup.desktop.subprocess.run") as mock_run:
+            mock_sys.platform = "win32"
+            mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            result = _auto_install(tmp_path)
+
+        assert result.outcome == Outcome.OK
+        cmd = mock_run.call_args[0][0]
+        assert cmd == [str(exe), "/S"]
+
+    def test_auto_install_falls_back_to_msi(self, tmp_path: Path) -> None:
+        msi = tmp_path / "Clarity.msi"
+        msi.write_bytes(b"fake")
+
+        with patch("clarity_agent.setup.desktop.sys") as mock_sys, \
+             patch("clarity_agent.setup.desktop.subprocess.run") as mock_run:
+            mock_sys.platform = "win32"
+            mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            result = _auto_install(tmp_path)
+
+        assert result.outcome == Outcome.OK
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["msiexec", "/i", str(msi), "/qb"]

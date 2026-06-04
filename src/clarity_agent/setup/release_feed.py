@@ -304,7 +304,7 @@ def _platform_keys_for_asset(filename: str) -> Iterator[str]:
             # Universal DMG — match both arches.
             yield "darwin-aarch64"
             yield "darwin-x86_64"
-    elif lower.endswith(".msi") or lower.endswith(".exe.zip"):
+    elif lower.endswith(".msi") or lower.endswith(".exe.zip") or lower.endswith(".exe"):
         yield "windows-x86_64"
     elif lower.endswith(".appimage") or lower.endswith(".appimage.tar.gz"):
         yield "linux-x86_64"
