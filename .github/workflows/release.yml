@@ -67,7 +67,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          uv sync --extra web --extra cli --extra brainstorm --extra docx --extra openai --extra azure --extra bundle --locked
+          # `dev` self-references [cli,web,mcp] and adds pyinstaller,
+          # which clarity.py install --release needs.  The previous
+          # bare-pip command referenced 5 non-existent extras
+          # (brainstorm/docx/openai/azure/bundle); pip silently
+          # ignored them, uv (correctly) errors.
+          uv sync --extra dev --locked
 
       - name: Install web dependencies
         run: cd web && npm ci
