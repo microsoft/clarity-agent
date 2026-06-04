@@ -920,10 +920,30 @@ def _probe_sdk(agent_dir: Path) -> CheckResult:
 
 
 def _probe_copilot(agent_dir: Path) -> CheckResult:
-    """Probe the GitHub Copilot SDK by spinning up a CopilotChatBackend."""
-    from clarity_agent.llm.impl.github_copilot import CopilotChatBackend, get_gh_cli_token
+    """Probe the GitHub Copilot SDK by spinning up a CopilotChatBackend.
 
-    token = os.environ.get("GITHUB_TOKEN") or get_gh_cli_token(raise_on_failure=True)
+    Walks the same auth ladder as ``detect_provider_auth``:
+    ``$GITHUB_TOKEN`` → SDK-native login → ``gh auth token``.  The
+    success message names which rung carried the call so users can
+    confirm their setup is actually using what they think it is.
+    """
+    from clarity_agent.llm.impl.github_copilot import (
+        CopilotChatBackend,
+        get_gh_cli_token,
+        probe_sdk_native_auth,
+    )
+
+    token: str | None
+    rung: str
+    if os.environ.get("GITHUB_TOKEN"):
+        token = os.environ["GITHUB_TOKEN"]
+        rung = "GITHUB_TOKEN"
+    elif probe_sdk_native_auth():
+        token = None
+        rung = "Copilot login"
+    else:
+        token = get_gh_cli_token(raise_on_failure=True)
+        rung = "gh CLI"
 
     backend = CopilotChatBackend(
         project_dir=agent_dir,
@@ -943,12 +963,12 @@ def _probe_copilot(agent_dir: Path) -> CheckResult:
         return CheckResult(
             name="Backend health",
             status=Status.PASS,
-            message="GitHub Copilot responded successfully",
+            message=f"GitHub Copilot responded successfully (via {rung})",
         )
     return CheckResult(
         name="Backend health",
         status=Status.WARN,
-        message="GitHub Copilot returned an empty response",
+        message=f"GitHub Copilot returned an empty response (via {rung})",
     )
 
 

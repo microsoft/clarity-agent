@@ -5,9 +5,18 @@ Copilot SDK for conversations.  Like the Claude SDK backend, this
 wraps an agent runtime rather than a raw messages API — there is no
 corresponding :class:`LLMClient`.
 
-Authentication uses the GitHub CLI (``gh auth token``), a
-``GITHUB_TOKEN`` / ``GH_TOKEN`` env var, or the Copilot SDK's
-built-in OAuth flow.
+Authentication is layered.  In order of priority:
+
+1. An explicit ``GITHUB_TOKEN`` env var (passed via ``token=`` from
+   the factory) — highest precedence, lets CI / custom setups
+   override everything else.
+2. The Copilot CLI's own stored login (``copilot auth login``) —
+   activated by passing ``token=None``; the bundled CLI handles its
+   own credential storage and refresh.  Probed via
+   :func:`probe_sdk_native_auth`.
+3. ``gh auth token`` from the GitHub CLI as an ambient fallback —
+   convenient for users who already live in ``gh`` but haven't run
+   ``copilot auth login``.  Probed via :func:`get_gh_cli_token`.
 """
 
 from __future__ import annotations
@@ -28,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from clarity_agent.transcript import Transcript
 
-from copilot import CopilotClient
+from copilot import CopilotClient, SubprocessConfig
 from copilot.generated.session_events import SessionEvent, SessionEventType
 from copilot.session import (
     CopilotSession,
@@ -106,6 +115,42 @@ async def _wait_for_done_with_idle_timeout(
             # An event may have arrived during the wait, refreshing
             # activity_timestamp[0].  Loop and recompute.
             continue
+
+
+def probe_sdk_native_auth() -> bool:
+    """Check whether the Copilot SDK has a usable logged-in user.
+
+    Spins up a transient :class:`CopilotClient` against the bundled
+    Copilot CLI binary, queries ``auth.getStatus``, and tears the
+    connection back down.  Returns ``True`` iff the CLI reports an
+    authenticated user — the same auth state that powers
+    ``CopilotChatBackend`` when constructed with ``token=None``.
+
+    Used by the autodetection cascade to decide whether to recommend
+    SDK-native auth before falling back to ``gh auth token``.  Cost is
+    a single subprocess spawn (~hundreds of ms); only call once per
+    detection pass, not per chat request.
+    """
+
+    async def _probe() -> bool:
+        client = CopilotClient()
+        try:
+            await client.start()
+            status = await client.get_auth_status()
+            return bool(status.isAuthenticated)
+        finally:
+            try:
+                await client.stop()
+            except Exception:
+                pass
+
+    try:
+        return asyncio.run(_probe())
+    except Exception:
+        # Bundled CLI missing, RPC failure, no event loop available —
+        # treat as "not authenticated" rather than propagating, since
+        # the caller is just choosing which rung of the ladder to use.
+        return False
 
 
 def get_gh_cli_token(*, raise_on_failure: bool = False) -> str | None:
@@ -327,7 +372,12 @@ class CopilotChatBackend(ChatBackend):
     async def _ensure_client(self) -> CopilotClient:
         if self._client is not None:
             return self._client
-        self._client = CopilotClient()
+        # ``token=None`` means "fall through to the SDK's own login" —
+        # ``SubprocessConfig`` resolves ``use_logged_in_user=True`` when
+        # ``github_token`` is unset.  A non-None token wins and is passed
+        # straight through (env var or gh-cli token).
+        config = SubprocessConfig(github_token=self._token) if self._token else None
+        self._client = CopilotClient(config)
         await self._client.start()
         return self._client
 
