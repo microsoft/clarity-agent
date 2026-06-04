@@ -507,12 +507,18 @@ def pytest_runtest_protocol(item, nextitem):  # noqa: ARG001 — hook signature
     Also snapshots the summary on test start so a test visible in
     ``summary.md`` as "in progress" — this way an interrupt mid-test
     leaves a summary that shows which test was running.
+
+    Only applies to legacy cases under ``evals/cases/``.  Non-legacy
+    paths (e.g. ``evals/cases_rampart/``) bypass the legacy summary
+    machinery entirely.
     """
     global _current_test_id
-    _current_test_id = item.nodeid
-    _snapshot_summary(item.config)
+    if item.nodeid.startswith("evals/cases/"):
+        _current_test_id = item.nodeid
+        _snapshot_summary(item.config)
     yield
-    _current_test_id = None
+    if item.nodeid.startswith("evals/cases/"):
+        _current_test_id = None
 
 
 def _classify_error(call) -> str:
@@ -575,8 +581,17 @@ def pytest_runtest_makereport(item, call):
       this, a fixture that can't connect to its backend would produce
       the same error repeated once per test function in the module,
       burying the real problem in noise.
+
+    Only applies to legacy cases under ``evals/cases/`` — the RAMPART
+    path (``evals/cases_rampart/``) uses standard pytest reporting via
+    its own conftest, and shouldn't be intercepted by this hook.
     """
     outcome = yield
+
+    if not item.nodeid.startswith("evals/cases/"):
+        # Pass through for non-legacy paths (e.g. evals/cases_rampart/).
+        return
+
     report = outcome.get_result()
 
     if report.when == "call":
