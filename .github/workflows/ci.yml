@@ -22,16 +22,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
-          uv pip install --system -e ".[dev]"
+          # `uv sync` honors uv.lock — `uv pip install` does NOT, which
+          # is how we previously ended up with stale transitive deps
+          # (notably github-copilot-sdk 0.1.0 instead of the locked 0.3.0,
+          # missing SubprocessConfig).  `--locked` makes a stale lock
+          # fail loudly rather than silently re-resolving.
+          uv sync --extra dev --locked
 
       - name: Lint (ruff)
-        run: ruff check src/ tests/ dev-tools/ evals/
+        run: uv run ruff check src/ tests/ dev-tools/ evals/
 
       - name: Type check (pyright)
-        run: pyright src/ evals/
+        run: uv run pyright src/ evals/
 
       - name: Run tests
-        run: pytest tests/ -q
+        run: uv run pytest tests/ -q
 
   tauri-build:
     strategy:
