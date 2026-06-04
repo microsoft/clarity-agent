@@ -289,10 +289,9 @@ class TestPersistDist:
 
 
 class TestWindowsInstallerSelection:
-    def test_open_installer_prefers_nsis_exe(self, tmp_path: Path) -> None:
+    def test_open_installer_launches_nsis_exe(self, tmp_path: Path) -> None:
         exe = tmp_path / "Clarity.exe"
         exe.write_bytes(b"fake")
-        (tmp_path / "Clarity.msi").write_bytes(b"fake")
 
         with patch("clarity_agent.setup.desktop.sys") as mock_sys, \
              patch("clarity_agent.setup.desktop.subprocess.run") as mock_run:
@@ -318,16 +317,15 @@ class TestWindowsInstallerSelection:
         cmd = mock_run.call_args[0][0]
         assert cmd == [str(exe), "/S"]
 
-    def test_auto_install_falls_back_to_msi(self, tmp_path: Path) -> None:
-        msi = tmp_path / "Clarity.msi"
-        msi.write_bytes(b"fake")
+    def test_auto_install_fails_without_exe(self, tmp_path: Path) -> None:
+        # Stale .msi from a pre-NSIS build must NOT be picked up.
+        (tmp_path / "Clarity.msi").write_bytes(b"fake")
 
         with patch("clarity_agent.setup.desktop.sys") as mock_sys, \
              patch("clarity_agent.setup.desktop.subprocess.run") as mock_run:
             mock_sys.platform = "win32"
-            mock_run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
             result = _auto_install(tmp_path)
 
-        assert result.outcome == Outcome.OK
-        cmd = mock_run.call_args[0][0]
-        assert cmd == ["msiexec", "/i", str(msi), "/qb"]
+        assert result.outcome == Outcome.FAIL
+        assert "No .exe" in result.message
+        mock_run.assert_not_called()

@@ -4,7 +4,7 @@ Builds a native desktop application for the current platform using
 PyInstaller (Python backend sidecar) and Tauri (native shell).
 
   macOS   → .app bundle + .dmg
-  Windows → .exe (NSIS) installer
+  Windows → .exe (NSIS) installer (per-user)
   Linux   → .AppImage / .deb
 
 Entry point: ``clarity install [--release]``
@@ -372,16 +372,14 @@ def _collect_outputs(source_dir: Path, *, release: bool = False) -> StepResult:
                 collected.append(f"{dest.name} ({size_mb:.0f} MB)")
 
     elif sys.platform == "win32":
-        # .msi / .exe installers
-        for subdir in ("msi", "nsis"):
-            d = bundle_dir / subdir
-            if d.exists():
-                for f in d.iterdir():
-                    if f.suffix in (".msi", ".exe"):
-                        dest = dist_dir / f.name
-                        shutil.copy2(f, dest)
-                        size_mb = dest.stat().st_size / (1024 * 1024)
-                        collected.append(f"{dest.name} ({size_mb:.0f} MB)")
+        d = bundle_dir / "nsis"
+        if d.exists():
+            for f in d.iterdir():
+                if f.suffix == ".exe":
+                    dest = dist_dir / f.name
+                    shutil.copy2(f, dest)
+                    size_mb = dest.stat().st_size / (1024 * 1024)
+                    collected.append(f"{dest.name} ({size_mb:.0f} MB)")
 
     else:
         # Linux: .AppImage, .deb
@@ -435,8 +433,8 @@ def _open_installer(persisted_dist: Path) -> StepResult:
     """Hand off to the platform's standard install flow.
 
     macOS: ``open Clarity.dmg`` (Finder shows the drag-to-Applications
-    window).  Windows: ``start Clarity.exe`` (or ``.msi`` fallback).
-    Linux: print the install commands — there's no
+    window).  Windows: ``start Clarity.exe`` (NSIS installer — per-user,
+    no UAC).  Linux: print the install commands — there's no
     universal Linux installer GUI, and silently auto-installing would
     need ``sudo``.
 
@@ -464,22 +462,20 @@ def _open_installer(persisted_dist: Path) -> StepResult:
 
     if sys.platform == "win32":
         exe = next(iter(persisted_dist.glob("*.exe")), None)
-        msi = next(iter(persisted_dist.glob("*.msi")), None)
-        installer = exe or msi
-        if installer is None:
+        if exe is None:
             return StepResult(
                 Outcome.WARN,
-                f"No .exe or .msi found in {persisted_dist}",
+                f"No .exe found in {persisted_dist}",
             )
         try:
-            subprocess.run(["cmd", "/c", "start", "", str(installer)], check=True, timeout=30)
+            subprocess.run(["cmd", "/c", "start", "", str(exe)], check=True, timeout=30)
             return StepResult(
-                Outcome.OK, f"Launched {installer.name} installer wizard",
+                Outcome.OK, f"Launched {exe.name} installer wizard",
             )
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return StepResult(
                 Outcome.WARN,
-                f"Could not launch installer — run {installer} manually",
+                f"Could not launch installer — run {exe} manually",
             )
 
     # Linux: print instructions for whatever's in the dist.
@@ -509,8 +505,8 @@ def _auto_install(persisted_dist: Path) -> StepResult:
     ``com.apple.quarantine`` attr so the app launches without the
     "downloaded from internet" Gatekeeper prompt.
 
-    Windows: run NSIS ``<file>.exe /S`` when available (per-user silent
-    install), falling back to ``msiexec /i <file>.msi /qb``.
+    Windows: run NSIS ``<file>.exe /S`` for a per-user silent install
+    (no UAC; lands under ``%LOCALAPPDATA%\\Programs\\Clarity``).
 
     Linux: ``sudo dpkg -i <file>.deb`` (errors out if no sudo /
     user is not in sudoers — that's the operator's problem to
@@ -547,35 +543,19 @@ def _auto_install(persisted_dist: Path) -> StepResult:
 
     if sys.platform == "win32":
         exe = next(iter(persisted_dist.glob("*.exe")), None)
-        msi = next(iter(persisted_dist.glob("*.msi")), None)
-        installer = exe or msi
-        if installer is None:
-            return StepResult(Outcome.FAIL, f"No .exe or .msi found in {persisted_dist}")
-
-        if exe is not None:
-            r = subprocess.run(
-                [str(installer), "/S"],
-                capture_output=True, text=True, timeout=300,
-            )
-            if r.returncode != 0:
-                return StepResult(
-                    Outcome.FAIL,
-                    f"installer exit {r.returncode}: "
-                    f"{(r.stderr or r.stdout or '').strip() or 'no output'}",
-                )
-            return StepResult(Outcome.OK, f"Installed {installer.name}")
-
+        if exe is None:
+            return StepResult(Outcome.FAIL, f"No .exe found in {persisted_dist}")
         r = subprocess.run(
-            ["msiexec", "/i", str(installer), "/qb"],
+            [str(exe), "/S"],
             capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
             return StepResult(
                 Outcome.FAIL,
-                f"msiexec exit {r.returncode}: "
+                f"installer exit {r.returncode}: "
                 f"{(r.stderr or r.stdout or '').strip() or 'no output'}",
             )
-        return StepResult(Outcome.OK, f"Installed {installer.name}")
+        return StepResult(Outcome.OK, f"Installed {exe.name}")
 
     # Linux
     deb = next(iter(persisted_dist.glob("*.deb")), None)
@@ -619,10 +599,10 @@ def run_desktop_install(
         source_dir:   The clarity-agent repo root.
         release:      If True, produce an optimized release build.
         auto_install: If True, after building, copy the .app into
-                      /Applications (or run msiexec /qb on Windows,
-                      dpkg on Linux) directly instead of opening the
-                      installer for the user to drive.  Convenient
-                      for developers; may need elevated privileges.
+                      /Applications (or run the NSIS installer silently
+                      on Windows, dpkg on Linux) directly instead of
+                      opening the installer for the user to drive.
+                      Convenient for developers.
         on_step:      Optional callback for real-time progress output.
     """
     results: list[StepResult] = []
@@ -717,9 +697,9 @@ def _cli_main(argv: Sequence[str] | None = None, source_dir: Path | None = None)
         action="store_true",
         help=(
             "Install the built bundle directly into the platform's "
-            "standard location (/Applications, msiexec /qb, dpkg) "
-            "instead of opening the installer for the user.  "
-            "Convenient for developers; may need elevated privileges."
+            "standard location (/Applications on macOS, NSIS silent "
+            "install on Windows, dpkg on Linux) instead of opening "
+            "the installer for the user.  Convenient for developers."
         ),
     )
     args = parser.parse_args(argv)

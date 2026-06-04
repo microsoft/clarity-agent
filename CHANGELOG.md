@@ -5,6 +5,10 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
+- Windows desktop builds now ship an NSIS per-user installer (`.exe`) instead
+  of the machine-wide `.msi`. Installs no longer require UAC elevation. Users
+  upgrading should uninstall the old machine-wide "Clarity" manually.
+
 ## [0.1.2] - 2026-05-29
 
 ### Added
