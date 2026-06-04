@@ -138,6 +138,12 @@ def create_chat_backend(
         )
 
     # The github provider uses the Copilot SDK agent runtime.
+    # Auth-mode dispatch:
+    #   - "token"      → explicit GITHUB_TOKEN, passed as-is
+    #   - "sdk_native" → ``token=None`` → SDK uses its own logged-in
+    #                    user (``use_logged_in_user=True``)
+    #   - "gh_cli"     → pull a token from ``gh auth token`` and pass
+    #                    it to the SDK like an explicit token
     if config.provider == "github":
         from clarity_agent.llm.impl.github_copilot import (
             CopilotChatBackend,

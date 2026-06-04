@@ -35,6 +35,11 @@ if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from clarity_agent.app_paths import clarity_env_path, get_bundle_dir
+from clarity_agent.env_path import ensure_tool_paths
+
+# Ensure Homebrew, ~/.local/bin, etc. are visible — macOS GUI apps
+# (Tauri desktop) inherit a minimal PATH that excludes them.
+ensure_tool_paths()
 
 # Root directory containing processes/, thinkers/, web/dist/, etc.
 # In development this is the repo root; in a frozen build it's sys._MEIPASS.
