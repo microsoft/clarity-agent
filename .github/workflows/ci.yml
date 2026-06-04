@@ -88,7 +88,14 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install Python dependencies
-        run: pip install -e ".[web,cli,brainstorm,docx,openai,azure,bundle]"
+        # `uv sync --locked` so we get the same versions resolved in
+        # uv.lock (notably github-copilot-sdk 0.3.0, which `uv pip` /
+        # bare `pip` would silently downgrade to 0.1.0 and break the
+        # SubprocessConfig import).
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          uv sync --extra web --extra cli --extra brainstorm --extra docx --extra openai --extra azure --extra bundle --locked
 
       - name: Install web dependencies
         run: cd web && npm ci
@@ -107,7 +114,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build desktop app
-        run: python clarity.py install --release
+        run: uv run python clarity.py install --release
         env:
           CI: true
           # Ad-hoc sign on macOS CI (no signing identity available).
