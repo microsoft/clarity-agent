@@ -18,11 +18,21 @@ The release workflow builds macOS, Windows, and Linux artifacts, then creates a 
 
 ## What gets built
 
-| Platform | Artifacts                        |
-|----------|----------------------------------|
-| macOS    | `Clarity.app`, `.dmg`            |
-| Windows  | `.msi` installer                 |
-| Linux    | `.deb` package, `.AppImage`      |
+| Platform | Artifacts |
+| --- | --- |
+| macOS | `Clarity.app`, `.dmg` |
+| Windows | `.exe` (NSIS) installer |
+| Linux | `.deb` package, `.AppImage` |
+
+Windows releases use NSIS in `currentUser` mode, so installs default to a per-user
+location and do not require administrator elevation.
+
+### Upgrading from a pre-NSIS Clarity install on Windows
+
+Earlier Windows builds shipped a machine-wide `.msi`. The new NSIS installer is
+per-user and registers separately, so the two can coexist as two entries in
+*Apps & Features*. Users coming from `.msi` should uninstall the old "Clarity"
+machine-wide entry (requires admin) manually.
 
 Release builds use `--release` (optimized, stripped). Debug builds are
 roughly 50% larger.
@@ -63,6 +73,7 @@ Outputs land in `dist/`.
 **Build fails locally**: Run `uv run python clarity.py install` and check which step fails. Prerequisites are Rust, Node.js, and Python with the `bundle` extra (`pip install -e ".[bundle]"`).
 
 **CI release fails**: Check the Actions tab for the failed run. Common issues:
+
 - Missing system dependencies on Linux (the workflow installs them, but package names can change between Ubuntu versions)
 - Stale Cargo cache (delete the cache in Actions → Caches if Rust compilation fails after a dependency update)
 - DMG creation fails on macOS if a previous Clarity volume is still mounted
