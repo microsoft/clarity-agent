@@ -72,6 +72,54 @@ _GITHUB_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # want to surface.  Override via ``CopilotChatBackend(idle_timeout_seconds=...)``.
 _DEFAULT_IDLE_TIMEOUT_SECONDS = 300.0
 
+# Ordered list of argument keys we look at when summarizing a tool
+# call for the UI.  First hit wins, so put the most "what is this
+# tool actually doing" keys first.  Generic names like ``input`` and
+# ``text`` come last because they tend to carry bulky payloads (whole
+# files, full prompts) rather than identifying hints.
+_TOOL_ARG_HINT_KEYS = (
+    "command",       # bash / shell tools
+    "cmd",
+    "path",          # file tools
+    "file_path",
+    "filename",
+    "file",
+    "url",           # fetchers
+    "uri",
+    "query",         # searches / lookups
+    "pattern",       # grep / regex
+    "search",
+    "name",
+)
+
+# Hard cap on hint length before truncation — keep the phase string
+# narrow enough not to wrap in typical terminals / sidebars.
+_TOOL_HINT_MAX_LEN = 60
+
+
+def _summarize_tool_args(arguments: Any) -> str | None:
+    """Return a short human-readable hint for a tool's argument dict.
+
+    Walks ``_TOOL_ARG_HINT_KEYS`` in order and returns the first
+    string-valued key truncated to ``_TOOL_HINT_MAX_LEN``.  Returns
+    ``None`` if ``arguments`` isn't a mapping or none of the known
+    keys are present — callers fall back to the bare tool name.
+
+    Deliberately doesn't try to be clever about unknown tools: a
+    half-summarized JSON blob in the status bar is worse than just
+    showing the tool name.
+    """
+    if not isinstance(arguments, dict):
+        return None
+    for key in _TOOL_ARG_HINT_KEYS:
+        value = arguments.get(key)
+        if isinstance(value, str) and value:
+            if len(value) > _TOOL_HINT_MAX_LEN:
+                return value[: _TOOL_HINT_MAX_LEN - 1] + "…"
+            return value
+    return None
+
+
 # Number of times to kill + recreate the SDK session on an idle
 # timeout before giving up on the turn entirely.  A real retry —
 # destroys the wedged session, builds a fresh one, replays every
@@ -456,24 +504,40 @@ class CopilotChatBackend(ChatBackend):
                     if self.on_text_delta:
                         self.on_text_delta(content)
             elif event.type == SessionEventType.TOOL_EXECUTION_START:
+                # ``ToolExecutionStartData`` carries the real
+                # ``tool_call_id`` and a structured ``arguments``
+                # dict (and MCP routing info when the tool is
+                # MCP-provided) — far richer than the bare name we
+                # used to surface.  Use the real id and args so the
+                # transcript records exactly what was called with
+                # what; build the phase string from the args so the
+                # status bar reads ``tool:read_file (src/foo.py)``
+                # instead of just ``tool:read_file``.
                 tool_name = getattr(event.data, "tool_name", None) or ""
+                tool_call_id = (
+                    getattr(event.data, "tool_call_id", None)
+                    or f"copilot_{tool_name}_{id(event)}"
+                )
+                arguments = getattr(event.data, "arguments", None)
+                input_dict = arguments if isinstance(arguments, dict) else {}
+                mcp_server = getattr(event.data, "mcp_server_name", None)
+
+                display_name = (
+                    f"{mcp_server}/{tool_name}" if mcp_server else tool_name
+                )
+                hint = _summarize_tool_args(arguments)
                 if self.on_tool_use:
-                    self.on_tool_use(tool_name, "executing")
-                # Structured callback for the transcript layer.
-                # The Copilot SDK's TOOL_EXECUTION_START event carries
-                # only ``tool_name`` — no id, no input dict — so we
-                # synthesize a degraded :class:`ToolUseBlock`.  The
-                # transcript will record that the tool was invoked
-                # but the input is empty.  Honest about its limit:
-                # the id is prefixed ``copilot_`` so a later replay
-                # path can recognize these as non-round-trippable.
+                    self.on_tool_use(display_name, hint or "executing")
                 if self.on_tool_call:
                     self.on_tool_call(ToolUseBlock(
-                        id=f"copilot_{tool_name}_{id(event)}",
-                        name=tool_name,
-                        input={},
+                        id=tool_call_id,
+                        name=display_name,
+                        input=input_dict,
                     ))
-                _emit_phase(f"tool:{tool_name}" if tool_name else "executing tool")
+                phase = f"tool:{display_name}" if display_name else "executing tool"
+                if hint:
+                    phase = f"{phase} ({hint})"
+                _emit_phase(phase)
             elif event.type == SessionEventType.SESSION_IDLE:
                 done.set()
 
@@ -488,9 +552,41 @@ class CopilotChatBackend(ChatBackend):
             ):
                 _emit_phase("reasoning")
             elif event.type == SessionEventType.TOOL_EXECUTION_COMPLETE:
-                _emit_phase("thinking")
+                # The SDK tells us whether the tool succeeded and,
+                # on failure, carries a structured error.  Surface
+                # the failure so the UI doesn't silently flip back
+                # to "thinking" after a tool blew up.
+                success = getattr(event.data, "success", True)
+                if not success:
+                    err = getattr(event.data, "error", None)
+                    err_msg = getattr(err, "message", None) if err else None
+                    label = err_msg or "failed"
+                    if len(label) > _TOOL_HINT_MAX_LEN:
+                        label = label[: _TOOL_HINT_MAX_LEN - 1] + "…"
+                    _emit_phase(f"tool failed: {label}")
+                else:
+                    _emit_phase("thinking")
             elif event.type == SessionEventType.TOOL_EXECUTION_PROGRESS:
-                pass  # stay in current tool phase, just refreshes activity_timestamp
+                # The SDK streams free-text progress messages for
+                # long-running tools (``Downloading…``,
+                # ``Installing dependencies…``).  Surface them so
+                # the status bar reflects what the tool is doing
+                # mid-flight instead of just sitting on the start
+                # phase.  Activity-timestamp refresh has already
+                # happened above.
+                msg = getattr(event.data, "progress_message", None)
+                if isinstance(msg, str) and msg:
+                    truncated = (
+                        msg if len(msg) <= _TOOL_HINT_MAX_LEN
+                        else msg[: _TOOL_HINT_MAX_LEN - 1] + "…"
+                    )
+                    # Re-use whatever the current tool phase is by
+                    # appending the progress hint after a dash.
+                    base = current_phase[0] or "tool"
+                    # Strip any prior progress suffix so we don't
+                    # accumulate "tool:x — a — b — c".
+                    base = base.split(" — ", 1)[0]
+                    _emit_phase(f"{base} — {truncated}")
             elif event.type == SessionEventType.SUBAGENT_STARTED:
                 _emit_phase("sub-agent working")
             elif event.type == SessionEventType.SUBAGENT_COMPLETED:
