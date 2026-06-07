@@ -6,6 +6,24 @@ import { getDocument, getProtocolTree, getPacketStatus } from "../api/client";
 import type { DocumentStatus, ProtocolFile } from "../types";
 import EmptyState from "./EmptyState";
 
+/** Trigger a print dialog for the main webview.
+ *
+ * ``window.print()`` is a no-op inside WKWebView (and unreliable on
+ * WebView2), so the Tauri shell exposes a ``print_main_window``
+ * command that routes the request through ``WebviewWindow::print``
+ * Rust-side.  The IPC import is lazy so the browser/dev build (where
+ * ``@tauri-apps/api/core`` is unavailable) falls through cleanly to
+ * the standard ``window.print()`` path.
+ */
+async function triggerPrint(): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("print_main_window");
+  } catch {
+    window.print();
+  }
+}
+
 function formatJson(raw: string): string {
   try {
     return JSON.stringify(JSON.parse(raw), null, 2);
@@ -138,8 +156,12 @@ export default function ProtocolViewer() {
 
   return (
     <div className="flex h-full">
-      {/* File tree */}
-      <div className="w-64 border-r border-border overflow-auto bg-surface">
+      {/* File tree.  ``print-hide`` keeps the document list out of
+          the print view — the global print CSS shows ancestors of
+          ``[data-printable]`` via ``:has(...)``, but siblings inside
+          those ancestors inherit visibility and would otherwise
+          leak into the printout. */}
+      <div className="w-64 border-r border-border overflow-auto bg-surface print-hide">
         <div className="px-5 py-4 border-b border-border">
           <h2
             className="text-sm text-body-heading font-display"
@@ -183,7 +205,7 @@ export default function ProtocolViewer() {
                   {selectedPath}
                 </h2>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => void triggerPrint()}
                   className="print-hide text-body-faint hover:text-body-label transition-colors p-1.5 rounded-lg hover:bg-surface-dim"
                   aria-label="Print document"
                 >

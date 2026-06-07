@@ -2217,6 +2217,12 @@
           "markdownDescription": "Allow the frontend to open additional panel windows via the open_panel_window app command."
         },
         {
+          "description": "Allow the frontend to invoke the native print dialog via the print_main_window app command (window.print() is a no-op in WKWebView).",
+          "type": "string",
+          "const": "allow-print-main-window",
+          "markdownDescription": "Allow the frontend to invoke the native print dialog via the print_main_window app command (window.print() is a no-op in WKWebView)."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",
