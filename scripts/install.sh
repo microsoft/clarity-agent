@@ -57,4 +57,12 @@ git clone --depth 1 --branch "$BRANCH" "$REPO" "$WORK/clarity-agent"
 
 # --- Hand off to Python ------------------------------------------------------
 # Python detects the platform and handles everything from here.
+#
+# Prepend $WORK so the downloaded uv is on PATH for the Python phase.
+# ``installer.py::install_python_deps`` uses ``shutil.which("uv")``
+# to decide whether to use uv or fall back to ``python -m pip``;
+# without this, the fallback runs against the uv-created venv, which
+# doesn't seed pip by default and dies with "No module named pip".
+# See issue #93.
+export PATH="$WORK:$PATH"
 "$UV" run --directory "$WORK/clarity-agent" python clarity.py install "${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}"
