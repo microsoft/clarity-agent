@@ -262,6 +262,20 @@ fn refresh_recent_menu(app: AppHandle) -> Result<(), String> {
     build_menu(&app).map_err(|e| e.to_string())
 }
 
+/// Trigger the native print dialog for the main webview.
+///
+/// Frontend ``window.print()`` is a no-op inside WKWebView (and
+/// unreliable on WebView2), so in-app print buttons have to round
+/// trip through here.  Identical to the ``ID_PRINT`` menu handler —
+/// the menu item just dispatches to the same Tauri API.
+#[tauri::command]
+fn print_main_window(app: AppHandle) -> Result<(), String> {
+    let w = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    w.print().map_err(|e| e.to_string())
+}
+
 // Counter for synthesizing unique window labels for
 // ``open_panel_window``.  Tauri requires window labels to be unique
 // per app; using a monotonic counter avoids any chance of collision
@@ -508,6 +522,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             refresh_recent_menu,
             open_panel_window,
+            print_main_window,
         ])
         .manage(SidecarState(Mutex::new(None)))
         .setup(|app| {
@@ -580,11 +595,10 @@ fn main() {
                         });
                     }
                     ID_PRINT => {
-                        // Use Tauri's native print — window.print() is a
-                        // no-op in WKWebView.
-                        if let Some(w) = handle.get_webview_window("main") {
-                            let _ = w.print();
-                        }
+                        // Route through the same handler the in-app
+                        // print buttons use; window.print() is a no-op
+                        // in WKWebView so both paths must go native.
+                        let _ = print_main_window(handle.clone());
                     }
                     ID_CLEAR_RECENT => {
                         dispatch("clarity-clear-recent", "");

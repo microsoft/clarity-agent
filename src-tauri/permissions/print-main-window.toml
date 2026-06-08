@@ -1,0 +1,6 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-print-main-window"
+description = "Allow the frontend to invoke the native print dialog via the print_main_window app command (window.print() is a no-op in WKWebView)."
+commands.allow = ["print_main_window"]
