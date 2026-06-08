@@ -36,9 +36,10 @@ The current implementation is a **full-implementation product** with three entry
 
 **Three entry points (products):**
 
-- **Coding agent integration (AGENTS.md)** — an `AGENTS.md` file in a project root instructs AI coding agents to engage clarity at inflection points: when the user asks to think, and proactively when the agent recognizes a choice that would be expensive to reverse. The coding agent session itself becomes the clarity conversation.
+- **Coding agent integration (AGENTS.md + MCP)** — `clarity embed` inserts an AGENTS.md snippet that instructs AI coding agents to engage clarity at inflection points, and configures `.vscode/mcp.json` so the agent has MCP tool access to the full Clarity infrastructure. The rules file is the *trigger* (detecting when to invoke Clarity); the MCP server is the *engine* (providing the actual tools). The coding agent session itself becomes the clarity conversation.
 - **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
 - **CLI** — initialization, packet status checking, session management.
+- **IDE integration (VS Code extension)** — a sidebar panel showing protocol documents glanceable while coding, with commands for project management and backend lifecycle.
 
 ### What It Does Well
 
@@ -50,9 +51,8 @@ The current system was designed for a narrower scope than the updated problem st
 
 - **No explicit intellectual corpus (Layer 1).** The principles behind the process guides are implicit — baked into the guides themselves and scattered across design notes. There's no canonical source of truth from which the guides are derived, which makes it hard to verify consistency, extend to new domains, or create alternative expressions.
 - **One expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure.
-- **Infrastructure is not portable.** The Python tools are invoked directly by process guides (`python -m clarity_agent.protocol.packet_status ...`). They aren't exposed as MCP tools or REST services, which limits portability to other AI environments.
 - **Greenfield assumption.** The system assumes you're starting a new project. There's no structured support for re-deriving clarity about an existing, partially-built system (FR11).
-- **Limited product surface.** Three entry points, all in the full-implementation path. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
+- **Limited product surface beyond engineering.** Four entry points, all oriented toward developers in coding tools. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
 
 ---
 

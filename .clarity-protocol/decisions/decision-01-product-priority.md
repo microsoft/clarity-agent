@@ -31,11 +31,11 @@ Which new products should we prioritize exploring beyond the existing three (AGE
 
 **Priority order:**
 
-1. **MCP-enhanced hybrid** — first new product to explore. The path to implementation is shortest from where we are: MCP exposure of Layer 3 is already in the near-term work plan, and the hybrid combines that with a light guide loaded as context. Validates the Layer 3 portability thesis. Medium reach today, but MCP adoption is growing.
+1. **MCP-enhanced hybrid** — first new product to explore. The path to implementation is shortest from where we are: MCP exposure of Layer 3 is already in the near-term work plan, and the hybrid combines that with a light guide loaded as context. Validates the Layer 3 portability thesis. Medium reach today, but MCP adoption is growing. ✅ *Implemented: MCP server with 8-tool surface, `clarity embed` for project setup, npx runner built (not yet published).*
 
 2. **General-purpose AI integration (light)** — second priority. Higher reach than the hybrid (anyone with any AI tool), but blocked on Layer 1 formalization → light expression, which is on a separate timeline. When it ships, this is likely the highest-reach product form.
 
-3. **IDE integration** — third priority. Once MCP works, VS Code integration may be lower effort than it appears (VS Code already supports MCP). Natural for the "reachable in the flow of creation" requirement (FR11).
+3. **IDE integration** — third priority. Once MCP works, VS Code integration may be lower effort than it appears (VS Code already supports MCP). Natural for the "reachable in the flow of creation" requirement (FR11). ✅ *Implemented: VS Code extension with protocol sidebar, backend lifecycle management, and commands.*
 
 4. **Hosted web service** — defer. High effort, high risk, well-understood engineering. Doesn't teach us much about the methodology. Revisit when the user base and use patterns are better understood.
 
