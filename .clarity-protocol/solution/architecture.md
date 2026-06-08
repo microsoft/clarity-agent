@@ -28,26 +28,27 @@
 
 ### Architecture Overview
 
-The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. A **Web UI** and **CLI** are both thin entry points into the same session infrastructure. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
+The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. Five entry points feed into this shared infrastructure: the **MCP Server** (primary integration for coding agents), **Web UI**, **CLI**, **VS Code Extension**, and **Desktop App**. A **Clarity Snippet** in the project's agent config file (AGENTS.md) acts as the trigger — teaching coding agents *when* to call the MCP tools.
 
 ```
-User ──► Entry Point ──► Session ──► LLM Provider
-         (Web/CLI/        │  ▲         │
-          Snippet)    reads│  │responses│
-                     guides│  └─────────┘
-                          │
-                          ▼
-                     .clarity-protocol/
-                          │
-                     ┌────┴────────┐
-                Packet Status   Brainstorm
-                Checker         Runner
-                     │          ├── General Thinker (inline)
-                     │          │     recommends ──►
-                     │          ├── Specialist A ──► LLM
-                     │          └── Specialist B ──► LLM
-                     │                  │
-                     └────── both ──────► Mailbox ──► Analysis Session
+User ──► Entry Point ──────────────► Session ──► LLM Provider
+         │                              │  ▲         │
+         ├── MCP Server (coding agents) │  │responses│
+         ├── Web UI                reads│  └─────────┘
+         ├── CLI                  guides│
+         ├── VS Code Extension         │
+         └── Desktop App               ▼
+                                  .clarity-protocol/
+              Snippet                    │
+              (AGENTS.md)           ┌────┴────────┐
+              triggers ──►     Packet Status   Brainstorm
+              MCP calls        Checker         Runner
+                                    │          ├── General Thinker (inline)
+                                    │          │     recommends ──►
+                                    │          ├── Specialist A ──► LLM
+                                    │          └── Specialist B ──► LLM
+                                    │                  │
+                                    └────── both ──────► Mailbox ──► Analysis Session
 ```
 
 ---
