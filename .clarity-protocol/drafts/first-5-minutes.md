@@ -1,10 +1,18 @@
-# First 5 Minutes Experience — Draft Plan
+# First 10 Minutes Experience — Draft Plan
 
-**Assertion:** Clarity Agent needs to show value (in the form of a helpful insight) in the first 5 minutes of use.
+**Assertion:** Clarity Agent needs to prove its value within 5 minutes, then deliver personal value within 10.
 
-**Required steps to do that:** Discovery → Install → Bridge Moment → First Conversation → First Insight
+**Two phases of value:**
+- **First 5 minutes (time to tool value):** The user sees that Clarity is *worth using* — it does something different from a chatbot.
+- **Minutes 5–10 (time to personal value):** The user experiences an insight about *their own* project — a reframe, a missed stakeholder, a failure mode they hadn't considered. This is what makes them come back.
 
-## The Ideal First 5 Minutes
+**Journey:** Discovery → Install → Setup & Tutorial → First Conversation → First Insight
+
+Two transitions connect these phases:
+- **Install → Tutorial** (the "getting started" transition): from "I have the app" to "I see what this does"
+- **Tutorial → Own Project** (the "make it mine" transition): from "neat demo" to "this helps me think about *my* thing"
+
+## The Ideal First 10 Minutes
 
 ```
 Discovery (0:00)
@@ -13,23 +21,41 @@ Discovery (0:00)
 
 Install (0:30)
   Install completes, app opens (or web UI launches)
-  → If LLM already detectable: auto-configure, skip setup step in bridge
+  → If LLM already detectable: auto-configure, skip setup
 
-Bridge Moment (1:00)
+                    ┌─────────────────────────────────────┐
+                    │  "Getting Started" transition        │
+                    │  (install → demonstrated tool value) │
+                    └─────────────────────────────────────┘
+
+Setup & Tutorial (1:00–5:00) — proves tool value
   → LLM setup (if needed): recommended provider pre-selected, 3 clicks
-  → Orientation: what Clarity is, what to expect, how to hold it right
-  → Optional: guided walkthrough with a sample project
-  → Transition to conversation
+  → Guided tutorial: live exercise with a sample project (email assistant scenario)
+  → User makes real judgments, sees Clarity push back, sees artifacts created
+  → User understands: "This is different. This helps me think."
+  → Tutorial ends with invitation to start their own project
 
-First Conversation (3:00)
-  User describes their project (even roughly)
-  → Agent listens, asks clarifying questions, looks for first pushback opportunity
+                    ┌─────────────────────────────────────┐
+                    │  "Make It Mine" transition           │
+                    │  (tool value → personal value)       │
+                    └─────────────────────────────────────┘
 
-First Insight (4:00)
-  Agent responds with first substantive challenge or reframe
-  → User thinks: "Oh, I hadn't considered that"
-  → User is engaged. Process continues naturally.
+First Conversation (5:00–8:00) — engages the user's own project
+  → User describes their own project (even roughly)
+  → Agent adapts: listens, asks clarifying questions, looks for pushback opportunity
+  → Conversation feels familiar because the tutorial taught the interaction pattern
+
+First Insight (8:00–10:00) — delivers personal value
+  Agent surfaces something the user hadn't considered about *their* project
+  → User thinks: "Oh — I hadn't thought about that for *my* thing"
+  → User is engaged. This is now their tool. Process continues naturally.
 ```
+
+**The distinction matters because:**
+- In the first 5 minutes, the user is evaluating the *tool*. "Is this worth my time?"
+- After minute 5, the user is engaging with their *problem*. "This is helping me think."
+- If we try to deliver personal insight before proving tool value, we're asking the user to invest context in something they don't yet trust.
+- If we only prove tool value and never bridge to personal value, the user thinks "neat demo" and doesn't return.
 
 Each phase has one job: get to the next phase with minimum friction and maximum clarity about what's happening.
 
@@ -126,100 +152,117 @@ The pattern: tools that install fast ship **pre-built artifacts**, not source + 
 
 ---
 
-## Bridge Moment
+## Setup & Tutorial
 
-The bridge moment is everything between "install completes" and "user is in a real conversation." It consolidates LLM setup, orientation, and the transition to first use into a single designed experience. The goal: the user arrives at their first real exchange understanding what Clarity is, how to use it well, and ready to engage.
+*The "getting started" transition: from "I have the app" to "I see what this does."*
+
+This phase covers everything between install completing and the user understanding Clarity's value. It includes LLM configuration and the guided tutorial as a single flow. The goal: by the end, the user has seen Clarity push back, create artifacts, and track changes — and is ready to try it on their own project.
 
 ### Design Principles
 
-1. **Setup is part of the bridge, not a separate phase.** LLM configuration should feel like getting ready to talk, not like configuring enterprise software. Embed it in the flow rather than treating it as a gate.
-2. **Teach how to hold it right.** Clarity is unlike other AI tools — it pushes back, it asks hard questions, it's not trying to please you. Users who don't understand this will either fight it or dismiss it. The bridge is where you set that expectation.
-3. **Show, don't tell.** A brief walkthrough with a sample project teaches more than any amount of explanatory text. Users learn "how this works" by seeing it work, not by reading about it.
-4. **Recommend, don't just list.** For LLM setup, surface a default based on what's already available on the system. Don't present a 5×N matrix of choices.
-5. **Every path leads to conversation.** Whether the user goes through setup, skips it, takes the walkthrough, or dismisses everything — they should end up in a conversation within 2 minutes.
-6. **Skipping should be safe.** Users who dismiss orientation can always access it later. Users who skip LLM setup get re-prompted gracefully, not crashed.
+1. **Setup is a step in the flow, not a separate phase.** LLM configuration should feel like getting ready to talk, not like configuring enterprise software.
+2. **Teach how to hold it right — by doing.** Users bring ChatGPT habits. The tutorial demonstrates the real interaction pattern (pushback, artifact creation, staleness) rather than explaining it.
+3. **Recommend, don't just list.** For LLM setup, surface a default based on what's already available on the system.
+4. **Every path leads to the tutorial.** Whether setup is auto-detected, manually configured, or skipped — the next thing is the tutorial.
+5. **Skipping should be safe.** Users who skip setup get re-prompted gracefully. Users who skip the tutorial get a compact orientation and go straight to their own project.
 
 ### Gap Analysis
 
-**Gaps against the ideal flow (0:30 → 3:00):**
+**Gaps against the ideal flow (0:30 → 5:00):**
 
-The ideal says: "Bridge moment begins — setup if needed, orientation, optional walkthrough, then conversation starts." The current experience has three separate disconnected pieces (setup wizard, blank chat, process guide start) with no coherent bridge between them.
+The ideal says: "Setup if needed, then tutorial proves tool value." The current experience has three disconnected pieces (setup wizard, blank chat, process guide start) with no coherent path from install to demonstrated value.
 
 **LLM setup is a disconnected gate**
 - **User Impact: High (8/10).** The setup wizard currently blocks all progress. 5 providers × multiple auth modes with no guidance. Users who don't have a preferred provider are paralyzed.
-- **Gap:** Setup exists as a separate phase rather than a step within the bridge. It has no orientation context ("why do I need this?") and no recommendation logic.
+- **Gap:** Setup has no orientation context ("why do I need this?") and no recommendation logic. It feels like enterprise configuration, not getting ready to think.
 
 **No orientation — user doesn't know how to engage**
-- **User Impact: High (7/10).** Clarity's value depends on the user engaging honestly and pushing back when the agent is wrong. But nothing in the current experience explains this. Users bring their ChatGPT habits: ask a question, get an answer, say "thanks." When Clarity pushes back, they're confused or annoyed rather than recognizing it as the point.
-- **Gap:** There is no designed moment that teaches the user what Clarity is and how it differs from other AI tools. The process guides assume the user already knows to engage as a thinking partner.
-
-**Abrupt transition to conversation**
-- **User Impact: Medium (6/10).** Page reloads after setup, blank chat appears, "What are you working on?" with no context. Makes Clarity feel generic.
-- **Gap:** No bridge between "configured" and "conversing." The user has no mental model for what's about to happen.
+- **User Impact: High (7/10).** Clarity's value depends on the user engaging honestly and pushing back when the agent is wrong. But nothing teaches this. Users bring their ChatGPT habits.
+- **Gap:** There is no designed moment that teaches what Clarity is and how it differs from other AI tools. The tutorial solves this — but it doesn't exist yet.
 
 **No path for exploratory or evaluating users**
-- **User Impact: High (7/10).** Users who type "what can you help with?" get an undesigned response. Users who installed to *evaluate* have no structured way to experience value before committing a real project.
-- **Gap:** The opening assumes the user arrives with a project. A walkthrough would serve evaluators and teach the tool simultaneously.
+- **User Impact: High (7/10).** Users who installed to *evaluate* have no structured way to experience value before committing a real project.
+- **Gap:** The opening assumes the user arrives with a project. The tutorial solves this by providing a sample scenario.
 
-**Skipping setup crashes later**
-- **User Impact: High (7/10).** User skips because they're unsure, then gets an unhandled error on first use. Feels like broken software.
-- **Gap:** No graceful degradation or re-prompting.
+**CLI has no interactive login — forces PAT flow**
+- **User Impact: Medium (4/10).** The web/desktop UI handles the unconfigured state gracefully (shows setup wizard). The CLI prints a clear error with env var suggestions but exits with code 1 and a "crash log" message — intimidating but not a real crash. The actual gap: the CLI error only suggests PAT-style flows (paste an API key) and doesn't mention `clarity web` or offer interactive browser login the way the installer and setup wizard do.
+- **Gap:** CLI has no interactive login recovery at runtime. Filed as [#100](https://github.com/microsoft/clarity-agent/issues/100).
 
 ### The "How to Hold It Right" Problem
 
-Clarity is a new kind of tool. Users' prior mental models (chatbot, search engine, document generator) all lead to wrong expectations. The bridge moment needs to communicate:
+Clarity is a new kind of tool. Users' prior mental models (chatbot, search engine, document generator) all lead to wrong expectations. The tutorial teaches by doing — the user doesn't read these principles, they experience them:
 
-**What Clarity is:**
-- A thinking partner that asks hard questions — not an assistant that does what you say
-- It will push back on your ideas. That's the point, not a bug.
-- The goal is *your* clarity about your project, not a document
+- Clarity is a thinking partner that pushes back, not an assistant that does what you say
+- The goal is the user's clarity about their project, not a document
+- The user supplies goals, context, and judgment; Clarity structures reasoning and introduces missing perspectives
+- Important reasoning becomes inspectable project artifacts, not chat history
+- Requirements and solutions are different things
+- Changed premises can make earlier conclusions stale
 
-**How to use it well:**
-- Bring a real project — even a rough idea works
-- Be honest about what you don't know; the gaps are where value lives
-- Push back when the agent is wrong or asks something irrelevant
-- The conversation produces documents as a byproduct — you don't need to fill anything in
+### The Guided Tutorial (First Five Minutes Process)
 
-**What to expect:**
-- It will ask questions you haven't thought about
-- It may reframe your goal in ways that feel unfamiliar
-- The first few exchanges establish what you're working on; then it gets specific
+The bridge moment's primary mechanism is a live, guided exercise using a sample project. This is not a product tour or a canned replay — it's a real Clarity conversation with guardrails that ensure the learning arc completes.
 
-### Walkthrough & Tutorial Considerations
+**Why a tutorial before the user's own project:**
+- The user doesn't yet trust the tool enough to invest their real context
+- A sample project creates a safe space to experience pushback without feeling interrogated
+- Predictable scenario ensures the learning arc completes regardless of what the user brings
+- Teaches the interaction pattern before the user needs it for real
+- Proves tool value *before* asking for personal investment
 
-A guided walkthrough addresses multiple problems simultaneously: it teaches how to hold the tool right, it serves evaluating users who don't have a project ready, and it demonstrates value before the user invests their own context.
+**The scenario:** A company building an AI assistant that reads employee email and drafts replies. The team is considering allowing the assistant to send messages automatically.
 
-**Design considerations:**
+This scenario works because it's: (a) understandable without specialist knowledge, (b) rich enough for genuine design decisions, (c) ambiguous enough that the user must make real judgments, and (d) raises authority/control/failure questions naturally. Do not present the full scenario at the start — reveal details only as needed.
 
-| Consideration | Options | Tradeoffs |
-|--------------|---------|-----------|
-| **Sample project** | Pre-built example vs. user picks from a few options vs. "tell me anything, even hypothetical" | Pre-built is fastest but may not resonate; user-chosen is more engaging but slower to value |
-| **Length** | 3-5 exchanges (60 seconds) vs. full mini-session (3-5 minutes) | Short proves the concept; long proves the depth. First-timers need short. |
-| **Interactivity** | Fully scripted replay vs. live conversation with training wheels vs. user-driven with guardrails | Scripted is predictable but passive; live is engaging but model-dependent; guardrails balance both |
-| **Replayability** | One-time first-run vs. accessible from help menu | Should be accessible later for "remind me how this works" moments |
-| **Content** | Software project vs. non-software vs. user's choice | Software is our strongest domain but limits audience; offering choice respects domain-neutrality |
-| **What it demonstrates** | The pushback disposition vs. the output format vs. both | Pushback is the differentiator; output is the proof of durability. Show pushback first. |
-| **Skip affordance** | Obvious "skip" button vs. subtle dismiss vs. no skip | Must be skippable — forcing a tutorial on an eager user is its own friction |
+**Learning arc (6 phases, ~5 minutes):**
 
-**Proposed walkthrough structure:**
+| Phase | What happens | What the user learns |
+|-------|-------------|---------------------|
+| **Frame** | Present the scenario. Ask what decision the team needs to make. | Clarity starts with *what problem are we solving*, not *what should we build* |
+| **Expand** | Ask who bears the consequence. Add a stakeholder the user missed. | Clarity broadens the system boundary — introduces perspectives you didn't have |
+| **Distinguish** | Surface a proposal (e.g., "require approval"). Ask: is this the requirement or one solution? | Requirements state what must be true; solutions are one way to achieve it |
+| **Challenge** | Find a specific failure mode (e.g., stale authorization — user approves, then state changes before send). Express as causal chain. | Clarity surfaces non-obvious failures specific to *this* system, not generic risks |
+| **Record** | Show what now exists as protocol artifacts. | Important reasoning becomes inspectable, durable project documents |
+| **Reassess** | Introduce a changed premise. Ask what it invalidates. | Changed assumptions affect downstream reasoning. Clarity tracks this. |
 
-1. **Brief orientation card** (5 seconds, dismissible): "Clarity is a thinking partner that pushes back. It'll ask hard questions to help you figure out what you actually want. Try it with a sample project, or bring your own."
-2. **Choice**: [Try a sample project] [I have my own project] [Skip]
-3. **If sample**: Pre-loaded 2-3 sentence project description → agent demonstrates a reframe or specificity push → user sees "oh, that's what it does" → "Ready to try with your own project?"
-4. **If own project**: Straight to conversation with a brief inline hint: "Tell me what you're working on — even a rough idea. I'll ask questions to help sharpen it."
+**Experience contract — the tutorial must:**
+- Use real protocol machinery (actual files, actual packet status)
+- Ask the user to make at least two genuine judgments
+- Adapt to the substance of the user's answers
+- Add at least one perspective the user did not provide
+- Distinguish a requirement from a proposed solution
+- Surface one non-obvious failure mode with a short causal chain
+- Create concise, visible protocol artifacts as it proceeds
+- Demonstrate that changing a premise affects downstream reasoning
+- End with a clear invitation to begin the user's real project
 
-**What the walkthrough must demonstrate in ≤ 3 exchanges:**
-- The agent pushes back (not just agrees)
-- The pushback is specific and useful (not generic)
-- Something gets captured as an artifact (a question, a requirement, a reframe)
-- The user sees the output and thinks "that's worth keeping"
+**The tutorial must NOT:**
+- Become a lecture about Clarity
+- Present a feature list or terminology
+- Require knowledge of Clarity jargon
+- Pretend there's one correct answer
+- Generate a large or exhaustive design packet
+- Overwhelm with many thinkers or failure modes
+- Continue refining the hypothetical after learning goals are met
 
-**Anti-patterns to avoid:**
-- Don't make the tutorial feel like a tour of features ("here's the sidebar, here's the settings")
-- Don't make it so long that impatient users skip and miss the orientation
-- Don't use a project so trivial that the pushback feels fake
-- Don't use a project so complex that a new user can't follow along
-- Don't script responses so rigidly that it feels canned — the point is to demonstrate *thinking*, not recitation
+**Interaction style:** Warm, direct, slightly more instructional than a normal Clarity session. Keep explanations brief and tied to something that just happened. Don't praise every answer — respond to substance. Move through obvious steps naturally; pause only for judgments that should genuinely come from the user.
+
+**Completion:** Summarize the pattern in one sentence:
+
+> You framed the problem. Clarity expanded the boundary, separated requirements from solutions, challenged an assumption, and preserved the result. When a premise changed, the affected reasoning needed another look.
+
+Then offer three paths:
+1. Start a real project (recommended)
+2. Explore the tutorial documents
+3. Continue experimenting with the sample
+
+**Recovery paths:**
+- User wants their own problem instead → transition to normal Clarity, retain orientation
+- User skips tutorial → compact explanation + start with their real project
+- User gets deeply engaged in hypothetical → conclude when learning goals are met, offer continued exploration separately
+- User can invoke the tutorial later from help menu
+
+**Adaptation guidance:** No two sessions need identical questions, stakeholders, or failure modes. Follow the user's terminology. Ask about the most consequential ambiguity they reveal. Prefer one deep failure over several shallow ones. Move quickly when the user already understands a concept. Maintain the stable arc: Frame → Expand → Distinguish → Challenge → Record → Reassess.
 
 ### LLM Setup (Embedded in Bridge)
 
@@ -262,97 +305,100 @@ Credentials → Test → Done. One screen, not five steps. Then flow continues i
 
 ## First Conversation
 
+*The "make it mine" transition: from demonstrated tool value to personal value.*
+
+The tutorial proved Clarity is worth using. Now the user needs to experience it on something *they* care about. This is the transition from "neat demo" to "my tool."
+
 ### Design Principles
 
-1. **The opening question should be answerable by everyone.** "What are you working on?" works for most but fails for "I'm just exploring" users. The opening must accommodate multiple attitudes.
-2. **Don't announce the process.** The user should feel like they're talking to a thinking partner, not launching a workflow. No "Running problem-clarification process..." messages.
+1. **The transition should feel natural.** The tutorial ends with "Ready to start your own project?" — the user already knows the interaction pattern. Don't re-explain.
+2. **The opening question should be answerable by everyone.** "What are you working on?" works for most. For users who skip the tutorial, accommodate exploration attitudes too.
 3. **Adapt to what arrives.** The agent's first response should be shaped by what the user actually says, not by a fixed script.
-4. **CLI goes straight to conversation on first run.** The command menu is for returning users. First-timers shouldn't navigate infrastructure.
+4. **Lower the bar for entry.** After the tutorial, the user knows what Clarity does with a well-formed scenario. But their own project might be vague, messy, or half-formed. That's fine — say so explicitly.
+5. **CLI goes straight to conversation on first run.** The command menu is for returning users.
 
 ### Gap Analysis
 
-**Gaps against the ideal flow (3:00 → 4:00):**
+**Gaps against the ideal flow (5:00 → 8:00):**
 
-The ideal says: "User describes their project. Agent listens, asks clarifying questions, looks for first pushback opportunity."
+The ideal says: "User describes their own project. Agent adapts, listens, looks for pushback opportunity. Conversation feels familiar because the tutorial taught the pattern."
 
-**Opening question too vague for exploratory users**
-- **User Impact: Medium (6/10).** "What are you working on?" works for users with a project in mind. Users who installed to *see what this does* don't have a ready answer.
-- **Gap:** Assumes one user attitude (has a project) and doesn't handle others (exploring, evaluating, unsure). The bridge moment should have reduced this problem — but if the user skipped it or it didn't land, the opening still needs to work.
+**Abrupt transition from tutorial to real work**
+- **User Impact: Medium (6/10).** If the tutorial workspace and the real workspace feel disconnected (different project, different context, starting over), the user loses momentum.
+- **Gap:** Need a smooth handoff: tutorial artifacts stay accessible but the new project starts clean. The user shouldn't feel like they're "rebooting."
 
-**CLI requires typing `run` at a menu**
-- **User Impact: Medium (5/10).** The command menu adds bureaucracy before conversation begins. For first-run, it's all cost and no benefit.
-- **Gap:** Exposes internal machinery (process names, commands) before the user has context for why they'd want that.
+**User's own project may be too vague for immediate insight**
+- **User Impact: Medium (6/10).** The tutorial used a rich scenario. The user's first description of their own project might be "I'm thinking about building an app for X." That's thin. The agent needs to draw out enough context to push back meaningfully.
+- **Gap:** Process guides say "ask follow-up questions" but don't emphasize that the first few exchanges of a *real* project need to build enough context for a specific challenge — not just gather information for its own sake.
 
-**No designed handling for common first-time responses**
-- **User Impact: High (7/10).** "What can you help with?", "How does this work?", "I'm just trying this out" — these are all common first messages that currently get undesigned LLM-improvised responses.
-- **Gap:** The process guide doesn't explicitly instruct the agent on how to handle evaluation/exploration attitudes.
+**No designed handling for common post-tutorial responses**
+- **User Impact: Medium (5/10).** After the tutorial, some users will say "let me think about what to bring here" or "I'll come back with something." That's fine — but there should be a graceful exit that invites return, not an awkward silence.
 
 ### Proposed Model
 
-The conversation opening adapts to what the user types:
-
-| User says | Agent disposition |
-|-----------|-----------------|
-| Describes a project ("I'm building a...") | Standard problem clarification — look for first pushback opportunity |
-| Asks what Clarity does ("What can you help with?") | Brief explanation + "Want to try it? Tell me about something you're working on — even rough ideas work." |
-| Expresses a problem ("My team can't agree on...") | Jump directly into the problem — skip meta-discussion |
-| Pastes existing context (PRs, docs, specs) | Acknowledge the context, assess it, identify what's missing or unclear |
-| Says something exploratory ("Just trying this out") | Acknowledge, offer the sample walkthrough, or ask "What's on your mind? Even a half-formed idea works." |
-
-**CLI simplification:** Remove the command menu for first-run. If the protocol doesn't exist, go straight into conversation.
+| User does after tutorial | Agent response |
+|--------------------------|---------------|
+| Describes their project | Begin normal problem clarification — carry the tutorial's energy and directness |
+| Asks a follow-up about the tutorial | Answer briefly, then redirect: "Want to try that with your own project?" |
+| Says "let me think" or "I'll come back" | "Take your time. When you're ready, just tell me what you're working on — even a rough idea. I'll be here." |
+| Brings something very vague | Draw out specifics with concrete questions: "Who's this for? What happens if it doesn't exist?" — build enough context for a real challenge |
 
 ### Open Questions
 
-- Should the process guide explicitly enumerate these response patterns, or should it give a general principle and trust the model?
-- How much should the first conversation differ from subsequent ones? (First visit has more hand-holding; return visits assume familiarity)
-- Should the first conversation save outputs somewhere visible ("here's what we captured") to reinforce that this produces durable artifacts?
+- Should the tutorial project and real project be in the same workspace or separate?
+- How much of the tutorial's instructional tone should carry into the real conversation? (Probably: none. The real conversation should feel like a peer, not a teacher.)
+- Should the first real conversation explicitly reference the tutorial patterns? ("Remember how we separated requirements from solutions? Let's do that here too.") Or is that patronizing?
 
 ---
 
 ## First Insight
 
+*Minutes 8–10: Personal value delivered. The user is now engaged with their own problem.*
+
 ### Design Principles
 
-1. **First insight within 3 exchanges.** The agent must surface something genuinely new to the user — a reframe, a missed stakeholder, a failure mode, a specificity challenge — before friction accumulates.
+1. **First personal insight within 3 exchanges of real conversation.** The agent must surface something genuinely new to the user about *their* project — not the tutorial scenario.
 2. **Specific beats generic.** "Have you thought about edge cases?" is worthless. "What happens when two people edit the same paragraph simultaneously?" is valuable. The insight must be *about this project*, not about projects in general.
-3. **Challenge, don't lecture.** The insight should arrive as a question or observation, not as a lesson. The user should feel "oh, good point" not "this thing is patronizing me."
-4. **The insight should be visible in the output.** Whatever the agent surfaces should appear in the protocol document as a captured requirement, open question, or failure mode — reinforcing that this conversation is producing something durable.
+3. **Challenge, don't lecture.** The insight should arrive as a question or observation. The user should feel "oh, good point" not "this thing is patronizing me."
+4. **The insight should be visible in the output.** Whatever the agent surfaces should appear in a protocol document — reinforcing the tutorial's lesson that conversation produces durable artifacts.
+5. **This is the retention moment.** The tutorial proved the tool is interesting. This moment proves it's useful *for them*. Without it, the user thinks "neat demo" and doesn't return.
 
 ### Gap Analysis
 
-**User Impact: Critical (10/10).** This is the make-or-break moment. Everything else in this document exists to deliver the user to this point. If the first insight lands — if the user thinks "oh, I hadn't considered that" — they're engaged. They'll tolerate friction, learn the tool, come back tomorrow. If it doesn't land (the agent asks generic questions, produces obvious observations, or just agrees with them), the user concludes "this is just another chatbot" and leaves permanently. No amount of install polish or setup streamlining matters if this moment fails.
+**User Impact: Critical (10/10).** This is what determines whether the user comes back. The tutorial bought trust and taught the pattern, but trust in a demo doesn't transfer automatically to trust in real use. The user needs to think "this helped me see something about *my* problem that I wouldn't have seen alone."
 
-**Gaps against the ideal flow (3:00 → 4:00):**
+**Gaps against the ideal flow (8:00 → 10:00):**
 
-The ideal says: "Agent responds with first substantive challenge or reframe." The current process guides support this but don't *guarantee* it:
+- The user's first description of their project will be less developed than the tutorial scenario. The agent must work harder to find something specific to challenge.
+- The tutorial's instructional scaffolding is gone. The agent must deliver insight through pure conversational quality — no guardrails ensuring the learning arc completes.
+- Process guides say to surface challenges early but don't guarantee it within 3 exchanges of a new project. Thin user input + average model performance = risk of generic follow-ups.
+- There's a new failure mode: the user compares the real conversation unfavorably to the tutorial ("the demo was better than this"). The tutorial sets a quality bar the real conversation must meet.
 
-- `processes/clarity-agent.md` Step 2 says "ask follow-up questions, help them articulate the problem" — but doesn't explicitly instruct the agent to surface a challenge in its *first* response.
-- `processes/problem-clarification.md` Step 2.25 ("Pressure-test the framing of the goal") is the right mechanism but is positioned as a later step, not as something to do immediately.
-- The agent's behavior depends heavily on model quality and the specificity of the user's input. A vague user description + a weak model = generic follow-up questions that deliver zero insight.
-- There's no fallback: if the agent doesn't naturally find something to push back on, there's no designed mechanism to ensure value is still delivered.
+### What "First Personal Insight" Looks Like
+
+- Reframing: "You said you want to build X — but it sounds like the real goal is Y. Is that right?"
+- A missed stakeholder: "Who maintains this after launch? That person has different needs than the builder."
+- A failure mode: "What happens when [specific scenario based on what the user said]?"
+- A specificity push: "You said 'fast' — what does fast mean here? 100ms? 5 seconds? Different answers lead to different architectures."
+- A scope question: "You described the full vision. What's the smallest version that would still be worth building?"
+
+### Proposed Constraint on Process Guides
+
+The opening of `processes/clarity-agent.md` Step 2 should be structured to surface a challenge within the first 2-3 exchanges of a real project. Concretely:
+
+- The agent's first substantive response should include at least one question that reveals a gap, assumption, or unconsidered angle.
+- If the user's description is too thin to challenge, draw out detail with *specific* questions (not "tell me more" — rather "who uses this and what happens if they can't?").
+- The questions should build toward a challenge, not just gather information. Every question should make the user think slightly harder.
 
 ### Supporting Research
 
 Clarity's own failure analysis (FM01: User Disengagement) identifies this as the existential risk and calls "time to first insight" the critical metric. The notes.md captures it as: "Value demonstration is the master intervention." The solution doc establishes it as a design constraint on Layer 2.
 
-Despite this, the process guides don't yet enforce it mechanically — they *encourage* early challenge but leave it to the model's judgment. This is the gap between principle and implementation.
-
-### What "First Insight" Looks Like
-
-- Reframing: "You said you want to build X — but it sounds like the real goal is Y. Is that right?"
-- A missed stakeholder: "Who maintains this after launch? That person has different needs than the builder."
-- A failure mode: "What happens when [specific scenario]? That seems unaddressed."
-- A specificity push: "You said 'fast' — what does fast mean here? 100ms? 5 seconds? Different answers lead to different architectures."
-
-### Proposed Constraint on Process Guides
-
-The opening of `processes/clarity-agent.md` Step 2 and `processes/problem-clarification.md` should be structured to surface one of these within the first 2-3 exchanges. Not after information gathering — *during* the first response to what the user says. Concretely:
-
-- The agent's first response to the user's project description should include at least one question that reveals a gap, assumption, or unconsidered angle.
-- If the user's description is too thin to challenge substantively, the agent should draw out more detail with *specific* questions (not "tell me more" — rather "who uses this and what happens if they can't?").
+The tutorial changes the dynamic: by minute 8, the user already knows Clarity can deliver insight (they experienced it in the tutorial). The bar is now: "can it do that for *my* thing?" This is a lower bar than cold-start first insight — the user is primed to engage and knows how to hold the tool. But it's also a higher quality bar — the user has a reference point for what good looks like.
 
 ### Open Questions
 
-- Can we measure time-to-first-insight? (Proxy: user response length increases after agent challenge)
-- Should the agent explicitly flag its first pushback? ("Here's something to think about..." vs. just asking the question naturally)
-- How do we avoid the failure mode where the "first insight" is generic/obvious and actually *decreases* trust?
+- Can we measure time-to-first-personal-insight? (Proxy: user response length increases; user asks a follow-up rather than answering minimally)
+- Should the agent explicitly connect back to tutorial patterns? ("Like the email assistant — let's check if there's a similar authority question here")
+- How do we avoid the failure mode where the real conversation feels less impressive than the tutorial? (Tutorial has a curated scenario; real projects are messy.)
+- What if the user's project genuinely doesn't have an interesting angle to push on in 3 exchanges? (Fallback: "Here's what I'm noticing is underspecified..." rather than forcing a dramatic reframe)
