@@ -2,39 +2,40 @@
 
 **Assertion:** Clarity Agent needs to show value (in the form of a helpful insight) in the first 5 minutes of use.
 
-**Required steps to do that:** Discovery → Install → LLM Setup → First Conversation → First Insight
+**Required steps to do that:** Discovery → Install → Bridge Moment → First Conversation → First Insight
 
 ## The Ideal First 5 Minutes
 
 ```
-0:00  User lands on README (aka.ms/clarity-agent) or releases page (aka.ms/clarity-agent-bits)
-      → One obvious action: "Download" (macOS/Win) or "curl | bash" (Linux)
+Discovery (0:00)
+  User lands on README (aka.ms/clarity-agent) or releases page (aka.ms/clarity-agent-bits)
+  → One obvious action: "Download" (macOS/Win) or "curl | bash" (Linux)
 
-0:30  Install completes
-      → App opens (or web UI launches)
-      → If LLM already detectable: auto-configure, skip wizard
+Install (0:30)
+  Install completes, app opens (or web UI launches)
+  → If LLM already detectable: auto-configure, skip setup step in bridge
 
-1:00  Setup wizard (if needed)
-      → Recommended provider pre-selected
-      → Enter key → Test → Save (3 clicks)
+Bridge Moment (1:00)
+  → LLM setup (if needed): recommended provider pre-selected, 3 clicks
+  → Orientation: what Clarity is, what to expect, how to hold it right
+  → Optional: guided walkthrough with a sample project
+  → Transition to conversation
 
-2:00  Bridge moment
-      → Brief orienting message: "Tell me what you're working on"
-      → Conversation begins
+First Conversation (3:00)
+  User describes their project (even roughly)
+  → Agent listens, asks clarifying questions, looks for first pushback opportunity
 
-3:00  User describes their project (even roughly)
-
-4:00  Agent responds with first substantive challenge or reframe
-      → User thinks: "Oh, I hadn't considered that"
-
-5:00  User is engaged. Process continues naturally.
+First Insight (4:00)
+  Agent responds with first substantive challenge or reframe
+  → User thinks: "Oh, I hadn't considered that"
+  → User is engaged. Process continues naturally.
 ```
 
 Each phase has one job: get to the next phase with minimum friction and maximum clarity about what's happening.
 
 ---
 
-## Phase 0: Discovery & Install Choice
+## Discovery
 
 ### Design Principles
 
@@ -77,7 +78,7 @@ Each phase has one job: get to the next phase with minimum friction and maximum 
 
 ---
 
-## Phase 1: Install Experience
+## Install
 
 ### Design Principles
 
@@ -125,112 +126,170 @@ The pattern: tools that install fast ship **pre-built artifacts**, not source + 
 
 ---
 
-## Phase 2: LLM Setup
+## Bridge Moment
+
+The bridge moment is everything between "install completes" and "user is in a real conversation." It consolidates LLM setup, orientation, and the transition to first use into a single designed experience. The goal: the user arrives at their first real exchange understanding what Clarity is, how to use it well, and ready to engage.
 
 ### Design Principles
 
-1. **Recommend, don't just list.** Surface a default based on what's already available on their system (env vars, installed CLIs).
-2. **Validate early.** Check API key format before the "test connection" step.
-3. **Skipping should be safe.** If skipped, re-prompt on next launch rather than crashing.
-4. **The setup wizard is the last gate before value.** Keep it short — minimum viable configuration to start talking.
+1. **Setup is part of the bridge, not a separate phase.** LLM configuration should feel like getting ready to talk, not like configuring enterprise software. Embed it in the flow rather than treating it as a gate.
+2. **Teach how to hold it right.** Clarity is unlike other AI tools — it pushes back, it asks hard questions, it's not trying to please you. Users who don't understand this will either fight it or dismiss it. The bridge is where you set that expectation.
+3. **Show, don't tell.** A brief walkthrough with a sample project teaches more than any amount of explanatory text. Users learn "how this works" by seeing it work, not by reading about it.
+4. **Recommend, don't just list.** For LLM setup, surface a default based on what's already available on the system. Don't present a 5×N matrix of choices.
+5. **Every path leads to conversation.** Whether the user goes through setup, skips it, takes the walkthrough, or dismisses everything — they should end up in a conversation within 2 minutes.
+6. **Skipping should be safe.** Users who dismiss orientation can always access it later. Users who skip LLM setup get re-prompted gracefully, not crashed.
 
 ### Gap Analysis
 
-**Gaps against the ideal flow (0:30 → 1:00):**
+**Gaps against the ideal flow (0:30 → 3:00):**
 
-The ideal says: "If LLM already detectable, auto-configure and skip wizard. If wizard needed, recommended provider pre-selected, 3 clicks to done." Here's where the current experience falls short:
+The ideal says: "Bridge moment begins — setup if needed, orientation, optional walkthrough, then conversation starts." The current experience has three separate disconnected pieces (setup wizard, blank chat, process guide start) with no coherent bridge between them.
 
-**No recommendation — 5 providers with no guidance**
-- **User Impact: High (8/10).** This is the single biggest "I don't know what to do" moment in the entire flow. Users who don't already have a preferred LLM provider (many non-developers, and even some developers) are stuck. They don't know what these providers *are*, which is best, or what the cost implications are. The paradox of choice applies strongly here — more options feel less helpful.
-- **Gap:** Violates "recommend, don't just list." The wizard shows a flat list of 5 providers with no hierarchy, no "recommended" badge, no auto-detection of what's already configured on the system.
+**LLM setup is a disconnected gate**
+- **User Impact: High (8/10).** The setup wizard currently blocks all progress. 5 providers × multiple auth modes with no guidance. Users who don't have a preferred provider are paralyzed.
+- **Gap:** Setup exists as a separate phase rather than a step within the bridge. It has no orientation context ("why do I need this?") and no recommendation logic.
 
-**Validation happens late (step 4 of 5)**
-- **User Impact: Medium (6/10).** User fills in 3 screens of information, hits "test," discovers their key is wrong, and must restart. Frustrating but recoverable.
-- **Gap:** Violates "validate early." The ideal flow is "enter key → test → save" (3 clicks). The current flow is "pick provider → pick auth mode → enter credentials → test → save" (5 steps, with validation only at step 4).
+**No orientation — user doesn't know how to engage**
+- **User Impact: High (7/10).** Clarity's value depends on the user engaging honestly and pushing back when the agent is wrong. But nothing in the current experience explains this. Users bring their ChatGPT habits: ask a question, get an answer, say "thanks." When Clarity pushes back, they're confused or annoyed rather than recognizing it as the point.
+- **Gap:** There is no designed moment that teaches the user what Clarity is and how it differs from other AI tools. The process guides assume the user already knows to engage as a thinking partner.
 
-**CLI auth prompt is terse (`[l] [e] [s]`)**
-- **User Impact: Medium (5/10).** Only affects CLI installers (already a more technical audience). The three options are cryptic but the stakes are low.
-- **Gap:** Minor violation of "recommend, don't just list" — but in a lower-traffic path. CLI users can tolerate terse prompts.
+**Abrupt transition to conversation**
+- **User Impact: Medium (6/10).** Page reloads after setup, blank chat appears, "What are you working on?" with no context. Makes Clarity feel generic.
+- **Gap:** No bridge between "configured" and "conversing." The user has no mental model for what's about to happen.
 
-**Skipping setup produces a runtime crash later**
-- **User Impact: High (7/10).** User skips because they're not sure what to pick, expects to configure later, then gets an unhandled error on first use. This feels like a bug in the software, not a configuration issue.
-- **Gap:** Directly violates "skipping should be safe." The system should re-prompt gracefully, not crash.
+**No path for exploratory or evaluating users**
+- **User Impact: High (7/10).** Users who type "what can you help with?" get an undesigned response. Users who installed to *evaluate* have no structured way to experience value before committing a real project.
+- **Gap:** The opening assumes the user arrives with a project. A walkthrough would serve evaluators and teach the tool simultaneously.
 
-### Supporting Research
+**Skipping setup crashes later**
+- **User Impact: High (7/10).** User skips because they're unsure, then gets an unhandled error on first use. Feels like broken software.
+- **Gap:** No graceful degradation or re-prompting.
 
-- **Ollama** requires no API key — it runs models locally. Zero setup friction. (Not applicable to Clarity, which needs a cloud LLM, but illustrates the ideal: no setup step at all.)
-- **LM Studio** auto-detects downloaded models on startup. If you have models, it just works. If you don't, it shows a model browser (the equivalent of our provider picker) with recommendations.
-- **VS Code** extensions that need auth (GitHub Copilot, etc.) prompt inline when you first try to use the feature — not at install time. The "try it and get prompted" model means setup only happens when the user has already demonstrated intent.
-- **Docker Desktop** requires no account for local use. Login is optional and prompted only when you try to push/pull from Docker Hub.
+### The "How to Hold It Right" Problem
 
-**Pattern:** The best tools either (a) need no setup at all, (b) auto-detect what's available, or (c) defer setup to the moment of use rather than blocking at launch.
+Clarity is a new kind of tool. Users' prior mental models (chatbot, search engine, document generator) all lead to wrong expectations. The bridge moment needs to communicate:
 
-### Proposed Model
+**What Clarity is:**
+- A thinking partner that asks hard questions — not an assistant that does what you say
+- It will push back on your ideas. That's the point, not a bug.
+- The goal is *your* clarity about your project, not a document
 
-**Auto-detect first.** Before showing the wizard, check:
+**How to use it well:**
+- Bring a real project — even a rough idea works
+- Be honest about what you don't know; the gaps are where value lives
+- Push back when the agent is wrong or asks something irrelevant
+- The conversation produces documents as a byproduct — you don't need to fill anything in
+
+**What to expect:**
+- It will ask questions you haven't thought about
+- It may reframe your goal in ways that feel unfamiliar
+- The first few exchanges establish what you're working on; then it gets specific
+
+### Walkthrough & Tutorial Considerations
+
+A guided walkthrough addresses multiple problems simultaneously: it teaches how to hold the tool right, it serves evaluating users who don't have a project ready, and it demonstrates value before the user invests their own context.
+
+**Design considerations:**
+
+| Consideration | Options | Tradeoffs |
+|--------------|---------|-----------|
+| **Sample project** | Pre-built example vs. user picks from a few options vs. "tell me anything, even hypothetical" | Pre-built is fastest but may not resonate; user-chosen is more engaging but slower to value |
+| **Length** | 3-5 exchanges (60 seconds) vs. full mini-session (3-5 minutes) | Short proves the concept; long proves the depth. First-timers need short. |
+| **Interactivity** | Fully scripted replay vs. live conversation with training wheels vs. user-driven with guardrails | Scripted is predictable but passive; live is engaging but model-dependent; guardrails balance both |
+| **Replayability** | One-time first-run vs. accessible from help menu | Should be accessible later for "remind me how this works" moments |
+| **Content** | Software project vs. non-software vs. user's choice | Software is our strongest domain but limits audience; offering choice respects domain-neutrality |
+| **What it demonstrates** | The pushback disposition vs. the output format vs. both | Pushback is the differentiator; output is the proof of durability. Show pushback first. |
+| **Skip affordance** | Obvious "skip" button vs. subtle dismiss vs. no skip | Must be skippable — forcing a tutorial on an eager user is its own friction |
+
+**Proposed walkthrough structure:**
+
+1. **Brief orientation card** (5 seconds, dismissible): "Clarity is a thinking partner that pushes back. It'll ask hard questions to help you figure out what you actually want. Try it with a sample project, or bring your own."
+2. **Choice**: [Try a sample project] [I have my own project] [Skip]
+3. **If sample**: Pre-loaded 2-3 sentence project description → agent demonstrates a reframe or specificity push → user sees "oh, that's what it does" → "Ready to try with your own project?"
+4. **If own project**: Straight to conversation with a brief inline hint: "Tell me what you're working on — even a rough idea. I'll ask questions to help sharpen it."
+
+**What the walkthrough must demonstrate in ≤ 3 exchanges:**
+- The agent pushes back (not just agrees)
+- The pushback is specific and useful (not generic)
+- Something gets captured as an artifact (a question, a requirement, a reframe)
+- The user sees the output and thinks "that's worth keeping"
+
+**Anti-patterns to avoid:**
+- Don't make the tutorial feel like a tour of features ("here's the sidebar, here's the settings")
+- Don't make it so long that impatient users skip and miss the orientation
+- Don't use a project so trivial that the pushback feels fake
+- Don't use a project so complex that a new user can't follow along
+- Don't script responses so rigidly that it feels canned — the point is to demonstrate *thinking*, not recitation
+
+### LLM Setup (Embedded in Bridge)
+
+Setup becomes a step within the bridge rather than a separate blocking phase:
+
+**Auto-detect first.** Before showing anything, check:
 - Is `ANTHROPIC_API_KEY` set? → Pre-select Anthropic, pre-fill, go straight to "Test & Save"
 - Is `claude` CLI logged in? → Pre-select Claude SDK, test it, auto-configure
 - Is `gh` CLI authenticated? → Pre-select GitHub Copilot
+- If anything detected → skip straight to orientation/walkthrough
 
-**If nothing detected, recommend one path** with a brief rationale:
-> "Clarity works best with Claude. If you have a Claude account, that's the fastest path. [Use Claude] [Other providers →]"
+**If nothing detected, one screen within the bridge:**
+> "To get started, Clarity needs an AI provider. We recommend Claude for the best experience. [Use Claude →] [Other providers]"
 
-**Keep the full provider list accessible** but don't lead with it. "Other providers" expands the matrix for users who need Azure, OpenAI, etc.
+Credentials → Test → Done. One screen, not five steps. Then flow continues into orientation.
 
-### Open Questions
-
-- What's the right default recommendation? (Claude is best quality; GitHub Copilot is most likely "already have it" for developers)
-- Should the app work in a limited mode without an LLM? (e.g., browse existing protocol, view documents, but can't start conversations)
-- How do we handle the "I just want to try it" user who doesn't have any API key yet?
-
----
-
-## Phase 3: First Conversation (The Opening)
-
-### Design Principles
-
-1. **Bridge the transition.** A brief moment between "setup done" and "conversation starts" that sets expectations: what Clarity does, what's about to happen, what the user should bring.
-2. **The opening question should be answerable by everyone.** "What are you working on?" works for most but fails for "I'm just exploring" users.
-3. **First value in < 3 exchanges.** The agent should push back, surface a gap, or reframe something within the first few turns.
-4. **Don't announce the process.** The user should feel like they're talking to a thinking partner, not launching a workflow.
-
-### Gap Analysis
-
-**Gaps against the ideal flow (2:00 → 3:00):**
-
-The ideal says: "Brief orienting message, then conversation begins. User describes their project." Here's where the current experience falls short:
-
-**Abrupt transition from setup to conversation**
-- **User Impact: Medium (6/10).** User completes the wizard, page reloads, and suddenly there's a chat with "What are you working on?" — with no context about what just happened or what to expect. Not blocking, but it makes Clarity feel like a generic chatbot rather than a specialized thinking partner.
-- **Gap:** Violates "bridge the transition." There's no moment that sets expectations or differentiates Clarity from ChatGPT. The user has no mental model for what's about to happen.
-
-**CLI requires typing `run` at a menu**
-- **User Impact: Medium (5/10).** The command menu adds a step that feels like bureaucracy — the user came to talk, not to navigate menus. For first-run specifically, the menu is all cost and no benefit.
-- **Gap:** Violates "don't announce the process." The menu exposes internal machinery (process names, commands) before the user has any context for why they'd want that.
-
-**Opening question too vague for exploratory users**
-- **User Impact: Medium (6/10).** "What are you working on?" works for users who arrive with a project in mind. But users who installed to *see what this does* don't have a ready answer. They feel put on the spot.
-- **Gap:** Violates "answerable by everyone." The opening assumes one user attitude (has a project) and doesn't handle others (exploring, evaluating, unsure).
-
-**No path for "what does this do?" users**
-- **User Impact: High (7/10).** A user who types "what can you help with?" currently gets an undesigned LLM-generated response. This matters because a meaningful portion of first-time users are evaluating, not using. If the evaluation experience is poor, they never become users.
-- **Gap:** Violates "bridge the transition" at a deeper level. The bridge should be good enough that this question doesn't arise — but if it does, there should be a designed response, not an improvised one.
+**If skipped:** Bridge continues without LLM. Show orientation and walkthrough in "preview" mode. When user tries to start a real conversation, re-prompt for setup. Never crash.
 
 ### Supporting Research
 
-- **Ollama** after install just runs and says: "You'll be prompted to run a model or connect Ollama to your existing agents." It tells you what to do next, in one line.
-- **Obsidian** on first launch shows a vault creation dialog with a "Learn more" option. It doesn't drop you into a blank page and wait — it explains the one concept you need (vault = folder) before starting.
-- **LM Studio** on first launch shows a model browser — it gives you something to *do* rather than asking an open-ended question.
-- **VS Code** on first open shows a "Get Started" tab with categorized next steps (themes, keybindings, extensions). It gives structure without being prescriptive.
+- **Ollama** after install just says what to do next in one line. No separate orientation.
+- **Obsidian** explains one concept (vault = folder) before starting. Minimal but sufficient.
+- **LM Studio** shows a model browser — gives you something to *do* immediately.
+- **VS Code** shows a "Get Started" tab with structured next steps on first open.
+- **Duolingo** (tutorial reference): teaches by doing, not explaining. First lesson starts immediately with a guided exercise; you learn the mechanics by using them.
+- **Figma** shows a brief interactive tutorial on first use that demonstrates the tool's unique interaction model (vector editing), not generic features.
 
-**Pattern:** Good first-run experiences either (a) tell you exactly what to do next, or (b) give you structured options rather than a blank canvas. None of them open with a vague question and wait.
+**Pattern:** Good first-run experiences either (a) tell you exactly what to do next, (b) give you structured options rather than a blank canvas, or (c) teach by doing rather than explaining. The best ones combine (b) and (c) — structured options that lead to a guided experience.
+
+### Open Questions
+
+- What's the right default LLM recommendation? (Claude is best quality; GitHub Copilot is most likely "already have it" for developers)
+- Should the app work in a limited mode without an LLM? (browse protocol, view docs, but can't converse)
+- What sample project resonates with the broadest audience? (Needs to be interesting enough to demonstrate real pushback but simple enough to follow in 60 seconds)
+- Should the walkthrough be a real LLM conversation (variable quality, costs money) or a scripted replay (predictable, free, but feels canned)?
+- How do we handle the user who skips the walkthrough but then doesn't know how to engage? (Inline hints? Contextual guidance during first real conversation?)
+- Should the bridge moment differ by modality? (Desktop/web users may want visual orientation; CLI users may prefer to just start; embedded users have a coding agent as intermediary)
+
+---
+
+## First Conversation
+
+### Design Principles
+
+1. **The opening question should be answerable by everyone.** "What are you working on?" works for most but fails for "I'm just exploring" users. The opening must accommodate multiple attitudes.
+2. **Don't announce the process.** The user should feel like they're talking to a thinking partner, not launching a workflow. No "Running problem-clarification process..." messages.
+3. **Adapt to what arrives.** The agent's first response should be shaped by what the user actually says, not by a fixed script.
+4. **CLI goes straight to conversation on first run.** The command menu is for returning users. First-timers shouldn't navigate infrastructure.
+
+### Gap Analysis
+
+**Gaps against the ideal flow (3:00 → 4:00):**
+
+The ideal says: "User describes their project. Agent listens, asks clarifying questions, looks for first pushback opportunity."
+
+**Opening question too vague for exploratory users**
+- **User Impact: Medium (6/10).** "What are you working on?" works for users with a project in mind. Users who installed to *see what this does* don't have a ready answer.
+- **Gap:** Assumes one user attitude (has a project) and doesn't handle others (exploring, evaluating, unsure). The bridge moment should have reduced this problem — but if the user skipped it or it didn't land, the opening still needs to work.
+
+**CLI requires typing `run` at a menu**
+- **User Impact: Medium (5/10).** The command menu adds bureaucracy before conversation begins. For first-run, it's all cost and no benefit.
+- **Gap:** Exposes internal machinery (process names, commands) before the user has context for why they'd want that.
+
+**No designed handling for common first-time responses**
+- **User Impact: High (7/10).** "What can you help with?", "How does this work?", "I'm just trying this out" — these are all common first messages that currently get undesigned LLM-improvised responses.
+- **Gap:** The process guide doesn't explicitly instruct the agent on how to handle evaluation/exploration attitudes.
 
 ### Proposed Model
 
-**After setup, show a brief bridge screen** (2-3 seconds, or a dismissible card):
-> "Clarity helps you think through projects — asking the hard questions before you build. Tell me what you're working on, and I'll help you figure out what you actually want."
-
-Then the conversation begins. The opening adapts to what the user types:
+The conversation opening adapts to what the user types:
 
 | User says | Agent disposition |
 |-----------|-----------------|
@@ -238,19 +297,19 @@ Then the conversation begins. The opening adapts to what the user types:
 | Asks what Clarity does ("What can you help with?") | Brief explanation + "Want to try it? Tell me about something you're working on — even rough ideas work." |
 | Expresses a problem ("My team can't agree on...") | Jump directly into the problem — skip meta-discussion |
 | Pastes existing context (PRs, docs, specs) | Acknowledge the context, assess it, identify what's missing or unclear |
+| Says something exploratory ("Just trying this out") | Acknowledge, offer the sample walkthrough, or ask "What's on your mind? Even a half-formed idea works." |
 
-**CLI simplification:** Remove the command menu for first-run. If the protocol doesn't exist, go straight into conversation. The menu is for returning users who want specific operations.
+**CLI simplification:** Remove the command menu for first-run. If the protocol doesn't exist, go straight into conversation.
 
 ### Open Questions
 
-- Should the bridge screen be a one-time thing, or appear each session?
-- How much should the opening differ by modality? (Desktop user vs. developer using `clarity embed`)
-- Is there a way to let users "try before committing" — e.g., a sample conversation or walkthrough?
-- Should the first conversation save outputs somewhere visible ("here's what we captured") to reinforce value?
+- Should the process guide explicitly enumerate these response patterns, or should it give a general principle and trust the model?
+- How much should the first conversation differ from subsequent ones? (First visit has more hand-holding; return visits assume familiarity)
+- Should the first conversation save outputs somewhere visible ("here's what we captured") to reinforce that this produces durable artifacts?
 
 ---
 
-## Phase 4: Time to First Insight
+## First Insight
 
 ### Design Principles
 
