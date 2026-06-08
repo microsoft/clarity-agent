@@ -223,14 +223,25 @@ def _cmd_web(args: argparse.Namespace) -> None:
     web_dist = clarity_agent_dir / "web" / "dist"
     static_dir: Path | None = web_dist if web_dist.exists() else None
 
-    if static_dir is None:
+    if static_dir is None and not args.api_only:
         # ``web/dist/`` is built locally — not checked into the repo —
         # so a fresh clone won't have one until either ``clarity install``
         # runs (which builds it) or the user builds the frontend by hand.
-        print("Warning: No built web UI found at web/dist/.")
-        print("Build it with 'cd web && npm install && npm run build',")
-        print("or run 'python clarity.py install' to set everything up.")
-        print("Starting in API-only mode.\n")
+        # Without it the server still binds its port but serves a blank
+        # page — and the desktop app points its webview here too — so
+        # refuse to start rather than fail silently. ``--api-only`` opts
+        # into the headless server for API/development use.
+        sys.exit(
+            "No built web UI found at web/dist/.\n"
+            "Build it with 'cd web && npm install && npm run build',\n"
+            "or run 'python clarity.py install' to set everything up.\n"
+            "Pass --api-only to start the server without a web UI."
+        )
+
+    if static_dir is None:
+        # Reached only with --api-only: start headless, but say so
+        # explicitly so a blank page later isn't a mystery.
+        print("Starting in API-only mode (no web UI).\n")
 
     # No project_dir → launcher mode (multi-project).
     # Explicit project_dir → single-project mode (developer shortcut).
@@ -513,6 +524,11 @@ def main() -> None:
     web_parser.add_argument(
         "--session-id", default=None,
         help="SDK session ID to resume (used by launcher for session continuity)",
+    )
+    web_parser.add_argument(
+        "--api-only", action="store_true",
+        help="Start the server without a web UI (headless API mode). "
+        "By default 'web' refuses to start when the UI hasn't been built.",
     )
     _add_llm_args(web_parser)
 
