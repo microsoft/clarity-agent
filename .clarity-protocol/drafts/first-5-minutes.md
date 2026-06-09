@@ -125,7 +125,7 @@ The ideal says install completes and the app opens within 30 seconds. Here's whe
 
 **15-20 minute CLI install time**
 - **User Impact: High (8/10).** A "try it" user won't wait 15 minutes for dependencies to install. This is acceptable for developers committing to a tool they've already decided to adopt, but devastating for curious first-timers.
-- **Gap:** Violates "< 3 minutes." The root cause is architectural: the CLI install clones a repo and builds from source (Python venv + npm) rather than shipping a pre-built artifact.
+- **Gap:** Violates "< 3 minutes." The root cause is architectural: the CLI install creates a Python venv, installs dependencies, and builds the web frontend — effectively a from-source build step rather than shipping a pre-built artifact.
 
 **Prerequisite assumptions (git, Python 3.12, Node 22)**
 - **User Impact: High (7/10).** Each missing prerequisite is a blocking error with a cryptic message. The user must leave Clarity's install flow, figure out how to install Python/Node/git for their platform, then return and retry. Each round-trip risks abandonment. Developers usually have these; non-developers almost never do.
@@ -269,9 +269,11 @@ Then offer three paths:
 Setup becomes a step within the bridge rather than a separate blocking phase:
 
 **Auto-detect first.** Before showing anything, check:
-- Is `ANTHROPIC_API_KEY` set? → Pre-select Anthropic, pre-fill, go straight to "Test & Save"
-- Is `claude` CLI logged in? → Pre-select Claude SDK, test it, auto-configure
-- Is `gh` CLI authenticated? → Pre-select GitHub Copilot
+- Is `ANTHROPIC_API_KEY` set? → Pre-select Anthropic
+- Is `OPENAI_API_KEY` set? → Pre-select OpenAI
+- Is `GITHUB_TOKEN` or copilot SDK available? → Pre-select GitHub Copilot
+- Is `GEMINI_API_KEY` set? → Pre-select Gemini
+- Is `AZURE_AI_ENDPOINT` set? → Pre-select Azure
 - If anything detected → skip straight to orientation/walkthrough
 
 **If nothing detected, one screen within the bridge:**
