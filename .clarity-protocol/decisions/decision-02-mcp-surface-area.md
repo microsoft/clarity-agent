@@ -16,7 +16,7 @@ The 8 tools are organized around three workflow moments:
 - **Assess and navigate:** `run_clarity`, `get_packet_status`
 - **Read, write, record:** `read_protocol_document`, `write_protocol_document`, `record_decision`, `record_failure`, `record_suggestion`
 
-Additionally, 3 MCP resources provide passive context: `clarity://summary`, `clarity://decisions`, `clarity://behaviors`.
+Additionally, 6 MCP resources provide passive context: `clarity://summary`, `clarity://decisions`, `clarity://behaviors`, `clarity://processes/{name}`, `clarity://thinkers/{name}`, and `clarity://protocol/{path}`.
 
 ## Rationale
 

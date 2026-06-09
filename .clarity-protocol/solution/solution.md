@@ -14,7 +14,7 @@ The shipped implementation focuses on software engineering, where the resulting 
 
 ### What Exists Today
 
-The current implementation is a **full-implementation product** with three entry points, built on a set of process guides backed by Python infrastructure.
+The current implementation is a **full-implementation product** with multiple entry points, built on a set of process guides backed by Python infrastructure.
 
 **Process guides** (`processes/`) are markdown documents that direct how an AI should conduct a structured conversation. They encode what to ask, when to push back, what to write down, and when to move on. An AI agent loaded with a process guide can follow it to conduct a clarity session — the guides are the logic; everything else is mechanics.
 
@@ -34,7 +34,7 @@ The current implementation is a **full-implementation product** with three entry
 | `session.py` | Session coordination and transcript recording |
 | `packet/` | Review packet generation (Markdown, DOCX) |
 
-**Three entry points (products):**
+**Current entry points (products):**
 
 - **Coding agent integration (AGENTS.md + MCP)** — `clarity embed` inserts an AGENTS.md snippet that instructs AI coding agents to engage clarity at inflection points, and configures `.vscode/mcp.json` so the agent has MCP tool access to the full Clarity infrastructure. The rules file is the *trigger* (detecting when to invoke Clarity); the MCP server is the *engine* (providing the actual tools). The coding agent session itself becomes the clarity conversation.
 - **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
@@ -52,7 +52,7 @@ The current system was designed for a narrower scope than the updated problem st
 - **No explicit intellectual corpus (Layer 1).** The principles behind the process guides are implicit — baked into the guides themselves and scattered across design notes. There's no canonical source of truth from which the guides are derived, which makes it hard to verify consistency, extend to new domains, or create alternative expressions.
 - **One expression of the methodology.** The process guides assume tool access, multi-file context, and filesystem operations. There's no way to bring the clarity agent's thinking to a user in a bare AI conversation (claude.ai, ChatGPT) without the full infrastructure.
 - **Greenfield assumption.** The system assumes you're starting a new project. There's no structured support for re-deriving clarity about an existing, partially-built system (FR11).
-- **Limited product surface beyond engineering.** Four entry points, all oriented toward developers in coding tools. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
+- **Limited product surface beyond engineering.** Current entry points are still oriented toward developers in coding tools. No path to the citizen developer, the general AI user, or the user who doesn't know they need structured thinking outside of a coding agent context.
 
 ---
 
