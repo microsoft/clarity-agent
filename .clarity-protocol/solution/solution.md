@@ -34,10 +34,11 @@ The current implementation is a **full-implementation product** with three entry
 | `session.py` | Session coordination and transcript recording |
 | `packet/` | Review packet generation (Markdown, DOCX) |
 
-**Three entry points (products):**
+**Entry points (products):**
 
 - **Coding agent integration (AGENTS.md + MCP)** — `clarity embed` inserts an AGENTS.md snippet that instructs AI coding agents to engage clarity at inflection points, and configures `.vscode/mcp.json` so the agent has MCP tool access to the full Clarity infrastructure. The rules file is the *trigger* (detecting when to invoke Clarity); the MCP server is the *engine* (providing the actual tools). The coding agent session itself becomes the clarity conversation.
 - **Web application** — FastAPI + React for dedicated clarity conversations, protocol browsing, and staleness monitoring.
+- **Desktop application** — Tauri-based native app bundling the Python server as a sidecar, providing a standalone experience without terminal or browser.
 - **CLI** — initialization, packet status checking, session management.
 - **IDE integration (VS Code extension)** — a sidebar panel showing protocol documents glanceable while coding, with commands for project management and backend lifecycle.
 
