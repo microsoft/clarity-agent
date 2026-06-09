@@ -398,7 +398,7 @@ MCP Server (clarity-agent)
     ├── Guard: check_decision
     ├── Read/Write: read_protocol_document, write_protocol_document
     ├── Record: record_decision, record_failure, record_suggestion
-    ├── Resources: clarity://summary, clarity://decisions, clarity://behaviors
+    ├── Resources: clarity://summary, clarity://decisions, clarity://behaviors, clarity://processes/{name}, clarity://thinkers/{name}, clarity://protocol/{path}
     │
     ▼
 .clarity-protocol/ (filesystem)

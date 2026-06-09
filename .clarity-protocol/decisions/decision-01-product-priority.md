@@ -11,7 +11,7 @@
 |------|--------|
 | 2026-03-03 | Decision made. Three existing products (AGENTS.md snippet, web app, CLI); six new products prioritized. |
 | 2026-04-06 | Integration strategy exploration validated MCP-first approach; confirmed "MCP as universal connector" thesis is strong given near-universal adoption across professional tools. |
-| 2026-06-08 | Review: 4 of 6 priorities now implemented. #1 MCP hybrid (8-tool server + `clarity embed` + npx runner). #3 IDE integration (VS Code extension with protocol sidebar). #5 Desktop app (Windows + Linux). Original products also evolved: coding agent integration now uses MCP instead of shell invocations. |
+| 2026-06-08 | Review: 3 of 6 priorities now implemented. #1 MCP hybrid (8-tool server + `clarity embed` + npx runner). #3 IDE integration (VS Code extension with protocol sidebar). #5 Desktop app (Windows + Linux). Original products also evolved: coding agent integration now uses MCP instead of shell invocations. |
 
 ## Question
 
@@ -48,7 +48,7 @@ Which new products should we prioritize exploring beyond the existing three (AGE
 
 4. **Hosted web service** — defer. High effort, high risk, well-understood engineering. Doesn't teach us much about the methodology. Revisit when the user base and use patterns are better understood.
 
-5. **Standalone desktop app** — defer. Niche audience, high effort, low learning value. ✅ *Implemented: Desktop app built for Windows and Linux.*
+5. **Standalone desktop app** — implemented. Niche audience, high effort, low learning value. ✅ *Implemented: Desktop app built for Windows and Linux.*
 
 6. **Deep model integration** — distant horizon. Revisit when methodology is mature and integration mechanisms exist.
 
