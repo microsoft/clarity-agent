@@ -58,27 +58,13 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "endpoint_env_var": None,
         "auth_modes": [
             {
-                "name": "claude_sdk",
-                "display_name": "Claude Code",
-                "description": (
-                    "Sign in through Claude Code — no API key needed. "
-                    "Best for personal use and development."
-                ),
-                "package": "claude_agent_sdk",
-                "env_var": None,
-                "setup_help": (
-                    "This option uses the Claude Code CLI's authentication. "
-                    "You must have run 'claude login' in your terminal first."
-                ),
-                "setup_url": "https://claude.ai/download",
-                "fields": [],
-            },
-            {
                 "name": "api_key",
-                "display_name": "API Key",
+                "display_name": "API Key (recommended)",
                 "description": (
-                    "Use an API key from console.anthropic.com. "
-                    "Best for teams and automated setups."
+                    "Paste an API key from console.anthropic.com. "
+                    "Works from anywhere with no extra tools — the "
+                    "right choice if you're new to Claude or aren't "
+                    "comfortable with terminal commands."
                 ),
                 "package": "anthropic",
                 "env_var": "ANTHROPIC_API_KEY",
@@ -94,6 +80,24 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
                      "help": "Starts with sk-ant-. Found under API Keys "
                              "in the Anthropic Console."},
                 ],
+            },
+            {
+                "name": "claude_sdk",
+                "display_name": "Claude Code login",
+                "description": (
+                    "Reuse the credentials from 'claude login' if you "
+                    "already use Claude Code. No API key to manage. "
+                    "Note: this is an off-label use of Claude Code's "
+                    "auth that Anthropic may remove in a future update."
+                ),
+                "package": "claude_agent_sdk",
+                "env_var": None,
+                "setup_help": (
+                    "This option uses the Claude Code CLI's authentication. "
+                    "You must have run 'claude login' in your terminal first."
+                ),
+                "setup_url": "https://claude.ai/download",
+                "fields": [],
             },
         ],
     },

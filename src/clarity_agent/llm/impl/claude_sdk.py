@@ -117,6 +117,7 @@ class SdkChatBackend(ChatBackend):
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
+        api_key: str | None = None,
         transcript: Transcript | None = None,
     ) -> None:
         try:
@@ -133,6 +134,16 @@ class SdkChatBackend(ChatBackend):
         self.clarity_agent_dir: Path = clarity_agent_dir
         self._session_id: str | None = None
         self._current_system_prompt: str | None = None
+        # Explicit API key (from ``ANTHROPIC_API_KEY`` flag or env).
+        # When set, the API-mode tool loop passes it directly to
+        # :class:`anthropic.AsyncAnthropic`, and the SDK subprocess
+        # path injects it via ``ClaudeAgentOptions.env`` so the CLI
+        # picks it up even if the parent process's env doesn't have
+        # it.  ``None`` means "let the SDK use its own auth"
+        # (``claude login`` credentials) — the off-label path that
+        # may be deprecated upstream; ``api_key`` is now the
+        # recommended route.
+        self._api_key: str | None = api_key
         self._api_client: Any = None  # lazily-created anthropic.AsyncAnthropic
         # Set by the PreCompact hook when the SDK is about to
         # compact.  Drained by the post-query detection in
@@ -329,6 +340,15 @@ class SdkChatBackend(ChatBackend):
 
         had_session = self._session_id is not None
 
+        # Inject the api_key into the SDK subprocess's env when we
+        # have an explicit one — covers the case where the user
+        # passed ``--api-key`` and the parent env doesn't already
+        # contain ``ANTHROPIC_API_KEY``.  ``env`` merges with parent
+        # env (only the keys we list override), so omitting it when
+        # we have no key is the equivalent of "inherit parent".
+        sdk_env: dict[str, str] = (
+            {"ANTHROPIC_API_KEY": self._api_key} if self._api_key else {}
+        )
         options = self._sdk.ClaudeAgentOptions(
             system_prompt=self._current_system_prompt,
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
@@ -337,6 +357,7 @@ class SdkChatBackend(ChatBackend):
             cwd=str(self.project_dir),
             max_turns=25,
             resume=self._session_id,
+            env=sdk_env,
             # PreCompact fires immediately before the SDK compacts
             # an existing session.  We just want to know about it —
             # the handler captures the transcript path and returns
@@ -466,8 +487,12 @@ class SdkChatBackend(ChatBackend):
         return asyncio.run(self._async_chat(user_message, system_prompt, model=model))
 
     def _has_api_key(self) -> bool:
-        """Check whether a direct Anthropic API key is available."""
-        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+        """Check whether a direct Anthropic API key is available.
+
+        Returns ``True`` if either an explicit key was passed to the
+        constructor or ``ANTHROPIC_API_KEY`` is present in the env.
+        """
+        return bool(self._api_key or os.environ.get("ANTHROPIC_API_KEY"))
 
     # ------------------------------------------------------------------
     # Tool-schema encoding for SDK fallback
@@ -582,7 +607,11 @@ class SdkChatBackend(ChatBackend):
                     "with the Claude SDK backend. "
                     "Install with: pip install anthropic"
                 ) from exc
-            self._api_client = anthropic.AsyncAnthropic()
+            # Pass the explicit api_key when we have one; the
+            # anthropic SDK falls back to the env var when this is
+            # ``None``, so this single call covers both the
+            # ``--api-key``-flag path and the bare-env-var path.
+            self._api_client = anthropic.AsyncAnthropic(api_key=self._api_key)
 
         resolved_model: str = self.resolve_model(model)
         messages: list[dict[str, Any]] = [

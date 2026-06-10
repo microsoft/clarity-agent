@@ -159,16 +159,27 @@ class TestCreateChatBackend:
     """create_chat_backend builds the right ChatBackend for each provider."""
 
     def test_anthropic_provider(self, tmp_path: Any) -> None:
-        config = LLMConfig(provider="anthropic", api_key="fake-key")
-        with patch("clarity_agent.llm.impl.anthropic._anthropic_mod") as mock_mod:
-            mock_mod.AsyncAnthropic.return_value = MagicMock()
-            backend = create_chat_backend(
-                config,
-                project_dir=tmp_path,
-                clarity_agent_dir=tmp_path,
-            )
-        assert isinstance(backend, ClientChatBackend)
+        """Anthropic API-key auth now routes through SdkChatBackend.
+
+        The low-level :class:`AnthropicClient` is no longer used as a
+        chat backend (see #105): both Anthropic auth modes share the
+        SDK runtime so tool calls / compaction / resume behave the
+        same regardless of how the user authed.
+        """
+        from clarity_agent.llm.impl.claude_sdk import SdkChatBackend
+        config = LLMConfig(
+            provider="anthropic", auth_mode="api_key", api_key="fake-key",
+        )
+        backend = create_chat_backend(
+            config,
+            project_dir=tmp_path,
+            clarity_agent_dir=tmp_path,
+        )
+        assert isinstance(backend, SdkChatBackend)
         assert hasattr(backend, "chat")
+        # The key threads through to the backend so it can hand it
+        # to ``AsyncAnthropic`` / the SDK subprocess env.
+        assert backend._api_key == "fake-key"
 
     def test_azure_provider(self, tmp_path: Any) -> None:
         config = LLMConfig(
@@ -1842,13 +1853,28 @@ class TestSdkToolCallParsing:
         cls = self._get_cls()
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         backend = MagicMock(spec=cls)
+        # ``_api_key`` is set in ``__init__``, so MagicMock(spec=cls)
+        # doesn't expose it.  Pin to ``None`` so we genuinely exercise
+        # the env-var branch.
+        backend._api_key = None
         assert cls._has_api_key(backend) is True
 
     def test_has_api_key_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         cls = self._get_cls()
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         backend = MagicMock(spec=cls)
+        backend._api_key = None
         assert cls._has_api_key(backend) is False
+
+    def test_has_api_key_explicit_constructor_arg(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An explicit constructor api_key counts even when env is unset."""
+        cls = self._get_cls()
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        backend = MagicMock(spec=cls)
+        backend._api_key = "sk-ant-xyz"
+        assert cls._has_api_key(backend) is True
 
 
 class TestSdkToolLoopRouting:
