@@ -219,6 +219,12 @@ def create_app(
     app.include_router(setup_router)
     app.include_router(settings_router)
 
+    # Onboarding routes (first-five-minutes exploration)
+    from clarity_agent.web.onboarding_routes import init as onboarding_init
+    from clarity_agent.web.onboarding_routes import router as onboarding_router
+    onboarding_init(clarity_agent_dir=clarity_agent_dir, app_state=state, project_dir=project_dir)
+    app.include_router(onboarding_router)
+
     # ------------------------------------------------------------------
     # WebSocket: Chat
     # ------------------------------------------------------------------
@@ -360,10 +366,14 @@ def create_app(
                         await ws.send_json({"type": "error", "message": "No process name"})
                         continue
 
+                    scenario_id: str | None = data.get("scenario_id")
+
                     stop_event.clear()
                     try:
                         chat_task = asyncio.create_task(
-                            session.start_process(process_name),
+                            session.start_process(
+                                process_name, scenario_id=scenario_id,
+                            ),
                         )
                         await _drain_events(session, chat_task, ws, stop_event)
                     except WebSocketDisconnect:

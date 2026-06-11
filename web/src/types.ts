@@ -1,7 +1,7 @@
 // WebSocket messages: client → server
 export type WsClientMessage =
   | { type: "chat"; message: string }
-  | { type: "start_process"; process: string }
+  | { type: "start_process"; process: string; scenario_id?: string }
   | { type: "set_model_override"; tier: string }
   | { type: "stop" };
 
@@ -26,7 +26,8 @@ export type WsServerMessage =
       source_chapter: number;
       /** Number of turns folded into the summary. */
       source_turn_count: number;
-    };
+    }
+  | { type: "exploration_complete" };
 
 // Chat UI state
 export interface ChatMessage {
@@ -266,4 +267,19 @@ export interface ProcessMeta {
   one_liner: string;
   tier: string;
   category: string;
+}
+
+// Onboarding (first-five-minutes exploration)
+export interface OnboardingStatus {
+  first_exploration_status: "not_started" | "completed" | "dismissed";
+  eligible_for_auto_exploration: boolean;
+  last_exploration_scenario: string | null;
+  /** True when all protocol documents are still templates (no real work done). */
+  project_is_fresh: boolean;
+}
+
+export interface ExplorationScenario {
+  id: string;
+  title: string;
+  description: string;
 }

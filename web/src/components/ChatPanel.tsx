@@ -1,12 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getProtocolTree, getSession } from "../api/client";
+import { useNavigate } from "react-router-dom";
+import {
+  activateProject,
+  createProject,
+  getOnboardingStatus,
+  getProtocolTree,
+  getSession,
+} from "../api/client";
+import { save as tauriSave } from "@tauri-apps/plugin-dialog";
 import { useChat } from "../hooks/useChat";
-import type { SessionInfo } from "../types";
+import type { OnboardingStatus, SessionInfo } from "../types";
 import ChatMessage from "./ChatMessage";
 import EmptyState from "./EmptyState";
 import ErrorBanner from "./ErrorBanner";
+import FirstScreen from "./FirstScreen";
+import { refreshRecentMenu } from "./Layout";
 import MessageInput from "./MessageInput";
 
 function formatTokens(n: number): string {
@@ -15,7 +25,16 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function hasNativeDialogs(): boolean {
+  return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+}
+
+function deriveName(path: string): string {
+  return path.split("/").filter(Boolean).pop() || "project";
+}
+
 export default function ChatPanel() {
+  const navigate = useNavigate();
   const {
     messages,
     turnCost,
@@ -30,6 +49,7 @@ export default function ChatPanel() {
     error,
     statusPhase,
     historyLoaded,
+    explorationComplete: explorationSignal,
     sendMessage,
     startProcess,
     stopGeneration,
@@ -44,6 +64,19 @@ export default function ChatPanel() {
   const autoStarted = useRef(false);
   const [protocolExists, setProtocolExists] = useState<boolean | null>(null);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false);
+  const [, setCreatingProject] = useState(false);
+  const [projectFlowError, setProjectFlowError] = useState<string | null>(null);
+
+  const inFirstExploration =
+    currentProcess === "first-exploration/exploration-process-guide";
+
+  // Detect when the exploration has reached its natural end.
+  // The backend sends an exploration_complete event when the model
+  // calls the complete_exploration tool.
+  const explorationComplete =
+    inFirstExploration && explorationSignal;
 
   // Check if a protocol directory exists
   useEffect(() => {
@@ -52,32 +85,83 @@ export default function ChatPanel() {
       .catch(() => setProtocolExists(null));
   }, []);
 
+  // Check onboarding status (first-five-minutes eligibility).
+  useEffect(() => {
+    getOnboardingStatus()
+      .then((s) => { setOnboarding(s); setOnboardingLoaded(true); })
+      .catch(() => { setOnboarding(null); setOnboardingLoaded(true); });
+  }, []);
+
   // Fetch session info (for print header).
   useEffect(() => {
     getSession().then(setSessionInfo).catch(() => {});
   }, []);
 
-  // Auto-start the clarity-agent process — but only when this is
-  // genuinely a fresh start.  The ``historyLoaded`` guard is the
-  // key new piece: if the user has prior conversation in the
-  // current chapter, the load_history fetch will populate
-  // ``messages`` and the ``messages.length === 0`` check below
-  // becomes false, so we skip the slow kickoff and let them resume.
-  // Without ``historyLoaded`` we'd race the fetch and fire the
-  // kickoff on every page open.
+  // Show the first screen only when onboarding is eligible AND the
+  // project has no real work yet.  Once the user has completed or
+  // dismissed the exploration, normal auto-start takes over.
+  const showFirstScreen =
+    messages.length === 0
+    && !streaming
+    && historyLoaded
+    && onboardingLoaded
+    && !!onboarding?.eligible_for_auto_exploration
+    && !!onboarding?.project_is_fresh;
+
+  // Auto-start the clarity-agent process on genuinely fresh starts
+  // where the first screen is NOT showing (i.e., exploration is done
+  // or dismissed, user created/opened a real project).
   useEffect(() => {
     if (
       historyLoaded
+      && onboardingLoaded
       && connected
       && !autoStarted.current
       && messages.length === 0
       && !streaming
+      && !showFirstScreen
       && protocolExists !== false
     ) {
       autoStarted.current = true;
       startProcess("clarity-agent");
     }
-  }, [historyLoaded, connected, messages.length, streaming, startProcess, protocolExists]);
+  }, [historyLoaded, onboardingLoaded, connected, messages.length, streaming, startProcess, protocolExists, showFirstScreen]);
+
+  const handleStartNewProject = async () => {
+    setProjectFlowError(null);
+
+    if (!hasNativeDialogs()) {
+      setProjectFlowError("Use File -> New Project to create a new project.");
+      return;
+    }
+
+    setCreatingProject(true);
+    try {
+      const path = await tauriSave({
+        title: "Create a new project",
+        defaultPath: "Untitled Project",
+      });
+      if (!path) {
+        return;
+      }
+
+      const name = deriveName(path);
+      const result = await createProject({ name, path, intent: "create_new" });
+
+      if (result.status !== "ok") {
+        throw new Error("Could not create project from the selected location.");
+      }
+
+      await activateProject(result.entry.id);
+      await refreshRecentMenu();
+      navigate(`/p/${result.entry.id}/`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setProjectFlowError(msg);
+    } finally {
+      setCreatingProject(false);
+    }
+  };
 
   // Track whether the user is scrolled to the bottom. Only auto-scroll
   // when they're "stuck" to the bottom — if they've scrolled up to read
@@ -183,6 +267,18 @@ export default function ChatPanel() {
         </div>
       </div>
 
+      {projectFlowError && (
+        <div className="print-hide border-b border-status-error/30 bg-status-error-bg/60 px-6 py-2 text-xs text-status-error-text">
+          {projectFlowError}
+          <button
+            onClick={() => setProjectFlowError(null)}
+            className="ml-2 underline hover:no-underline"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
         <ErrorBanner
@@ -221,7 +317,24 @@ export default function ChatPanel() {
           </div>
         )}
         <div className="flex flex-col justify-end min-h-full max-w-3xl mx-auto px-6 py-6 space-y-5">
-          {messages.length === 0 && !streaming && protocolExists === false && connected && (
+          {/* First-screen experience: eligible new user with no project */}
+          {showFirstScreen && connected && (
+            <FirstScreen
+              onStartOwnProblem={() => {
+                void handleStartNewProject();
+              }}
+              onStartExploration={(scenarioId) => {
+                autoStarted.current = true;
+                startProcess(
+                  "first-exploration/exploration-process-guide",
+                  scenarioId,
+                );
+              }}
+            />
+          )}
+
+          {/* Fallback empty state when onboarding is not eligible but no protocol exists */}
+          {messages.length === 0 && !streaming && protocolExists === false && !showFirstScreen && connected && (
             <EmptyState
               heading="What are you working on?"
               description="Clarity helps you think through problems, design solutions, and anticipate failures — structured thinking with AI guidance."
@@ -345,8 +458,22 @@ export default function ChatPanel() {
         </div>
       </div>
 
-      {/* Input */}
-      <div className="print-hide">
+      {/* Input area — hidden during first screen; replaced by
+          Continue button when the exploration is complete */}
+      {explorationComplete ? (
+        <div className="print-hide border-t border-border bg-surface/80 px-6 py-5 text-center">
+          <button
+            onClick={() => {
+              void startNewChapter();
+            }}
+            className="px-6 py-2.5 rounded-lg text-sm bg-accent-focus text-white
+              hover:brightness-110 transition-all duration-150"
+          >
+            Continue
+          </button>
+        </div>
+      ) : (
+      <div className={`print-hide ${showFirstScreen ? "hidden" : ""}`}>
         <MessageInput
           onSend={sendMessage}
           // Only disable when fully disconnected — typing while
@@ -382,6 +509,7 @@ export default function ChatPanel() {
           }
         />
       </div>
+      )}
     </div>
   );
 }

@@ -239,6 +239,7 @@ describe("chatReducer", () => {
         error: null,
         statusPhase: null,
         historyLoaded: true,
+        explorationComplete: false,
       };
       const next = chatReducer(populated, { type: "clear" });
       expect(next.messages).toEqual([]);

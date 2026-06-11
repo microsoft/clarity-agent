@@ -72,6 +72,9 @@ class WebSessionAdapter:
         self._cancelled = False
         # Partial text accumulated from events before cancellation.
         self._partial_text: list[str] = []
+        # System prompt from the last start_process call, re-sent on
+        # follow-up chat turns so the LLM retains the process guide context.
+        self._process_system_prompt: str | None = None
 
     def _setup_feedback_tools(self) -> None:
         """Set up the feedback tool as baseline for all chat calls."""
@@ -493,10 +496,20 @@ class WebSessionAdapter:
         self._cancelled = True
 
     async def chat(self, message: str, system_prompt: str | None = None) -> str:
-        """Send a chat message, running the blocking call in a thread."""
+        """Send a chat message, running the blocking call in a thread.
+
+        If *system_prompt* is ``None`` and a process system prompt was
+        stored by :meth:`start_process`, that stored prompt is re-used
+        so the LLM retains the process guide context across turns.
+        """
         assert self._session is not None
         self._cancelled = False
         self._partial_text.clear()
+
+        # Re-use the process system prompt when the caller doesn't
+        # supply one (i.e., follow-up user chat messages).
+        if system_prompt is None and self._process_system_prompt is not None:
+            system_prompt = self._process_system_prompt
 
         # On the first call, inject transcript context if we have it.
         if self._transcript_context is not None:
@@ -533,6 +546,26 @@ class WebSessionAdapter:
             await self._event_queue.put({"type": "warning", "message": warn_msg})
         self._pending_warnings.clear()
 
+        # For first-exploration, detect the completion signal in the
+        # response text.  The model includes "complete_exploration" as
+        # a marker; we emit a WS event and strip the marker so the
+        # user only sees the Continue button.
+        if (
+            self.current_process
+            and self.current_process.startswith("first-exploration/")
+            and "complete_exploration" in response
+        ):
+            import logging
+            logging.getLogger(__name__).info(
+                "complete_exploration detected in response text — emitting WS event",
+            )
+            await self._event_queue.put({"type": "exploration_complete"})
+            # Strip the marker and any surrounding tool-call noise.
+            import re
+            response = re.sub(
+                r"(?m)^.*complete_exploration.*$\n?", "", response,
+            ).strip()
+
         await self._event_queue.put({"type": "response", "content": response})
 
         # Threshold-based compaction (for backends that don't
@@ -547,11 +580,19 @@ class WebSessionAdapter:
 
         return response
 
-    async def start_process(self, process_name: str) -> str:
+    async def start_process(
+        self,
+        process_name: str,
+        *,
+        scenario_id: str | None = None,
+    ) -> str:
         """Begin a process (loads guide, sends initial message).
 
         Does NOT enter an interactive loop — the web frontend replaces
         the loop by sending individual ``chat`` messages.
+
+        For the first-exploration process, *scenario_id* selects which
+        scenario module to inject alongside the base guide.
         """
         assert self._session is not None
         self._cancelled = False
@@ -616,10 +657,51 @@ class WebSessionAdapter:
         behaviors: str = self._session.load_behaviors()
         behaviors_block: str = f"{behaviors}\n\n" if behaviors else ""
 
+        # For first-exploration, compose the base guide + scenario into
+        # the system prompt so the LLM has both the interaction arc and
+        # the domain-specific material.
+        scenario_block = ""
+        initial_message: str = f"Let's run the {process_name} process."
+        if scenario_id:
+            from clarity_agent.onboarding.scenarios import load_scenario_content
+
+            try:
+                scenario_content = load_scenario_content(
+                    self.clarity_agent_dir, scenario_id,
+                )
+                scenario_block = (
+                    f"\n\n## Selected Scenario\n\n"
+                    f"The user has already chosen a scenario in the UI. "
+                    f"Skip the guide's Scenario selection step entirely. Do "
+                    f"not offer alternative scenarios or invite the user to "
+                    f"bring their own problem in the opening. Start directly "
+                    f"at the guide's Opening using the selected scenario "
+                    f"below. Use its seed situation, dimensions, deepening "
+                    f"questions, and premise changes as material for the "
+                    f"exploration — but follow the base process guide's arc "
+                    f"and rules.\n\n"
+                    f"{scenario_content}\n\n"
+                    f"## IMPORTANT: Completion Signal\n\n"
+                    f"When you deliver your closing reflection (Movement 3 "
+                    f"completion), include the exact phrase "
+                    f"'complete_exploration' somewhere in your final "
+                    f"message. This signals the UI to show the user their "
+                    f"next-step options. Do not include it before the "
+                    f"closing — include it exactly once, in your final "
+                    f"turn."
+                )
+                initial_message = (
+                    f"Begin the first exploration with the preselected "
+                    f"scenario '{scenario_id}'."
+                )
+            except FileNotFoundError:
+                pass  # Fall through without scenario material.
+
         system_prompt: str = (
             f"{behaviors_block}"
             f"You are running the {process_name} process. "
-            f"Here is the process guide:\n\n{process_content}\n\n"
+            f"Here is the process guide:\n\n{process_content}"
+            f"{scenario_block}\n\n"
             f"Follow this process step by step.\n\n"
             f"The clarity-agent directory (containing process guides and "
             f"thinker definitions) is: {self.clarity_agent_dir}\n"
@@ -652,7 +734,10 @@ class WebSessionAdapter:
             if specialists:
                 system_prompt += f"\n\n{_fmt_thinkers(specialists)}"
 
-        initial_message: str = f"Let's run the {process_name} process."
+        # Store the process system prompt so follow-up chat() calls
+        # re-use it — the LLM needs the process guide context on
+        # every turn, not just the first.
+        self._process_system_prompt = system_prompt
 
         return await self.chat(
             initial_message,

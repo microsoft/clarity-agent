@@ -3,9 +3,11 @@ import type {
   AppSettings,
   ChatMessage,
   ConfigureResult,
+  ExplorationScenario,
   FeedbackPayload,
   FeedbackResult,
   ModelProfileInfo,
+  OnboardingStatus,
   PacketOptions,
   ProcessMeta,
   ProjectEntry,
@@ -321,3 +323,35 @@ export const updateSettings = (settings: Partial<AppSettings>) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
+
+// Onboarding (first-five-minutes exploration)
+export const getOnboardingStatus = () =>
+  fetchJson<OnboardingStatus>("/api/onboarding/status");
+
+export const getOnboardingScenarios = () =>
+  fetchJson<{ scenarios: ExplorationScenario[] }>("/api/onboarding/scenarios");
+
+export const startExploration = (scenarioId: string) =>
+  fetchJson<{ workspace_path: string; scenario_id: string }>("/api/onboarding/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
+
+export const completeExploration = (scenarioId?: string) =>
+  fetchJson<{ status: string }>("/api/onboarding/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
+
+export const dismissExploration = () =>
+  fetchJson<{ status: string }>("/api/onboarding/dismiss", { method: "POST" });
+
+export const resetExploration = () =>
+  fetchJson<{ status: string }>("/api/onboarding/reset", { method: "POST" });
+
+/** Reset both onboarding state and workspace, then reload.
+ *  Convenience for iterative testing of the first-screen experience. */
+export const resetExplorationAll = () =>
+  fetchJson<{ status: string; workspace_path: string }>("/api/onboarding/reset-all", { method: "POST" });

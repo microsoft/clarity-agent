@@ -287,6 +287,12 @@ def create_launcher(
     app.include_router(setup_router)
     app.include_router(settings_router)
 
+    # Onboarding routes (first-five-minutes exploration)
+    from clarity_agent.web.onboarding_routes import init as onboarding_init
+    from clarity_agent.web.onboarding_routes import router as onboarding_router
+    onboarding_init(clarity_agent_dir=clarity_agent_dir)
+    app.include_router(onboarding_router)
+
     # ------------------------------------------------------------------
     # Subprocess management
     # ------------------------------------------------------------------

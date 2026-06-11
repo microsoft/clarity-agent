@@ -211,7 +211,6 @@ export default function Layout() {
       window.removeEventListener("clarity-open-project", onOpen);
       window.removeEventListener("clarity-new-project", onNew);
       window.removeEventListener("clarity-activate-project", onActivate);
-
       window.removeEventListener("clarity-clear-recent", onClearRecent);
     };
   }, [navigate]);

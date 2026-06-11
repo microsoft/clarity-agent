@@ -50,6 +50,9 @@ export interface ChatState {
    *  "tool:read_file").  Displayed transiently, not in chat history.
    *  Cleared on response/error. */
   statusPhase: string | null;
+  /** True once the backend signals that the first-exploration
+   *  session has reached its natural conclusion. */
+  explorationComplete: boolean;
   /** True once the initial fetch of the current chapter's history
    *  has resolved (either with prior turns or with an empty list).
    *  Gates the auto-start effect in ChatPanel so it doesn't fire
@@ -86,12 +89,12 @@ export type ChatAction =
    *  appear as a summary block.  Also clears the transient
    *  status phase (the "Summarizing earlier conversation"
    *  indicator that was set during the LLM call). */
-  | {
-      type: "compaction_complete_event";
+  | { type: "compaction_complete_event";
       viaBackend: boolean;
       sourceChapter: number;
       sourceTurnCount: number;
-    };
+    }
+  | { type: "exploration_complete_event" };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -283,6 +286,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         autoModel: state.autoModel,
         error: null,
         statusPhase: null,
+        explorationComplete: false,
         // ``clear`` is used by both "Start new chapter" (where we
         // genuinely want a fresh slate) and the streaming reset
         // paths.  In either case the history-loaded state is
@@ -321,12 +325,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             timestamp: Date.now(),
           },
         ],
-        // The transient "Summarizing earlier conversation" status
-        // was set during the LLM call; clear it now that compaction
-        // is done.
         statusPhase: null,
       };
     }
+
+    case "exploration_complete_event":
+      return {
+        ...state,
+        explorationComplete: true,
+      };
 
     default:
       return state;
@@ -349,6 +356,7 @@ export const initialState: ChatState = {
   autoModel: true,
   error: null,
   statusPhase: null,
+  explorationComplete: false,
   historyLoaded: false,
 };
 
@@ -381,9 +389,10 @@ export interface UseChatReturn {
    *  exists. */
   historyLoaded: boolean;
   sendMessage: (text: string) => void;
-  startProcess: (name: string) => void;
+  startProcess: (name: string, scenarioId?: string) => void;
   stopGeneration: () => void;
   setModelOverride: (tier: string) => void;
+  explorationComplete: boolean;
   /** Roll the conversation thread over to a new chapter.
    *  Archives the current chapter, clears the visible message list,
    *  and resets the backend SDK session so the next message starts
@@ -463,6 +472,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           sourceTurnCount: msg.source_turn_count,
         });
         break;
+      case "exploration_complete":
+        dispatch({ type: "exploration_complete_event" });
+        break;
       case "error":
         dispatch({
           type: "error_event",
@@ -503,7 +515,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [connected, state.streaming, state.outgoingQueue, send]);
 
   const startProcess = useCallback(
-    (name: string) => {
+    (name: string, scenarioId?: string) => {
       // Inject a process explainer system message if we have metadata
       const meta = processMetaRef.current.get(name);
       if (meta) {
@@ -515,7 +527,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         });
       }
       dispatch({ type: "start_process", name });
-      send({ type: "start_process", process: name } as WsClientMessage);
+      const msg: WsClientMessage = { type: "start_process", process: name };
+      if (scenarioId) {
+        (msg as any).scenario_id = scenarioId;
+      }
+      send(msg);
     },
     [send],
   );
@@ -562,6 +578,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     error: state.error,
     statusPhase: state.statusPhase,
     historyLoaded: state.historyLoaded,
+    explorationComplete: state.explorationComplete,
     sendMessage,
     startProcess,
     stopGeneration,
