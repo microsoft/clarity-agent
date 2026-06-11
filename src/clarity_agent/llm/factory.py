@@ -127,13 +127,28 @@ def create_chat_backend(
     Raises:
         ValueError: If the provider is not recognized.
     """
-    # The claude_sdk auth mode uses a fundamentally different backend
-    # that wraps the Claude Code agent runtime rather than a raw API.
-    if config.provider == "anthropic" and config.auth_mode == "claude_sdk":
+    # Both Anthropic auth modes route through SdkChatBackend (the
+    # Claude Agent SDK runtime).  The difference is just *how* the
+    # SDK authenticates:
+    #
+    #   - ``api_key``    → explicit ``ANTHROPIC_API_KEY`` passed in.
+    #                      Recommended; works anywhere with no extra
+    #                      setup.
+    #   - ``claude_sdk`` → SDK uses ``claude login`` credentials.
+    #                      Convenient for existing Claude Code users
+    #                      but officially off-label and may be
+    #                      removed by Anthropic in the future.
+    #
+    # The low-level :class:`AnthropicClient` is no longer used as a
+    # chat backend — keeping every Anthropic conversation on the SDK
+    # runtime means tool calls, compaction, and session resume all
+    # use the same code path regardless of how the user authed.
+    if config.provider == "anthropic":
         from clarity_agent.llm.impl.claude_sdk import SdkChatBackend
         return SdkChatBackend(
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
+            api_key=config.api_key,
             transcript=transcript,
         )
 
