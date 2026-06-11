@@ -53,6 +53,11 @@ function Expandable({ open, children }: { open: boolean; children: React.ReactNo
 
 function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: () => void }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  // ``getSetupProviders`` can take a few seconds on first call
+  // (lazy backend probes); without a spinner the tab opens onto an
+  // empty pane which reads as "broken".  Start ``true`` so the very
+  // first render is the spinner, never an empty grid.
+  const [providersLoading, setProvidersLoading] = useState(true);
   const [selected, setSelected] = useState<ProviderInfo | null>(null);
   const [selectedMode, setSelectedMode] = useState<AuthModeInfo | null>(null);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
@@ -62,21 +67,23 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
   const [result, setResult] = useState<{ ok: boolean; message: string; hint?: string } | null>(null);
 
   useEffect(() => {
-    getSetupProviders().then((r) => {
-      setProviders(r.providers);
-      if (settings.provider) {
-        const current = r.providers.find((p) => p.name === settings.provider);
-        if (current) {
-          setSelected(current);
-          if (settings.auth_mode) {
-            const mode = current.auth_modes.find((m) => m.name === settings.auth_mode);
-            if (mode) setSelectedMode(mode);
-          } else if (current.auth_modes.length === 1) {
-            setSelectedMode(current.auth_modes[0]);
+    getSetupProviders()
+      .then((r) => {
+        setProviders(r.providers);
+        if (settings.provider) {
+          const current = r.providers.find((p) => p.name === settings.provider);
+          if (current) {
+            setSelected(current);
+            if (settings.auth_mode) {
+              const mode = current.auth_modes.find((m) => m.name === settings.auth_mode);
+              if (mode) setSelectedMode(mode);
+            } else if (current.auth_modes.length === 1) {
+              setSelectedMode(current.auth_modes[0]);
+            }
           }
         }
-      }
-    });
+      })
+      .finally(() => setProvidersLoading(false));
   }, [settings.provider, settings.auth_mode]);
 
   // Determine which providers are configured (have stored credentials).
@@ -176,6 +183,18 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
 
   const isActive = (provName: string, modeName?: string) =>
     provName === settings.provider && (!modeName || modeName === settings.auth_mode);
+
+  if (providersLoading && providers.length === 0) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-12">
+        <svg className="w-5 h-5 animate-spin text-accent-focus" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+          <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <span className="text-sm text-body-muted">Loading providers…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
