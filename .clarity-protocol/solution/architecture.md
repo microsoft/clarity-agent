@@ -28,26 +28,27 @@
 
 ### Architecture Overview
 
-The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. A **Web UI** and **CLI** are both thin entry points into the same session infrastructure. A lightweight **Clarity Snippet** inserted into the project's agent config file (CLAUDE.md or AGENTS.md) makes coding agents follow the process guides directly.
+The napkin sketch: a **Session** drives a conversation with an LLM, guided by a **Process Guide**, reading from and writing to **Protocol Documents**. The **Packet Status Checker** monitors that document graph. **Brainstorming** runs a **General Thinker** inline first; it identifies broad failure modes and recommends which **Specialist Thinkers** to run for deeper analysis. When specialists run, their results land in a **Mailbox** for downstream analysis. Five entry points feed into this shared infrastructure: the **MCP Server** (primary integration for coding agents), **Web UI**, **CLI**, **VS Code Extension**, and **Desktop App**. A **Clarity Snippet** in the project's agent config file (AGENTS.md) acts as the trigger — teaching coding agents *when* to call the MCP tools.
 
 ```
-User ──► Entry Point ──► Session ──► LLM Provider
-         (Web/CLI/        │  ▲         │
-          Snippet)    reads│  │responses│
-                     guides│  └─────────┘
-                          │
-                          ▼
-                     .clarity-protocol/
-                          │
-                     ┌────┴────────┐
-                Packet Status   Brainstorm
-                Checker         Runner
-                     │          ├── General Thinker (inline)
-                     │          │     recommends ──►
-                     │          ├── Specialist A ──► LLM
-                     │          └── Specialist B ──► LLM
-                     │                  │
-                     └────── both ──────► Mailbox ──► Analysis Session
+User ──► Entry Point ──────────────► Session ──► LLM Provider
+         │                              │  ▲         │
+         ├── MCP Server (coding agents) │  │responses│
+         ├── Web UI                reads│  └─────────┘
+         ├── CLI                  guides│
+         ├── VS Code Extension         │
+         └── Desktop App               ▼
+                                  .clarity-protocol/
+              Snippet                    │
+              (AGENTS.md)           ┌────┴────────┐
+              triggers ──►     Packet Status   Brainstorm
+              MCP calls        Checker         Runner
+                                    │          ├── General Thinker (inline)
+                                    │          │     recommends ──►
+                                    │          ├── Specialist A ──► LLM
+                                    │          └── Specialist B ──► LLM
+                                    │                  │
+                                    └────── both ──────► Mailbox ──► Analysis Session
 ```
 
 ---
@@ -99,10 +100,11 @@ Provider implementations live in `llm/impl/` with lazy imports. A tier system (`
 Composite of typed `ContentSource` objects, each knowing how to read one part of the protocol. Sources are assembled into canonical sections (Intro → Solution → Failures → Decisions → Notes) and rendered via a registered format function (markdown or DOCX). Both content sources and renderers are extensible without modifying core logic.
 
 #### Setup Infrastructure (`setup/`)
-Three components manage installation and ongoing health:
+Four components manage installation and ongoing health:
 
 - **Installer** (`installer.py`) — runs the full install sequence (preflight checks, venv, pip, web build, snippet insertion). Stdlib-only at the top level so it can run before pip install; submodules like `snippet` are imported lazily after dependencies are available.
-- **Snippet** (`snippet.py` + `snippet.md`) — a markdown snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with `<!-- clarity-begin -->` / `<!-- clarity-end -->` delimiters for idempotent updates. The snippet instructs coding agents to engage clarity at two points: *before building* (triggered by the user asking, or by the agent recognizing a consequential architectural choice that would be expensive to reverse) and *after building* (checking protocol staleness after significant implementation work). Target file auto-detected; `{{PROCESSES_DIR}}` placeholder substituted at insertion time.
+- **Embed** (`project.py`) — the primary path for integrating Clarity into an existing project. `clarity embed <project-dir>` creates `.vscode/mcp.json` (auto-detecting pip vs. uv install mode and merging with existing MCP configs), `.clarity-protocol/`, and the `AGENTS.md` snippet in one step. No venv or agent code is copied — it assumes Clarity is already installed on the machine.
+- **Snippet** (`snippet.py` + `snippet.md`) — a markdown snippet (schema v2) inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with `<!-- clarity-begin -->` / `<!-- clarity-end -->` delimiters for idempotent updates. The snippet references the MCP server (not shell commands) and instructs coding agents to call MCP tools at two moments: *before building* (`check_decision` when recognizing a consequential choice) and *after building* (`get_packet_status` after significant implementation). Template placeholders (`{{PROTOCOL_DIR_NAME}}`, `{{MODE}}`) are substituted at insertion time.
 - **Doctor** (`doctor.py`) — validates installation health (Python version, dependencies, protocol directory, snippet presence) and offers auto-fix for common issues.
 
 #### Web Backend (`web/app.py` + `session_manager.py`)
@@ -360,20 +362,30 @@ The staleness tracking infrastructure (Layer 3) could potentially be extended to
 
 ### Layer 3: MCP as the Portability Interface
 
-The key architectural change from the as-built system: infrastructure exposed via **MCP** rather than invoked directly as Python commands by the process guides.
+Infrastructure is exposed via **MCP** rather than invoked directly as Python commands. The MCP server (`src/clarity_agent/mcp/server.py`) wraps existing Python infrastructure with a focused tool surface designed for how coding agents actually work.
 
-**What changes:**
+**The 8-tool public surface:**
 
-The current process guides contain instructions like `python -m clarity_agent.protocol.packet_status . --record goal/problem.md`. These work when the AI has shell access (coding agent, CLI) but not in other contexts. With MCP exposure, the same operations become tool calls that any MCP-capable AI environment can invoke:
+| Tool | Purpose | Workflow moment |
+|---|---|---|
+| `run_clarity` | Assess project state; return staleness report + recommended process guide inlined | Starting work, returning after a break |
+| `check_decision` | Return existing decisions, requirements, architecture for conflict checking | Before making an expensive-to-reverse choice |
+| `get_packet_status` | Check document staleness across the dependency graph | After completing significant implementation |
+| `read_protocol_document` | Read a document from `.clarity-protocol/` | During any process |
+| `write_protocol_document` | Write/update a document; auto-records content hash | During any process |
+| `record_decision` | Create a structured decision record with context, rationale, alternatives | After making a significant choice |
+| `record_failure` | Record a potential failure mode to the brainstorm mailbox | During failure brainstorming |
+| `record_suggestion` | Record a suggestion to update a protocol document | Anytime |
 
-| Current (direct invocation) | Target (MCP tool) |
+**Design decision: small public surface, rich internal library.** Only these 8 tools are exposed as MCP tools. Additional functions (`init_protocol`, `list_processes`, `read_process_guide`, `generate_packet`, `get_mailbox_status`, `check_failure_state`, `snapshot_mailbox`, etc.) remain importable Python for the web/CLI/desktop modes but are deliberately hidden from the MCP surface. The rationale: a coding agent needs a focused set of actions; the `run_clarity` tool handles routing and inlines process guides, so the agent doesn't need separate process-discovery tools.
+
+**MCP resources** (passive context, not actions):
+
+| URI | Content |
 |---|---|
-| `python -m clarity_agent.protocol.packet_status .` | `check_staleness()` |
-| `python -m clarity_agent.protocol.packet_status . --record goal/problem.md` | `record_document("goal/problem.md")` |
-| `python -m clarity_agent.protocol.initialize .` | `initialize_protocol()` |
-| Brainstorm runner invoked via session | `run_thinker("general")`, `run_thinker("security")` |
-| Manual file writes with guessed paths | `record_failure(title, description, ...)` |
-| Packet generation via CLI | `generate_packet(format="docx")` |
+| `clarity://summary` | Project summary from `summary.md` |
+| `clarity://decisions` | All decision records concatenated |
+| `clarity://behaviors` | The Clarity snippet block from AGENTS.md |
 
 **MCP server architecture:**
 
@@ -382,19 +394,21 @@ MCP Client (any AI tool)
     │
     ▼
 MCP Server (clarity-agent)
-    ├── Staleness tools: check_staleness, record_document
-    ├── Protocol tools: initialize_protocol, read_document
-    ├── Brainstorm tools: run_thinker, record_failure, record_suggestion
-    ├── Packet tools: generate_packet
-    └── State tools: get_status, list_open_questions
+    ├── Assess: run_clarity, get_packet_status
+    ├── Guard: check_decision
+    ├── Read/Write: read_protocol_document, write_protocol_document
+    ├── Record: record_decision, record_failure, record_suggestion
+    ├── Resources: clarity://summary, clarity://decisions, clarity://behaviors, clarity://processes/{name}, clarity://thinkers/{name}, clarity://protocol/{path}
     │
     ▼
 .clarity-protocol/ (filesystem)
 ```
 
-The MCP server wraps the existing Python infrastructure — the same `packet_status.py`, `brainstorm_runner.py`, `mailbox.py` modules — with MCP tool interfaces. No reimplementation of core logic; just a new exposure layer.
+The server wraps existing Python infrastructure — `packet_status.py`, `brainstorm_runner.py`, `mailbox.py`, `ai_actions/` — with MCP tool interfaces. No reimplementation of core logic; just a focused exposure layer.
 
-**REST adapter:** For platforms that support HTTP tool calls but not MCP (e.g., OpenAI Actions), a thin REST layer wraps the same MCP tools. One implementation of core logic, two exposure protocols.
+**Installation:** `clarity embed <project-dir>` creates `.vscode/mcp.json` (auto-detecting pip vs. uv install mode), `.clarity-protocol/`, and the AGENTS.md snippet in one step. An npx runner (`@clarity-agent/mcp`) is built but not yet published to npm.
+
+**REST adapter:** For platforms that support HTTP tool calls but not MCP (e.g., OpenAI Actions), a thin REST layer wrapping the same tools is architecturally planned but not yet implemented.
 
 **Environment compatibility matrix:**
 
@@ -412,10 +426,10 @@ All products share the protocol format as the interoperability point. A user's `
 
 **Full-implementation products** embed or connect to the Layer 3 infrastructure. Architecture varies by product:
 
-- **Coding agent integration** — a snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters. Instructs the agent to proactively check protocol context before making consequential choices (not just when the user asks), and to maintain protocol freshness after implementation. Zero infrastructure of its own; the coding agent's shell access provides Layer 3 via direct invocation. Migration to MCP tools would let the snippet work with coding agents that support MCP but not shell access.
+- **Coding agent integration** — a snippet inserted into the project's agent config file (CLAUDE.md or AGENTS.md) with idempotent delimiters, paired with `.vscode/mcp.json` that configures the MCP server. The snippet instructs the agent when to call MCP tools; the MCP server provides the actual infrastructure. `clarity embed` sets up both in one step. This creates a context-aware system: the rules file is the *trigger* (detecting risky moments), the MCP server is the *engine* (providing structured analysis and protocol maintenance).
 - **Web app** — runs Layer 3 infrastructure in-process. Could additionally expose it as an MCP server for other tools to connect to.
-- **Hosted web service** — runs Layer 3 server-side with multi-tenant isolation. New architectural concerns: user authentication, project isolation, storage backend (filesystem may not be appropriate at scale), and cost management per tenant.
-- **IDE integration** — connects to a local MCP server running Layer 3 infrastructure.
+- **IDE integration (VS Code extension)** — a sidebar panel showing protocol documents (problem, requirements, failures, decisions) glanceable while coding. Launches and manages the Clarity backend, serves the React frontend in a webview. Provides persistent visibility of *why* something is being built without context-switching.
+- **Hosted web service** — architecturally planned, not yet built. Multi-tenant isolation, user authentication, project isolation, storage backend, cost management.
 
 **Light-implementation products** distribute Layer 2 (light) and rely on the host AI environment for the conversation:
 
@@ -552,8 +566,6 @@ These principles carry the same architectural weight as the layer model. See the
 ### Open Architectural Questions
 
 **How should the hosted service handle storage?** The current architecture assumes filesystem-based storage (`.clarity-protocol/` as a directory). A multi-tenant hosted service may need a different storage backend — but the protocol format must remain the same regardless of how it's stored.
-
-**Should the full process guides be refactored to use MCP tools instead of direct Python invocation?** This would make them portable to any MCP-capable environment, but adds a dependency on an MCP server being available. The current direct-invocation approach works without MCP but is limited to shell-access environments.
 
 **How does the light expression handle the evolving-project case (FR11)?** The full expression can potentially read code and existing documentation. The light expression, in a bare conversation, must rely entirely on the user to describe the existing system. Is this sufficient, or does FR11 effectively require tool access?
 

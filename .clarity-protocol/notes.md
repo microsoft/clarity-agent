@@ -91,8 +91,6 @@
 
 [for: solution-brainstorming] Integration strategy needs to be reconciled with the current Layer 4 product priority list. The "install once, meet them everywhere" model may reshape priorities — MCP server becomes prerequisite infrastructure rather than a product.
 
-[for: architecture-design] MCP server surface area needs explicit design: which tools, what granularity, how does graduated depth work at the protocol level.
-
 [for: stakeholders] The three personas here (citizen dev, PM, professional engineer) cut across the existing jobs-to-be-done differently. The citizen developer is a new stakeholder not well-represented in the current stakeholder doc — the user who "doesn't know they need to think" is mentioned but not fleshed out for this specific population.
 
 ## Adaptive Teaching Disposition (2026-04-27)
