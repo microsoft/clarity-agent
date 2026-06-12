@@ -352,6 +352,14 @@ class SdkChatBackend(ChatBackend):
         options = self._sdk.ClaudeAgentOptions(
             system_prompt=self._current_system_prompt,
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+            # ``AskUserQuestion`` is in Claude Code's default tool set
+            # but requires an interactive TUI to resolve — there's no
+            # SDK callback for delivering the user's answer back to
+            # the paused tool call, so it just hangs.  Blocking it
+            # tells the model "you don't have this tool"; it falls
+            # back to asking the question in plain text in its
+            # response, which our chat UI already renders.  See #102.
+            disallowed_tools=["AskUserQuestion"],
             permission_mode="bypassPermissions",
             model=self.resolve_model(model),
             cwd=str(self.project_dir),
