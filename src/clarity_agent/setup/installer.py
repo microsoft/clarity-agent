@@ -195,7 +195,7 @@ def check_python_version_preflight() -> StepResult:
     try:
         r = subprocess.run(
             [python, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, encoding="utf8",
         )
         ver = _parse_version(r.stdout + r.stderr)
         if ver == (0, 0):
@@ -227,7 +227,7 @@ def check_node_version_preflight() -> StepResult:
     try:
         r = subprocess.run(
             ["node", "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, encoding="utf8",
         )
         ver = _parse_version(r.stdout)
         if ver[0] >= MIN_NODE:
@@ -277,6 +277,7 @@ def resolve_clone_url(agent_dir: Path) -> StepResult:
         r = subprocess.run(
             ["git", "remote", "get-url", "origin"],
             cwd=agent_dir, capture_output=True, text=True, timeout=10,
+            encoding="utf8",
         )
         if r.returncode == 0 and r.stdout.strip():
             return StepResult(Outcome.OK, r.stdout.strip())
@@ -305,6 +306,7 @@ def clone_or_update(target: Path, clone_url: str) -> StepResult:
         r = subprocess.run(
             ["git", "pull", "--ff-only"],
             cwd=dest, capture_output=True, text=True, timeout=60,
+            encoding="utf8",
         )
         if r.returncode == 0:
             return StepResult(Outcome.OK, f"Updated {CLARITY_DIR}")
@@ -315,7 +317,7 @@ def clone_or_update(target: Path, clone_url: str) -> StepResult:
 
     r = subprocess.run(
         ["git", "clone", clone_url, str(dest)],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, timeout=120, encoding="utf8",
     )
     if r.returncode != 0:
         return StepResult(Outcome.FAIL, _subprocess_failure("git clone", r))
@@ -369,7 +371,7 @@ def create_venv(venv_dir: Path) -> StepResult:
 
     r = subprocess.run(
         [sys.executable, "-m", "venv", str(venv_dir)],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, timeout=60, encoding="utf8",
     )
     if r.returncode != 0:
         return StepResult(
@@ -416,7 +418,7 @@ def install_python_deps(
     else:
         upgrade = subprocess.run(
             [venv_python, "-m", "pip", "install", "--upgrade", "pip", "--quiet"],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=120, encoding="utf8",
         )
         if upgrade.returncode != 0:
             # WARN, not FAIL — bundled pip is usually fine.
@@ -442,6 +444,7 @@ def install_python_deps(
         installer_label = "pip install"
     install = subprocess.run(
         install_cmd, cwd=cwd, capture_output=True, text=True, timeout=300,
+        encoding="utf8",
     )
     if install.returncode != 0:
         results.append(StepResult(
@@ -473,7 +476,7 @@ def build_web_frontend(web_dir: Path) -> StepResult:
         r = subprocess.run(
             ["npm", "install"], cwd=web_dir,
             capture_output=True, text=True, timeout=120,
-            shell=_IS_WINDOWS,
+            shell=_IS_WINDOWS, encoding="utf8",
         )
     except FileNotFoundError:
         return StepResult(
@@ -486,7 +489,7 @@ def build_web_frontend(web_dir: Path) -> StepResult:
         r = subprocess.run(
             ["npm", "run", "build"], cwd=web_dir,
             capture_output=True, text=True, timeout=120,
-            shell=_IS_WINDOWS,
+            shell=_IS_WINDOWS, encoding="utf8",
         )
     except FileNotFoundError:
         return StepResult(
@@ -647,6 +650,7 @@ def run_tests(target: Path, venv_dir: Path) -> list[StepResult]:
         r = subprocess.run(
             [venv_python, "-m", "pytest", "tests/", "-x", "-q"],
             cwd=target, capture_output=True, text=True, timeout=300,
+            encoding="utf8",
         )
     except FileNotFoundError as exc:
         results.append(StepResult(
@@ -666,7 +670,7 @@ def run_tests(target: Path, venv_dir: Path) -> list[StepResult]:
             r = subprocess.run(
                 ["npx", "vitest", "run"],
                 cwd=web_dir, capture_output=True, text=True, timeout=300,
-                shell=_IS_WINDOWS,
+                shell=_IS_WINDOWS, encoding="utf8",
             )
         except FileNotFoundError:
             results.append(StepResult(

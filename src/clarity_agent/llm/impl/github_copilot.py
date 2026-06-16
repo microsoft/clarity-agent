@@ -78,16 +78,16 @@ _DEFAULT_IDLE_TIMEOUT_SECONDS = 300.0
 # ``text`` come last because they tend to carry bulky payloads (whole
 # files, full prompts) rather than identifying hints.
 _TOOL_ARG_HINT_KEYS = (
-    "command",       # bash / shell tools
+    "command",  # bash / shell tools
     "cmd",
-    "path",          # file tools
+    "path",  # file tools
     "file_path",
     "filename",
     "file",
-    "url",           # fetchers
+    "url",  # fetchers
     "uri",
-    "query",         # searches / lookups
-    "pattern",       # grep / regex
+    "query",  # searches / lookups
+    "pattern",  # grep / regex
     "search",
     "name",
 )
@@ -154,8 +154,7 @@ async def _wait_for_done_with_idle_timeout(
         remaining = idle_timeout_seconds - elapsed_since_activity
         if remaining <= 0:
             raise TimeoutError(
-                f"No peer activity for {idle_timeout_seconds:.0f}s — "
-                f"backend appears stuck"
+                f"No peer activity for {idle_timeout_seconds:.0f}s — backend appears stuck"
             )
         try:
             await asyncio.wait_for(done.wait(), timeout=remaining)
@@ -222,6 +221,7 @@ def get_gh_cli_token(*, raise_on_failure: bool = False) -> str | None:
             ["gh", "auth", "token"],
             capture_output=True,
             text=True,
+            encoding="utf8",
             timeout=5,
         )
     except subprocess.TimeoutExpired as exc:
@@ -283,9 +283,7 @@ class CopilotChatBackend(ChatBackend):
         # Expensive (replay costs N turns of SDK time for the Nth turn)
         # but it's the only reliable way to unwedge the SDK.
         self._max_rpc_retries: int = (
-            max_rpc_retries
-            if max_rpc_retries is not None
-            else _DEFAULT_MAX_RPC_RETRIES
+            max_rpc_retries if max_rpc_retries is not None else _DEFAULT_MAX_RPC_RETRIES
         )
         self._client: CopilotClient | None = None
         self._session: CopilotSession | None = None
@@ -332,13 +330,13 @@ class CopilotChatBackend(ChatBackend):
                 loop.close()
 
         thread = threading.Thread(
-            target=_run, name="copilot-loop", daemon=True,
+            target=_run,
+            name="copilot-loop",
+            daemon=True,
         )
         thread.start()
         if not ready.wait(timeout=5) or self._loop is None:
-            raise RuntimeError(
-                "CopilotChatBackend: background event loop failed to start"
-            )
+            raise RuntimeError("CopilotChatBackend: background event loop failed to start")
         self._loop_thread = thread
 
     def _run_coro(self, coro: Coroutine[Any, Any, Any]) -> Any:
@@ -394,6 +392,7 @@ class CopilotChatBackend(ChatBackend):
 
     def _build_system_prompt(self, system_prompt: str | None = None) -> str:
         from clarity_agent.app_paths import protocol_dir as _protocol_dir
+
         pd = _protocol_dir(self.project_dir)
         base: str = (
             "You are running the Clarity Agent framework.  Clarity "
@@ -457,9 +456,7 @@ class CopilotChatBackend(ChatBackend):
         decides whether to kill + replay or give up.  Assumes
         :attr:`_session` is non-None.
         """
-        assert self._session is not None, (
-            "_send_and_wait called without an active session"
-        )
+        assert self._session is not None, "_send_and_wait called without an active session"
         text_parts: list[str] = []
         done = asyncio.Event()
         # Tracks wall-clock time of the most recent SDK event.  The
@@ -515,25 +512,24 @@ class CopilotChatBackend(ChatBackend):
                 # instead of just ``tool:read_file``.
                 tool_name = getattr(event.data, "tool_name", None) or ""
                 tool_call_id = (
-                    getattr(event.data, "tool_call_id", None)
-                    or f"copilot_{tool_name}_{id(event)}"
+                    getattr(event.data, "tool_call_id", None) or f"copilot_{tool_name}_{id(event)}"
                 )
                 arguments = getattr(event.data, "arguments", None)
                 input_dict = arguments if isinstance(arguments, dict) else {}
                 mcp_server = getattr(event.data, "mcp_server_name", None)
 
-                display_name = (
-                    f"{mcp_server}/{tool_name}" if mcp_server else tool_name
-                )
+                display_name = f"{mcp_server}/{tool_name}" if mcp_server else tool_name
                 hint = _summarize_tool_args(arguments)
                 if self.on_tool_use:
                     self.on_tool_use(display_name, hint or "executing")
                 if self.on_tool_call:
-                    self.on_tool_call(ToolUseBlock(
-                        id=tool_call_id,
-                        name=display_name,
-                        input=input_dict,
-                    ))
+                    self.on_tool_call(
+                        ToolUseBlock(
+                            id=tool_call_id,
+                            name=display_name,
+                            input=input_dict,
+                        )
+                    )
                 phase = f"tool:{display_name}" if display_name else "executing tool"
                 if hint:
                     phase = f"{phase} ({hint})"
@@ -577,7 +573,8 @@ class CopilotChatBackend(ChatBackend):
                 msg = getattr(event.data, "progress_message", None)
                 if isinstance(msg, str) and msg:
                     truncated = (
-                        msg if len(msg) <= _TOOL_HINT_MAX_LEN
+                        msg
+                        if len(msg) <= _TOOL_HINT_MAX_LEN
                         else msg[: _TOOL_HINT_MAX_LEN - 1] + "…"
                     )
                     # Re-use whatever the current tool phase is by
@@ -609,21 +606,25 @@ class CopilotChatBackend(ChatBackend):
                 summary_content = getattr(event.data, "summary_content", None)
                 if success and summary_content:
                     messages_removed = getattr(
-                        event.data, "messages_removed", None,
+                        event.data,
+                        "messages_removed",
+                        None,
                     )
                     source_turn_count = (
-                        int(messages_removed)
-                        if messages_removed is not None else None
+                        int(messages_removed) if messages_removed is not None else None
                     )
                     self._record_provider_compaction(
-                        summary_content, source_turn_count,
+                        summary_content,
+                        source_turn_count,
                     )
 
         unsubscribe = self._session.on(on_event)
         try:
             await self._session.send(message)
             await _wait_for_done_with_idle_timeout(
-                done, activity_timestamp, self._idle_timeout_seconds,
+                done,
+                activity_timestamp,
+                self._idle_timeout_seconds,
             )
         finally:
             unsubscribe()
@@ -631,7 +632,9 @@ class CopilotChatBackend(ChatBackend):
         return "".join(text_parts)
 
     def _record_provider_compaction(
-        self, summary: str, source_turn_count: int | None,
+        self,
+        summary: str,
+        source_turn_count: int | None,
     ) -> None:
         """Translate Copilot's compaction signal into our transcript.
 
@@ -646,13 +649,16 @@ class CopilotChatBackend(ChatBackend):
         if self.on_compaction_started:
             self.on_compaction_started()
         result = self._transcript.external_compaction_occurred(
-            summary=summary, source_turn_count=source_turn_count,
+            summary=summary,
+            source_turn_count=source_turn_count,
         )
         if self.on_compaction_complete:
-            self.on_compaction_complete(CompactionInfo(
-                summary=result.summary,
-                source_turn_count=result.source_turn_count,
-            ))
+            self.on_compaction_complete(
+                CompactionInfo(
+                    summary=result.summary,
+                    source_turn_count=result.source_turn_count,
+                )
+            )
 
     async def _retry_after_kill(self, model: str) -> str:
         """Kill the wedged session, build a new one, replay, retry.
@@ -671,7 +677,8 @@ class CopilotChatBackend(ChatBackend):
                 f"  [copilot] idle timeout on turn {turn_index} — "
                 f"killing session and retrying ({attempt}/{total}); "
                 f"will replay {replay_count} prior turn(s)",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
             await self._destroy_session()
             try:
