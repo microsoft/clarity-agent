@@ -204,16 +204,16 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "auth_modes": [
             {
                 "name": "sdk_native",
-                "display_name": "Copilot login (recommended)",
+                "display_name": "GitHub Copilot CLI login",
                 "description": (
-                    "Zero-config via the bundled Copilot CLI's own login. "
+                    "Zero-config via the bundled GitHub Copilot CLI's own login. "
                     "No external tools to install."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
                     "Run 'copilot auth login' in a terminal to sign in. "
-                    "The Copilot CLI is bundled with the Python package, "
+                    "The GitHub Copilot CLI is bundled with the Python package, "
                     "so no separate install is required."
                 ),
                 "setup_url": "https://docs.github.com/en/copilot",
@@ -221,16 +221,17 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
             },
             {
                 "name": "gh_cli",
-                "display_name": "GitHub CLI",
+                "display_name": "GitHub CLI fallback",
                 "description": (
-                    "Use the gh CLI's stored token — convenient if you "
-                    "already have 'gh auth login' set up."
+                    "Use an existing GitHub CLI token from 'gh auth login'. "
+                    "Choose this only if you already have gh set up."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
-                    "This option uses the GitHub CLI's authentication. "
-                    "You must have run 'gh auth login' first."
+                    "This fallback uses GitHub CLI authentication, not the "
+                    "GitHub Copilot CLI. You must have run 'gh auth login' "
+                    "first."
                 ),
                 "setup_url": "https://cli.github.com/",
                 "fields": [],
