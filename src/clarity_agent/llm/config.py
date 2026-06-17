@@ -204,7 +204,7 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "auth_modes": [
             {
                 "name": "sdk_native",
-                "display_name": "GitHub Copilot CLI",
+                "display_name": "GitHub Copilot CLI (recommended)",
                 "description": (
                     "Sign in with Copilot using the bundled CLI. "
                     "No separate GitHub CLI install required."
