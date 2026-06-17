@@ -267,6 +267,7 @@ def check_repo_freshness(agent_dir: Path) -> CheckResult:
         result = subprocess.run(
             ["git", "rev-list", "--count", "HEAD..@{u}"],
             cwd=agent_dir, capture_output=True, text=True, timeout=10,
+            encoding="utf8",
         )
         if result.returncode != 0:
             return CheckResult(
@@ -440,7 +441,7 @@ def check_npm_dependencies(agent_dir: Path) -> list[CheckResult]:
     try:
         ver_out = subprocess.run(
             ["node", "--version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, timeout=5, encoding="utf8",
         )
         ver_str = ver_out.stdout.strip().lstrip("v")
         major = int(ver_str.split(".")[0])

@@ -78,7 +78,10 @@ def _last_release_tag() -> str | None:
     """Return the most recent vX.Y.Z tag, or None if there are no tags."""
     r = subprocess.run(
         ["git", "tag", "--sort=-creatordate", "--list", "v*"],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        encoding="utf8",
     )
     for line in r.stdout.strip().splitlines():
         if re.match(r"^v\d+\.\d+\.\d+", line):
@@ -94,13 +97,13 @@ def _commits_since(tag: str | None) -> list[str]:
     cmd = ["git", "log", "--oneline", "--no-merges"]
     if tag:
         cmd.append(f"{tag}..HEAD")
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT, encoding="utf8")
     return [line.split(" ", 1)[1] for line in r.stdout.strip().splitlines() if " " in line]
 
 
 _CATEGORY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("Added",   re.compile(r"^(add|feat|introduce|create|implement|new)\b", re.I)),
-    ("Fixed",   re.compile(r"^(fix|repair|resolve|patch|correct|bug)\b", re.I)),
+    ("Added", re.compile(r"^(add|feat|introduce|create|implement|new)\b", re.I)),
+    ("Fixed", re.compile(r"^(fix|repair|resolve|patch|correct|bug)\b", re.I)),
     ("Changed", re.compile(r"^(update|change|refactor|move|rename|improve|bump|upgrade)\b", re.I)),
     ("Removed", re.compile(r"^(remove|delete|drop|deprecate)\b", re.I)),
 ]
@@ -167,7 +170,9 @@ def update_changelog(new_version: str) -> None:
     if count == 0:
         # No [Unreleased] section — prepend after the header.
         header_end = text.index("\n\n") + 2 if "\n\n" in text else 0
-        new_text = text[:header_end] + "## [Unreleased]\n\n" + new_section + "\n" + text[header_end:]
+        new_text = (
+            text[:header_end] + "## [Unreleased]\n\n" + new_section + "\n" + text[header_end:]
+        )
 
     # Update footer links.
     old_tag = tag or f"v{new_version}"
