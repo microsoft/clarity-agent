@@ -204,34 +204,33 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "auth_modes": [
             {
                 "name": "sdk_native",
-                "display_name": "GitHub Copilot CLI login",
+                "display_name": "GitHub Copilot CLI",
                 "description": (
-                    "Zero-config via the bundled GitHub Copilot CLI's own login. "
-                    "No external tools to install."
+                    "Sign in with Copilot using the bundled CLI. "
+                    "No separate GitHub CLI install required."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
                     "Run 'copilot auth login' in a terminal to sign in. "
                     "The GitHub Copilot CLI is bundled with the Python package, "
-                    "so no separate install is required."
+                    "so no separate GitHub CLI install is required."
                 ),
                 "setup_url": "https://docs.github.com/en/copilot",
                 "fields": [],
             },
             {
                 "name": "gh_cli",
-                "display_name": "GitHub CLI fallback",
+                "display_name": "GitHub CLI (gh)",
                 "description": (
                     "Use an existing GitHub CLI token from 'gh auth login'. "
-                    "Choose this only if you already have gh set up."
+                    "Choose this only if gh is already set up."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
-                    "This fallback uses GitHub CLI authentication, not the "
-                    "GitHub Copilot CLI. You must have run 'gh auth login' "
-                    "first."
+                    "This uses GitHub CLI authentication, not 'copilot auth "
+                    "login'. You must have run 'gh auth login' first."
                 ),
                 "setup_url": "https://cli.github.com/",
                 "fields": [],

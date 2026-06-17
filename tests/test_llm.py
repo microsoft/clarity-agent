@@ -126,11 +126,11 @@ class TestProviderMetadata:
 
         assert sdk_mode is not None
         assert gh_mode is not None
-        assert sdk_mode["display_name"] == "GitHub Copilot CLI login"
-        assert "bundled GitHub Copilot CLI" in sdk_mode["description"]
+        assert sdk_mode["display_name"] == "GitHub Copilot CLI"
+        assert "No separate GitHub CLI install required" in sdk_mode["description"]
         assert "copilot auth login" in sdk_mode["setup_help"]
-        assert gh_mode["display_name"] == "GitHub CLI fallback"
-        assert "not the GitHub Copilot CLI" in gh_mode["setup_help"]
+        assert gh_mode["display_name"] == "GitHub CLI (gh)"
+        assert "not 'copilot auth login'" in gh_mode["setup_help"]
 
 
 # ---------------------------------------------------------------------------

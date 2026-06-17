@@ -69,7 +69,7 @@ On first launch, the setup wizard walks you through connecting an LLM provider.
 | **Anthropic (Claude)** | Claude Code login (`claude login`) · API key from [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **OpenAI (GPT)** | API key from [platform.openai.com](https://platform.openai.com/api-keys) |
 | **Azure AI** | Microsoft sign-in · Azure CLI (`az login`) · API key |
-| **GitHub Copilot** | GitHub Copilot CLI (`copilot auth login`) · GitHub CLI fallback (`gh auth login`) · personal access token |
+| **GitHub Copilot** | GitHub Copilot CLI (`copilot auth login`) · GitHub CLI (`gh auth login`) · personal access token |
 | **Google Gemini** | API key from [Google AI Studio](https://aistudio.google.com/apikey) |
 
 Clarity works best with frontier models — structured thinking is where model quality matters most. The setup wizard tests your credentials before saving them. Run `clarity doctor` at any time to re-check the configuration.
