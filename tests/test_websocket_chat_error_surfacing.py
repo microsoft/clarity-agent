@@ -142,10 +142,9 @@ class TestSessionStartFailure:
             msg = ws.receive_json()
 
         assert msg["type"] == "error"
-        # ``_classify_ws_error`` doesn't have a "not found" bucket;
-        # we just need to confirm it didn't crash the handler — the
-        # category will be ``unknown`` for this message text.
-        assert "category" in msg
+        assert msg["category"] == "setup_required"
+        assert msg["retryable"] is False
+        assert "dependency" in msg["hint"]
 
 
 class TestChatTurnFailure:

@@ -126,7 +126,7 @@ The `src/clarity_agent/llm/` package abstracts all LLM interaction behind two in
 | **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | Default auth uses `claude login` (`--auth-mode claude_sdk`); use `--auth-mode api_key` for direct API access. |
 | **Azure AI Inference** | `azure` | `AZURE_AI_API_KEY` | Also requires `--endpoint` or `AZURE_AI_ENDPOINT`. |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | Tool definitions translated from Anthropic format. |
-| **GitHub Copilot** | `github` | `GITHUB_TOKEN` | Also supports zero-config via `gh auth login` (`--auth-mode gh_cli`). |
+| **GitHub Copilot** | `github` | `GITHUB_TOKEN` | Supports bundled GitHub Copilot CLI login (`copilot auth login`), GitHub CLI auth (`--auth-mode gh_cli`), and personal access tokens. |
 | **Google Gemini** | `gemini` | `GEMINI_API_KEY` | API key from [Google AI Studio](https://aistudio.google.com/apikey). |
 
 Select a provider with `--provider`:

@@ -168,6 +168,13 @@ def create_app(
         # misroute it.
         if _is_claude_tool_config_error(error):
             category, retryable = "mcp_config", False
+        elif isinstance(error, FileNotFoundError) or "command not found" in msg_lower:
+            category, retryable = "setup_required", False
+            if not hint or isinstance(error, FileNotFoundError):
+                hint = (
+                    "A required local dependency could not be found. "
+                    "Install the missing CLI tool, then reload Clarity."
+                )
         elif "exit code" in msg_lower or "command failed" in msg_lower:
             # CLI crash — check for auth hints before classifying generically.
             category, retryable = "backend_crash", True
