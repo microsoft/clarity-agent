@@ -5,9 +5,36 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
-- Windows desktop builds now ship an NSIS per-user installer (`.exe`) instead
-  of the machine-wide `.msi`. Installs no longer require UAC elevation. Users
-  upgrading should uninstall the old machine-wide "Clarity" manually.
+## [0.1.3] - 2026-06-18
+
+### Changed
+- Use explicit encoding=utf8 on subprocess calls (#127)
+- Bump cryptography from 46.0.7 to 48.0.1 (#115)
+- Bump aiohttp from 3.14.0 to 3.14.1 (#116)
+- Bump starlette from 1.0.1 to 1.3.1 (#113)
+- Bump pyjwt from 2.12.0 to 2.13.0 (#111)
+- Bump esbuild from 0.27.4 to 0.28.1 in /vscode-extension (#109)
+- Updated clarity protocol to match all of the MCP work that has happend (#101)
+- Block AskUserQuestion tool from Claude SDK backend (#108)
+- Use ANTHROPIC_API_KEY with SdkChatBackend (#107)
+- Prepend uv to path in install script. (#96)
+- Produce better tool use diagnostics with GHCP (#94)
+- Bump react-router and react-router-dom in /web (#87)
+- Bump starlette from 0.52.1 to 1.0.1 (#89)
+- Bump aiohttp from 3.13.4 to 3.14.0 (#86)
+- For GHCP, try using SDK native auth before falling back to gh auth login (#91)
+- Clarify VS Code launcher fallback
+- Clarify VS Code project fallback
+- Include web frontend in VSIX package
+- Repackage VS Code extension
+- Bump vitest from 4.0.18 to 4.1.0 in /web
+
+### Fixed
+- fix(web): refuse to start when frontend unbuilt (#98)
+- Fix broken printing in Tauri app
+- FIX: build Windows installer as NSIS per-user installer instead of machine-wide (removes UAC requirement) (#92)
+- fix: augment PATH at startup so desktop app can find gh, node, etc. (#90)
+- Fix VS Code extension launcher parity
 
 ## [0.1.2] - 2026-05-29
 
@@ -93,7 +120,8 @@ Initial release.
 - Credential storage via system keyring.
 - DOCX export for protocol documents.
 
-[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/microsoft/clarity-agent/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/microsoft/clarity-agent/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/microsoft/clarity-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/microsoft/clarity-agent/releases/tag/v0.1.0
