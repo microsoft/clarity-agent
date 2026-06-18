@@ -59,6 +59,7 @@ def _git_head(cwd: Path) -> str:
     """Return the current HEAD commit SHA."""
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=cwd, text=True, timeout=10,
+        encoding="utf8",
     ).strip()
 
 
@@ -67,7 +68,7 @@ def _git_current_branch(cwd: Path) -> str | None:
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=cwd, text=True, timeout=10,
+            cwd=cwd, text=True, timeout=10, encoding="utf8",
         ).strip() or None
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
@@ -142,7 +143,7 @@ def _check_git_updates(agent_dir: Path) -> UpdateStatus:
     try:
         remote_sha = subprocess.check_output(
             ["git", "rev-parse", upstream], cwd=agent_dir, text=True, timeout=10,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, encoding="utf8",
         ).strip()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         # Branch exists locally but isn't pushed (or its upstream
@@ -160,7 +161,7 @@ def _check_git_updates(agent_dir: Path) -> UpdateStatus:
     try:
         count_str = subprocess.check_output(
             ["git", "rev-list", "--count", f"HEAD..{upstream}"],
-            cwd=agent_dir, text=True, timeout=10,
+            cwd=agent_dir, text=True, timeout=10, encoding="utf8",
         ).strip()
         commit_count = int(count_str)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
@@ -273,6 +274,7 @@ def run_update(
     r = subprocess.run(
         ["git", "pull", "--ff-only"],
         cwd=agent_dir, capture_output=True, text=True, timeout=60,
+        encoding="utf8",
     )
     if r.returncode != 0:
         stderr = r.stderr.strip()

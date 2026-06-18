@@ -81,7 +81,7 @@ def _git_username(project_dir: Path) -> str | None:
         try:
             result = subprocess.run(
                 ["git", "-C", str(project_dir), "config", field],
-                capture_output=True, text=True, timeout=3,
+                capture_output=True, text=True, timeout=3, encoding="utf8",
             )
             value = result.stdout.strip()
             if value:
