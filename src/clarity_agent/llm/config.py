@@ -208,33 +208,33 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "auth_modes": [
             {
                 "name": "sdk_native",
-                "display_name": "Copilot login (recommended)",
+                "display_name": "GitHub Copilot CLI (copilot, recommended)",
                 "description": (
-                    "Zero-config via the bundled Copilot CLI's own login. "
-                    "No external tools to install."
+                    "Sign in with Copilot using the bundled CLI. "
+                    "No separate GitHub CLI install required."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
                     "Run 'copilot auth login' in a terminal to sign in. "
-                    "The Copilot CLI is bundled with the Python package, "
-                    "so no separate install is required."
+                    "The GitHub Copilot CLI is bundled with the Python package, "
+                    "so no separate GitHub CLI install is required."
                 ),
                 "setup_url": "https://docs.github.com/en/copilot",
                 "fields": [],
             },
             {
                 "name": "gh_cli",
-                "display_name": "GitHub CLI",
+                "display_name": "GitHub CLI (gh)",
                 "description": (
-                    "Use the gh CLI's stored token — convenient if you "
-                    "already have 'gh auth login' set up."
+                    "Use an existing GitHub CLI token from 'gh auth login'. "
+                    "Choose this only if gh is already set up."
                 ),
                 "package": "copilot",
                 "env_var": None,
                 "setup_help": (
-                    "This option uses the GitHub CLI's authentication. "
-                    "You must have run 'gh auth login' first."
+                    "This uses GitHub CLI authentication, not 'copilot auth "
+                    "login'. You must have run 'gh auth login' first."
                 ),
                 "setup_url": "https://cli.github.com/",
                 "fields": [],

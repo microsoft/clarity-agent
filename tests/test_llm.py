@@ -23,7 +23,7 @@ from clarity_agent.llm import (
     create_chat_backend,
     create_client,
 )
-from clarity_agent.llm.config import LLMConfigError
+from clarity_agent.llm.config import LLMConfigError, get_auth_mode_info
 
 # ---------------------------------------------------------------------------
 # Streaming mock helpers (used by OpenAI and Azure tests)
@@ -109,6 +109,28 @@ class TestLLMResponse:
         resp = LLMResponse()
         assert resp.content == []
         assert resp.stop_reason == "end_turn"
+
+
+# ---------------------------------------------------------------------------
+# Provider metadata
+# ---------------------------------------------------------------------------
+
+class TestProviderMetadata:
+    """Provider metadata drives first-run setup and preferences UI copy."""
+
+    def test_github_auth_modes_distinguish_copilot_cli_from_gh_fallback(
+        self,
+    ) -> None:
+        sdk_mode = get_auth_mode_info("github", "sdk_native")
+        gh_mode = get_auth_mode_info("github", "gh_cli")
+
+        assert sdk_mode is not None
+        assert gh_mode is not None
+        assert sdk_mode["display_name"] == "GitHub Copilot CLI (copilot, recommended)"
+        assert "No separate GitHub CLI install required" in sdk_mode["description"]
+        assert "copilot auth login" in sdk_mode["setup_help"]
+        assert gh_mode["display_name"] == "GitHub CLI (gh)"
+        assert "not 'copilot auth login'" in gh_mode["setup_help"]
 
 
 # ---------------------------------------------------------------------------

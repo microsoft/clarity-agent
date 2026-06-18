@@ -944,7 +944,7 @@ def _probe_copilot(agent_dir: Path) -> CheckResult:
         rung = "Copilot login"
     else:
         token = get_gh_cli_token(raise_on_failure=True)
-        rung = "gh CLI"
+        rung = "GitHub CLI (gh)"
 
     backend = CopilotChatBackend(
         project_dir=agent_dir,
