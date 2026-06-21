@@ -78,6 +78,7 @@ _has_issues: bool = False
 # Low-level helpers (always execute — used for reads)
 # ---------------------------------------------------------------------------
 
+
 def _run(
     cmd: list[str],
     *,
@@ -85,7 +86,7 @@ def _run(
     quiet: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run a shell command and return the result."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf8")
     if check and result.returncode != 0:
         stderr = result.stderr.strip()
         if not quiet:
@@ -122,6 +123,7 @@ def _az_show(args: list[str]) -> object | None:
 # Apply helpers (respect _verify_only)
 # ---------------------------------------------------------------------------
 
+
 def _apply(label: str, cmd: list[str], *, verb: str = "CREATE") -> None:
     """Execute a state-changing shell command, or print it.
 
@@ -139,7 +141,10 @@ def _apply(label: str, cmd: list[str], *, verb: str = "CREATE") -> None:
 
 
 def _apply_json(
-    label: str, az_args: list[str], *, verb: str = "CREATE",
+    label: str,
+    az_args: list[str],
+    *,
+    verb: str = "CREATE",
 ) -> object | None:
     """Execute a state-changing ``az`` command and return JSON, or print it.
 
@@ -163,23 +168,30 @@ def _apply_json(
 
 _C = "\033["
 
+
 def _ok(msg: str) -> None:
     print(f"  {_C}32m[OK]{_C}0m       {msg}")
+
 
 def _create(msg: str) -> None:
     print(f"  {_C}33m[CREATE]{_C}0m   {msg}")
 
+
 def _update(msg: str) -> None:
     print(f"  {_C}33m[UPDATE]{_C}0m   {msg}")
+
 
 def _fixable(msg: str) -> None:
     print(f"  {_C}33m[FIXABLE]{_C}0m  {msg}")
 
+
 def _error(msg: str) -> None:
     print(f"  {_C}31m[ERROR]{_C}0m    {msg}")
 
+
 def _info(msg: str) -> None:
     print(f"  {_C}34m[INFO]{_C}0m     {msg}")
+
 
 def _warn(msg: str) -> None:
     print(f"  {_C}33m[WARN]{_C}0m     {msg}")
@@ -189,8 +201,12 @@ def _warn(msg: str) -> None:
 # Scope helpers
 # ---------------------------------------------------------------------------
 
+
 def _container_scope(
-    sub_id: str, rg: str, account: str, container: str,
+    sub_id: str,
+    rg: str,
+    account: str,
+    container: str,
 ) -> str:
     """Build the ARM resource ID for a blob container."""
     return (
@@ -203,6 +219,7 @@ def _container_scope(
 # ---------------------------------------------------------------------------
 # Step 0: Prerequisites
 # ---------------------------------------------------------------------------
+
 
 def check_prerequisites() -> str:
     """Verify ``az`` is available and user is logged in.
@@ -229,6 +246,7 @@ def check_prerequisites() -> str:
 # Step 1: Resource group
 # ---------------------------------------------------------------------------
 
+
 def ensure_resource_group(name: str, location: str) -> None:
     existing = _az_show(["group", "show", "--name", name])
     if existing is not None:
@@ -244,24 +262,42 @@ def ensure_resource_group(name: str, location: str) -> None:
 # Step 2: Storage account
 # ---------------------------------------------------------------------------
 
+
 def ensure_storage_account(name: str, rg: str, location: str) -> None:
-    existing = _az_show([
-        "storage", "account", "show", "--name", name, "--resource-group", rg,
-    ])
+    existing = _az_show(
+        [
+            "storage",
+            "account",
+            "show",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+        ]
+    )
     if existing is not None:
         _ok(f"Storage account '{name}' exists")
         return
     _apply_json(
         f"Storage account '{name}' (Standard_LRS)",
         [
-            "storage", "account", "create",
-            "--name", name,
-            "--resource-group", rg,
-            "--location", location,
-            "--sku", "Standard_LRS",
-            "--kind", "StorageV2",
-            "--min-tls-version", "TLS1_2",
-            "--allow-blob-public-access", "false",
+            "storage",
+            "account",
+            "create",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+            "--location",
+            location,
+            "--sku",
+            "Standard_LRS",
+            "--kind",
+            "StorageV2",
+            "--min-tls-version",
+            "TLS1_2",
+            "--allow-blob-public-access",
+            "false",
         ],
     )
 
@@ -270,12 +306,21 @@ def ensure_storage_account(name: str, rg: str, location: str) -> None:
 # Step 3: Blob container
 # ---------------------------------------------------------------------------
 
+
 def _get_connection_string(account: str, rg: str) -> str | None:
     """Get storage connection string, or None if the account isn't accessible."""
-    result = _az_json([
-        "storage", "account", "show-connection-string",
-        "--name", account, "--resource-group", rg,
-    ], check=False)
+    result = _az_json(
+        [
+            "storage",
+            "account",
+            "show-connection-string",
+            "--name",
+            account,
+            "--resource-group",
+            rg,
+        ],
+        check=False,
+    )
     if isinstance(result, dict):
         return result.get("connectionString")
     return None
@@ -287,12 +332,22 @@ def ensure_storage_container(container: str, account: str, rg: str) -> None:
         _warn(f"Cannot verify container — storage account '{account}' not accessible")
         return
 
-    result = _run([
-        "az", "storage", "container", "show",
-        "--name", container,
-        "--connection-string", conn_str,
-        "-o", "json",
-    ], check=False, quiet=True)
+    result = _run(
+        [
+            "az",
+            "storage",
+            "container",
+            "show",
+            "--name",
+            container,
+            "--connection-string",
+            conn_str,
+            "-o",
+            "json",
+        ],
+        check=False,
+        quiet=True,
+    )
 
     if result.returncode == 0:
         data = json.loads(result.stdout)
@@ -302,10 +357,16 @@ def ensure_storage_container(container: str, account: str, rg: str) -> None:
             _apply(
                 f"Container '{container}' — disable public access",
                 [
-                    "az", "storage", "container", "set-permission",
-                    "--name", container,
-                    "--connection-string", conn_str,
-                    "--public-access", "off",
+                    "az",
+                    "storage",
+                    "container",
+                    "set-permission",
+                    "--name",
+                    container,
+                    "--connection-string",
+                    conn_str,
+                    "--public-access",
+                    "off",
                 ],
                 verb="UPDATE",
             )
@@ -316,10 +377,16 @@ def ensure_storage_container(container: str, account: str, rg: str) -> None:
     _apply(
         f"Container '{container}' (public access off)",
         [
-            "az", "storage", "container", "create",
-            "--name", container,
-            "--connection-string", conn_str,
-            "--public-access", "off",
+            "az",
+            "storage",
+            "container",
+            "create",
+            "--name",
+            container,
+            "--connection-string",
+            conn_str,
+            "--public-access",
+            "off",
         ],
     )
 
@@ -328,27 +395,47 @@ def ensure_storage_container(container: str, account: str, rg: str) -> None:
 # Step 4: Function app
 # ---------------------------------------------------------------------------
 
+
 def ensure_function_app(
-    name: str, rg: str, storage_account: str, location: str,
+    name: str,
+    rg: str,
+    storage_account: str,
+    location: str,
 ) -> None:
-    existing = _az_show([
-        "functionapp", "show", "--name", name, "--resource-group", rg,
-    ])
+    existing = _az_show(
+        [
+            "functionapp",
+            "show",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+        ]
+    )
     if existing is not None:
         _ok(f"Function app '{name}' exists")
         return
     _apply_json(
         f"Function app '{name}' (Python 3.11, consumption plan)",
         [
-            "functionapp", "create",
-            "--name", name,
-            "--resource-group", rg,
-            "--storage-account", storage_account,
-            "--consumption-plan-location", location,
-            "--runtime", "python",
-            "--runtime-version", "3.11",
-            "--functions-version", "4",
-            "--os-type", "Linux",
+            "functionapp",
+            "create",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+            "--storage-account",
+            storage_account,
+            "--consumption-plan-location",
+            location,
+            "--runtime",
+            "python",
+            "--runtime-version",
+            "3.11",
+            "--functions-version",
+            "4",
+            "--os-type",
+            "Linux",
         ],
     )
 
@@ -356,6 +443,7 @@ def ensure_function_app(
 # ---------------------------------------------------------------------------
 # Step 5: Managed identity
 # ---------------------------------------------------------------------------
+
 
 def ensure_managed_identity(name: str, rg: str) -> str | None:
     """Ensure the function app has a system-assigned managed identity.
@@ -389,6 +477,7 @@ def ensure_managed_identity(name: str, rg: str) -> str | None:
 # Step 6: Custom write-only RBAC role
 # ---------------------------------------------------------------------------
 
+
 def ensure_custom_role(sub_id: str) -> None:
     """Ensure the custom write-only role exists with correct permissions."""
     existing = _az_json(
@@ -419,16 +508,14 @@ def ensure_custom_role(sub_id: str) -> None:
 
         _apply_json(
             f"Custom role '{CUSTOM_ROLE_NAME}' — fix permissions",
-            ["role", "definition", "update",
-             "--role-definition", json.dumps(role_def)],
+            ["role", "definition", "update", "--role-definition", json.dumps(role_def)],
             verb="UPDATE",
         )
         return
 
     _apply_json(
         f"Custom role '{CUSTOM_ROLE_NAME}'",
-        ["role", "definition", "create",
-         "--role-definition", json.dumps(role_def)],
+        ["role", "definition", "create", "--role-definition", json.dumps(role_def)],
     )
 
 
@@ -436,16 +523,28 @@ def ensure_custom_role(sub_id: str) -> None:
 # Step 7: Role assignments
 # ---------------------------------------------------------------------------
 
+
 def ensure_role_assignment(
-    principal_id: str, role_name: str, scope: str, label: str,
+    principal_id: str,
+    role_name: str,
+    scope: str,
+    label: str,
 ) -> None:
     """Ensure *principal_id* has *role_name* at *scope*."""
-    existing = _az_json([
-        "role", "assignment", "list",
-        "--assignee", principal_id,
-        "--role", role_name,
-        "--scope", scope,
-    ], check=False)
+    existing = _az_json(
+        [
+            "role",
+            "assignment",
+            "list",
+            "--assignee",
+            principal_id,
+            "--role",
+            role_name,
+            "--scope",
+            scope,
+        ],
+        check=False,
+    )
 
     if isinstance(existing, list) and len(existing) > 0:
         _ok(f"Role '{role_name}' assigned to {label}")
@@ -454,10 +553,15 @@ def ensure_role_assignment(
     _apply_json(
         f"Role assignment: '{role_name}' -> {label}",
         [
-            "role", "assignment", "create",
-            "--assignee", principal_id,
-            "--role", role_name,
-            "--scope", scope,
+            "role",
+            "assignment",
+            "create",
+            "--assignee",
+            principal_id,
+            "--role",
+            role_name,
+            "--scope",
+            scope,
         ],
     )
 
@@ -482,6 +586,7 @@ def ensure_reader_group(group_name: str, scope: str) -> None:
 # Step 8: Permission audit
 # ---------------------------------------------------------------------------
 
+
 def audit_container_permissions(
     scope: str,
     *,
@@ -491,11 +596,17 @@ def audit_container_permissions(
     """List data-plane role assignments on the container and warn about
     any that are unexpected.
     """
-    assignments = _az_json([
-        "role", "assignment", "list",
-        "--scope", scope,
-        "--include-inherited",
-    ], check=False)
+    assignments = _az_json(
+        [
+            "role",
+            "assignment",
+            "list",
+            "--scope",
+            scope,
+            "--include-inherited",
+        ],
+        check=False,
+    )
 
     if not isinstance(assignments, list):
         _warn("Could not list role assignments for audit")
@@ -527,16 +638,10 @@ def audit_container_permissions(
         if principal in expected_principals:
             continue
 
-        unexpected.append(
-            f"{role} -> {principal_name} "
-            f"(scope: {a.get('scope', '?')})"
-        )
+        unexpected.append(f"{role} -> {principal_name} (scope: {a.get('scope', '?')})")
 
     if unexpected:
-        _warn(
-            f"Unexpected data-plane role assignments on the container "
-            f"({len(unexpected)}):"
-        )
+        _warn(f"Unexpected data-plane role assignments on the container ({len(unexpected)}):")
         for line in unexpected:
             print(f"           {line}")
     else:
@@ -547,14 +652,27 @@ def audit_container_permissions(
 # Step 9: Function app settings
 # ---------------------------------------------------------------------------
 
+
 def ensure_function_settings(
-    name: str, rg: str, account: str, container: str,
+    name: str,
+    rg: str,
+    account: str,
+    container: str,
 ) -> None:
     """Ensure the function app has the correct application settings."""
-    result = _az_json([
-        "functionapp", "config", "appsettings", "list",
-        "--name", name, "--resource-group", rg,
-    ], check=False)
+    result = _az_json(
+        [
+            "functionapp",
+            "config",
+            "appsettings",
+            "list",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+        ],
+        check=False,
+    )
 
     if not isinstance(result, list):
         _warn(f"Cannot verify settings — function app '{name}' not accessible")
@@ -573,8 +691,14 @@ def ensure_function_settings(
     _apply_json(
         "Function app settings (FEEDBACK_STORAGE_ACCOUNT, FEEDBACK_CONTAINER)",
         [
-            "functionapp", "config", "appsettings", "set",
-            "--name", name, "--resource-group", rg,
+            "functionapp",
+            "config",
+            "appsettings",
+            "set",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
             "--settings",
             f"FEEDBACK_STORAGE_ACCOUNT={account}",
             f"FEEDBACK_CONTAINER={container}",
@@ -586,6 +710,7 @@ def ensure_function_settings(
 # ---------------------------------------------------------------------------
 # Step 10: Deploy function code
 # ---------------------------------------------------------------------------
+
 
 def deploy_function(name: str, rg: str, function_dir: Path) -> None:
     """Deploy function code if the local source has changed.
@@ -605,10 +730,19 @@ def deploy_function(name: str, rg: str, function_dir: Path) -> None:
         local_hash = hashlib.sha256(tmp.read()).hexdigest()[:16]
 
         # Read the deployed hash from app settings.
-        result = _az_json([
-            "functionapp", "config", "appsettings", "list",
-            "--name", name, "--resource-group", rg,
-        ], check=False)
+        result = _az_json(
+            [
+                "functionapp",
+                "config",
+                "appsettings",
+                "list",
+                "--name",
+                name,
+                "--resource-group",
+                rg,
+            ],
+            check=False,
+        )
 
         deployed_hash: str | None = None
         if isinstance(result, list):
@@ -633,21 +767,42 @@ def deploy_function(name: str, rg: str, function_dir: Path) -> None:
             return
 
         _update(f"Deploying function code ({detail})")
-        _run([
-            "az", "functionapp", "deployment", "source", "config-zip",
-            "--name", name,
-            "--resource-group", rg,
-            "--src", tmp.name,
-            "--build-remote", "true",
-        ])
+        _run(
+            [
+                "az",
+                "functionapp",
+                "deployment",
+                "source",
+                "config-zip",
+                "--name",
+                name,
+                "--resource-group",
+                rg,
+                "--src",
+                tmp.name,
+                "--build-remote",
+                "true",
+            ]
+        )
 
         # Record the hash so the next run can detect changes.
-        _run([
-            "az", "functionapp", "config", "appsettings", "set",
-            "--name", name, "--resource-group", rg,
-            "--settings", f"FEEDBACK_CODE_HASH={local_hash}",
-            "-o", "json",
-        ])
+        _run(
+            [
+                "az",
+                "functionapp",
+                "config",
+                "appsettings",
+                "set",
+                "--name",
+                name,
+                "--resource-group",
+                rg,
+                "--settings",
+                f"FEEDBACK_CODE_HASH={local_hash}",
+                "-o",
+                "json",
+            ]
+        )
         _ok(f"Function code deployed ({local_hash})")
 
 
@@ -655,13 +810,22 @@ def deploy_function(name: str, rg: str, function_dir: Path) -> None:
 # Step 11: Function URL
 # ---------------------------------------------------------------------------
 
+
 def get_function_url(name: str, rg: str) -> str | None:
-    keys = _az_show([
-        "functionapp", "function", "keys", "list",
-        "--name", name,
-        "--resource-group", rg,
-        "--function-name", "submit_feedback",
-    ])
+    keys = _az_show(
+        [
+            "functionapp",
+            "function",
+            "keys",
+            "list",
+            "--name",
+            name,
+            "--resource-group",
+            rg,
+            "--function-name",
+            "submit_feedback",
+        ]
+    )
     if keys is None or not isinstance(keys, dict):
         _warn(
             "Could not retrieve function keys — the function may not "
@@ -680,6 +844,7 @@ def get_function_url(name: str, rg: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     global _verify_only
@@ -761,23 +926,30 @@ def main() -> None:
 
     # 2. Storage account
     ensure_storage_account(
-        args.storage_account, args.resource_group, args.location,
+        args.storage_account,
+        args.resource_group,
+        args.location,
     )
 
     # 3. Blob container (with public access verification)
     ensure_storage_container(
-        args.container, args.storage_account, args.resource_group,
+        args.container,
+        args.storage_account,
+        args.resource_group,
     )
 
     # 4. Function app
     ensure_function_app(
-        args.function_app, args.resource_group, args.storage_account,
+        args.function_app,
+        args.resource_group,
+        args.storage_account,
         args.location,
     )
 
     # 5. Managed identity
     principal_id = ensure_managed_identity(
-        args.function_app, args.resource_group,
+        args.function_app,
+        args.resource_group,
     )
 
     # 6. Custom write-only RBAC role
@@ -785,11 +957,16 @@ def main() -> None:
 
     # 7. Role assignments
     scope = _container_scope(
-        sub_id, args.resource_group, args.storage_account, args.container,
+        sub_id,
+        args.resource_group,
+        args.storage_account,
+        args.container,
     )
     if principal_id is not None:
         ensure_role_assignment(
-            principal_id, CUSTOM_ROLE_NAME, scope,
+            principal_id,
+            CUSTOM_ROLE_NAME,
+            scope,
             f"function app '{args.function_app}'",
         )
     else:
@@ -807,8 +984,10 @@ def main() -> None:
 
     # 9. Function app settings
     ensure_function_settings(
-        args.function_app, args.resource_group,
-        args.storage_account, args.container,
+        args.function_app,
+        args.resource_group,
+        args.storage_account,
+        args.container,
     )
 
     # 10. Deploy

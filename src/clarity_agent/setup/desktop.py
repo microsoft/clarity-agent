@@ -87,7 +87,7 @@ def _get_target_triple() -> str:
         return override
     r = subprocess.run(
         ["rustc", "--print", "host-tuple"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf8",
     )
     return r.stdout.strip()
 
@@ -151,7 +151,7 @@ def _ensure_build_deps(source_dir: Path) -> StepResult:
         cmd = ["uv", "pip", "install", "-e", pkg]
     else:
         cmd = [sys.executable, "-m", "pip", "install", "-e", pkg, "--quiet"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf8")
     if r.returncode != 0:
         return StepResult(Outcome.FAIL, f"Failed to install build deps: {r.stderr.strip()}")
     return StepResult(Outcome.OK, "Build dependencies installed")
@@ -545,15 +545,24 @@ def _auto_install(persisted_dist: Path) -> StepResult:
         exe = next(iter(persisted_dist.glob("*.exe")), None)
         if exe is None:
             return StepResult(Outcome.FAIL, f"No .exe found in {persisted_dist}")
+        # NSIS/MSI installers traditionally emit MUI strings in the
+        # system ANSI code page (cp1252 on US Windows, cp932 on JP,
+        # …), not UTF-8.  Forcing utf-8 like the rest of the codebase
+        # would mojibake or raise on the failure path.  Capture bytes
+        # and decode with errors="replace" only when we actually
+        # surface output to the user — robust against any code page
+        # the installer happens to use.
         r = subprocess.run(
             [str(exe), "/S"],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, timeout=300,
         )
         if r.returncode != 0:
+            stderr = r.stderr.decode("utf8", errors="replace").strip()
+            stdout = r.stdout.decode("utf8", errors="replace").strip()
             return StepResult(
                 Outcome.FAIL,
                 f"installer exit {r.returncode}: "
-                f"{(r.stderr or r.stdout or '').strip() or 'no output'}",
+                f"{(stderr or stdout) or 'no output'}",
             )
         return StepResult(Outcome.OK, f"Installed {exe.name}")
 
@@ -563,7 +572,7 @@ def _auto_install(persisted_dist: Path) -> StepResult:
     if deb is not None:
         r = subprocess.run(
             ["sudo", "dpkg", "-i", str(deb)],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=120, encoding="utf8",
         )
         if r.returncode != 0:
             return StepResult(
