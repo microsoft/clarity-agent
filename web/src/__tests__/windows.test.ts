@@ -10,14 +10,20 @@
  *      server, hosted web build) — the function should call
  *      ``window.open`` with the same URL.
  *
- * We mock ``@tauri-apps/api/core`` via ``vi.doMock`` (and
- * re-import the module under test in each test so the mock
- * takes effect for that import) since the function uses a
- * dynamic ``await import(...)``.
+ * We mock ``@tauri-apps/api/core`` via top-level ``vi.mock``
+ * (hoisted by vitest) so the mock applies to the dynamic
+ * ``await import(...)`` inside ``openPanelInNewWindow`` without
+ * requiring per-test module-cache resets.  Per-test behaviour is
+ * configured via ``vi.mocked``.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PanelId } from "../data/panels";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
+import * as TauriCore from "@tauri-apps/api/core";
+import { openPanelInNewWindow } from "../data/windows";
 
 const chatA: PanelId = {
   projectId: "/Users/test/proj-a",
@@ -30,26 +36,18 @@ const historyA: PanelId = {
 };
 
 beforeEach(() => {
-  vi.resetModules();
-  vi.unstubAllGlobals();
-});
-
-afterEach(() => {
-  vi.doUnmock("@tauri-apps/api/core");
-  vi.resetModules();
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe("openPanelInNewWindow — Tauri path", () => {
   it("invokes 'open_panel_window' with the route and project's tabbingId", async () => {
-    const invoke = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.mocked(TauriCore.invoke).mockResolvedValue(undefined);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(historyA, "abc123");
 
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith("open_panel_window", {
+    expect(TauriCore.invoke).toHaveBeenCalledTimes(1);
+    expect(TauriCore.invoke).toHaveBeenCalledWith("open_panel_window", {
       route: "/p/abc123/history",
       tabbingId: historyA.projectId,
       title: "Clarity — History",
@@ -57,13 +55,11 @@ describe("openPanelInNewWindow — Tauri path", () => {
   });
 
   it("uses the bare route in single-project mode (no launcher id)", async () => {
-    const invoke = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.mocked(TauriCore.invoke).mockResolvedValue(undefined);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(historyA);
 
-    expect(invoke).toHaveBeenCalledWith("open_panel_window", {
+    expect(TauriCore.invoke).toHaveBeenCalledWith("open_panel_window", {
       route: "/history",
       tabbingId: historyA.projectId,
       title: "Clarity — History",
@@ -71,19 +67,17 @@ describe("openPanelInNewWindow — Tauri path", () => {
   });
 
   it("uses the chat root route '/' (or its launcher variant) for chat panels", async () => {
-    const invoke = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.mocked(TauriCore.invoke).mockResolvedValue(undefined);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(chatA, "abc123");
-    expect(invoke).toHaveBeenLastCalledWith("open_panel_window", {
+    expect(TauriCore.invoke).toHaveBeenLastCalledWith("open_panel_window", {
       route: "/p/abc123/",
       tabbingId: chatA.projectId,
       title: "Clarity — Chat",
     });
 
     await openPanelInNewWindow(chatA);
-    expect(invoke).toHaveBeenLastCalledWith("open_panel_window", {
+    expect(TauriCore.invoke).toHaveBeenLastCalledWith("open_panel_window", {
       route: "/",
       tabbingId: chatA.projectId,
       title: "Clarity — Chat",
@@ -92,15 +86,15 @@ describe("openPanelInNewWindow — Tauri path", () => {
 });
 
 describe("openPanelInNewWindow — fallback path (no Tauri)", () => {
-  it("falls back to window.open when @tauri-apps/api/core fails to import", async () => {
-    // Simulate "no Tauri IPC bridge": the dynamic import rejects.
-    vi.doMock("@tauri-apps/api/core", () => {
-      throw new Error("module not available");
-    });
+  it("falls back to window.open when @tauri-apps/api/core is unavailable", async () => {
+    // Simulate "no Tauri IPC bridge": invoke rejects as if the
+    // module or command is not available.
+    vi.mocked(TauriCore.invoke).mockRejectedValue(
+      new Error("module not available"),
+    );
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(historyA, "abc123");
 
     expect(open).toHaveBeenCalledWith("/p/abc123/history", "_blank");
@@ -110,30 +104,26 @@ describe("openPanelInNewWindow — fallback path (no Tauri)", () => {
     // The IPC bridge is present but the command fails.  Same
     // user-visible outcome as no bridge at all: the new window
     // opens via the browser path.
-    const invoke = vi
-      .fn()
-      .mockRejectedValue(new Error("command not registered"));
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.mocked(TauriCore.invoke).mockRejectedValue(
+      new Error("command not registered"),
+    );
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(historyA);
 
-    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(TauriCore.invoke).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith("/history", "_blank");
   });
 
   it("does not double-open: invoke success path does NOT also call window.open", async () => {
-    const invoke = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.mocked(TauriCore.invoke).mockResolvedValue(undefined);
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
-    const { openPanelInNewWindow } = await import("../data/windows");
     await openPanelInNewWindow(historyA, "abc123");
 
-    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(TauriCore.invoke).toHaveBeenCalledTimes(1);
     expect(open).not.toHaveBeenCalled();
   });
 });
