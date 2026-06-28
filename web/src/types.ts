@@ -7,6 +7,7 @@ export type WsClientMessage =
 
 // WebSocket messages: server → client
 export type WsServerMessage =
+  | { type: "log"; source: string; level: string; message: string }
   | { type: "tool_use"; tool: string; detail: string }
   | { type: "text_delta"; content: string }
   | { type: "cost"; cost_usd: number }
