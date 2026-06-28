@@ -34,7 +34,7 @@ describe("ChatMessage", () => {
     expect(strong.tagName).toBe("STRONG");
   });
 
-  it("shows tool events for assistant messages", () => {
+  it("does not render tool events inline for assistant messages", () => {
     render(
       <ChatMessage
         message={makeMessage({
@@ -47,13 +47,30 @@ describe("ChatMessage", () => {
         })}
       />,
     );
-    // Component renders "→ read_file: main.py" — tool name without brackets
-    expect(screen.getByText(/read_file/)).toBeInTheDocument();
-    expect(screen.getByText(/main\.py/)).toBeInTheDocument();
-    expect(screen.getByText(/write_file/)).toBeInTheDocument();
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.queryByText(/read_file/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tool-terminal")).not.toBeInTheDocument();
   });
 
-  it("shows cost for assistant messages", () => {
+  it("does not render tool-only assistant messages in the chat timeline", () => {
+    const { container } = render(
+      <ChatMessage
+        message={makeMessage({
+          role: "assistant",
+          content: "",
+          toolEvents: [
+            { tool: "bash", detail: "npm run build" },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/npm run build/)).not.toBeInTheDocument();
+    expect(container.querySelector(".prose")).toBeNull();
+    expect(screen.queryByText("Clarity")).not.toBeInTheDocument();
+  });
+
+  it("does not render usage inline for assistant messages", () => {
     render(
       <ChatMessage
         message={makeMessage({
@@ -63,8 +80,8 @@ describe("ChatMessage", () => {
         })}
       />,
     );
-    // Component renders "$0.0567" without a "Cost:" prefix
-    expect(screen.getByText("$0.0567")).toBeInTheDocument();
+    expect(screen.getByText("Result")).toBeInTheDocument();
+    expect(screen.queryByText("$0.0567")).not.toBeInTheDocument();
   });
 
   it("does not show tool events or cost for user messages", () => {

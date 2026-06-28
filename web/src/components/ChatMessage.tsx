@@ -18,8 +18,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={handleCopy}
       title="Copy to clipboard"
       className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px]
-        rounded text-body-faint hover:text-body hover:bg-surface-hover
-        transition-colors"
+        rounded text-body-faint transition-colors hover:bg-surface-hover hover:text-body"
     >
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
@@ -38,21 +37,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const isTool = message.role === "tool";
+  const hasContent = message.content.trim().length > 0;
 
-  // Tool messages: compact inline indicator
-  if (isTool && message.toolEvents?.length) {
-    return (
-      <div className="flex justify-start">
-        <div className="text-xs text-body-faint pl-1 font-mono">
-          {message.toolEvents.map((te, i) => (
-            <div key={i}>
-              <span className="text-accent/60">{"\u2192"}</span> {te.tool}: {te.detail}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (isTool || !hasContent) return null;
 
   // System messages: full-width, lighter styling
   if (isSystem) {
@@ -73,23 +60,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div className={`flex flex-col gap-1.5 ${isUser ? "max-w-[75%]" : "max-w-[85%]"}`}>
-        {/* Tool events + cost log — visible above the message bubble */}
-        {!isUser && (message.toolEvents?.length || message.costUsd || message.tokenCount) && (
-          <div className="text-xs text-body-faint space-y-0.5 pl-1 font-mono">
-            {message.toolEvents?.map((te, i) => (
-              <div key={i}>
-                <span className="text-accent/50">→</span> {te.tool}: {te.detail}
-              </div>
-            ))}
-            {(message.tokenCount != null || message.costUsd != null) && (
-              <div className="text-body-faint/60">
-                {message.tokenCount != null && <>{message.tokenCount.toLocaleString()} tokens</>}
-                {message.costUsd != null && <>{message.tokenCount != null ? " \u00b7 " : ""}${message.costUsd.toFixed(4)}</>}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Message bubble */}
         <div
           className={`rounded-2xl px-5 py-3.5 ${
@@ -109,7 +79,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           )}
         </div>
 
-        {/* Role label + copy — subtle, below the bubble */}
+        {/* Role label and copy action, below the bubble. */}
         <div className={`flex items-center gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
           <span className="text-[10px] uppercase tracking-widest text-body-faint/50 px-1">
             {isUser ? "You" : "Clarity"}

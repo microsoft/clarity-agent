@@ -63,6 +63,7 @@ export type ChatAction =
   | { type: "send_message"; content: string }
   | { type: "enqueue_message"; content: string }
   | { type: "dequeue_message" }
+  | { type: "log_event"; source: string; level: string; message: string }
   | { type: "tool_event"; tool: string; detail: string }
   | { type: "text_delta"; content: string }
   | { type: "cost_event"; cost_usd: number }
@@ -92,6 +93,59 @@ export type ChatAction =
       sourceChapter: number;
       sourceTurnCount: number;
     };
+
+function toolEventContent(event: ToolEvent): string {
+  const detail = event.detail.trim();
+  return detail ? `${event.tool}: ${detail}` : `${event.tool}: executing`;
+}
+
+function isTerminalOnlyMessage(message: ChatMessage): boolean {
+  return Boolean(message.toolEvents?.length) && (
+    message.role === "tool" ||
+    (message.role === "assistant" && message.content.trim().length === 0)
+  );
+}
+
+function hasConversationContent(messages: ChatMessage[]): boolean {
+  return messages.some((message) => !isTerminalOnlyMessage(message));
+}
+
+function appendToolLogMessage(
+  messages: ChatMessage[],
+  event: ToolEvent,
+): ChatMessage[] {
+  const next = [...messages];
+  const last = next[next.length - 1];
+  if (last && isTerminalOnlyMessage(last)) {
+    const toolEvents = [...(last.toolEvents ?? []), event];
+    next[next.length - 1] = {
+      ...last,
+      content: toolEvents.map(toolEventContent).join("\n"),
+      toolEvents,
+      timestamp: Date.now(),
+    };
+    return next;
+  }
+
+  return [
+    ...next,
+    {
+      id: crypto.randomUUID(),
+      role: "tool",
+      content: toolEventContent(event),
+      toolEvents: [event],
+      timestamp: Date.now(),
+    },
+  ];
+}
+
+function appendTurnLog(state: ChatState, event: ToolEvent): ChatState {
+  return {
+    ...state,
+    messages: appendToolLogMessage(state.messages, event),
+    pendingTools: [],
+  };
+}
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -127,54 +181,53 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         outgoingQueue: state.outgoingQueue.slice(1),
       };
 
+    case "log_event": {
+      const detail =
+        action.level === "info" ? action.message : `${action.level}: ${action.message}`;
+      return appendTurnLog(state, {
+        tool: action.source || "backend",
+        detail,
+      });
+    }
+
     case "text_delta":
       return {
         ...state,
         streamingText: state.streamingText + action.content,
       };
 
-    case "tool_event": {
-      // Commit any accumulated streaming text, then commit the tool
-      // event as its own message — everything stays in time order.
-      const msgs = [...state.messages];
-      let newStreamingText = state.streamingText;
-      if (state.streamingText) {
-        msgs.push({
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: state.streamingText,
-          timestamp: Date.now(),
-        });
-        newStreamingText = "";
-      }
-      msgs.push({
-        id: crypto.randomUUID(),
-        role: "tool",
-        content: `${action.tool}: ${action.detail}`,
-        toolEvents: [{ tool: action.tool, detail: action.detail }],
-        timestamp: Date.now(),
+    case "tool_event":
+      return appendTurnLog(state, {
+        tool: action.tool,
+        detail: action.detail,
       });
-      return {
-        ...state,
-        messages: msgs,
-        streamingText: newStreamingText,
-        pendingTools: [],
-      };
-    }
 
-    case "cost_event":
-      return {
+    case "cost_event": {
+      const next = {
         ...state,
         turnCost: action.cost_usd,
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "cost",
+        detail: `$${action.cost_usd.toFixed(4)}`,
+      });
+    }
 
     case "usage_event": {
       const turnDelta = action.input_tokens + action.output_tokens;
-      return {
+      const next = {
         ...state,
         turnTokens: state.turnTokens + turnDelta,
         sessionTokens: state.sessionTokens + turnDelta,
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "usage",
+        detail:
+          `${action.input_tokens.toLocaleString()} input tokens, ` +
+          `${action.output_tokens.toLocaleString()} output tokens`,
+      });
     }
 
     case "receive_response": {
@@ -205,16 +258,22 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case "start_process":
-      return {
-        ...state,
-        currentProcess: action.name,
-        streaming: true,
-        pendingTools: [],
-        turnCost: 0,
-        turnTokens: 0,
-        streamingText: "",
-        error: null,
-      };
+      return appendTurnLog(
+        {
+          ...state,
+          currentProcess: action.name,
+          streaming: true,
+          pendingTools: [],
+          turnCost: 0,
+          turnTokens: 0,
+          streamingText: "",
+          error: null,
+        },
+        {
+          tool: "process",
+          detail: `starting ${action.name}`,
+        },
+      );
 
     case "process_starting":
       return {
@@ -231,34 +290,57 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ],
       };
 
-    case "model_changed":
-      return {
+    case "model_changed": {
+      const next = {
         ...state,
         activeModel: action.model,
         activeTier: action.tier,
         autoModel: action.auto,
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "model",
+        detail: `${action.tier}: ${action.model}${action.auto ? " (auto)" : ""}`,
+      });
+    }
 
-    case "error_event":
-      return {
+    case "error_event": {
+      const next = {
         ...state,
         error: action.error,
         streaming: false,
         statusPhase: null,
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "error",
+        detail: action.error.message,
+      });
+    }
 
-    case "warning_event":
-      // Non-fatal: show a dismissible banner without interrupting streaming.
-      return {
+    case "warning_event": {
+      const next = {
         ...state,
         error: { message: action.message, category: "warning", retryable: false },
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "warning",
+        detail: action.message,
+      });
+    }
 
-    case "status_event":
-      return {
+    case "status_event": {
+      const next = {
         ...state,
         statusPhase: action.phase,
       };
+      if (!state.streaming) return next;
+      return appendTurnLog(next, {
+        tool: "status",
+        detail: action.phase,
+      });
+    }
 
     case "dismiss_error":
       return {
@@ -300,7 +382,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // needs to fire in that case).
       return {
         ...state,
-        messages: action.messages,
+        messages:
+          action.messages.length === 0 && !hasConversationContent(state.messages)
+            ? state.messages
+            : action.messages,
         historyLoaded: true,
       };
 
@@ -431,6 +516,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // rapid-fire tool_use events that arrived within the same render cycle).
   const handleWsMessage = useCallback((msg: WsServerMessage) => {
     switch (msg.type) {
+      case "log":
+        dispatch({
+          type: "log_event",
+          source: msg.source,
+          level: msg.level,
+          message: msg.message,
+        });
+        break;
       case "tool_use":
         dispatch({ type: "tool_event", tool: msg.tool, detail: msg.detail });
         break;

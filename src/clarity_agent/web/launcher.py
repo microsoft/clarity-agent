@@ -103,6 +103,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from clarity_agent.projects import ProjectEntry, ProjectRegistry
+from clarity_agent.web.log_broadcast import WebLogBroadcaster
 
 # ---------------------------------------------------------------------------
 # Process table (in-memory, runtime-only)
@@ -213,6 +214,27 @@ async def _wait_for_server(port: int, timeout: float = 30.0) -> bool:
 
 _IDLE_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 
+
+class _LockedWebSocketSender:
+    """Serialize writes to a WebSocket from multiple tasks."""
+
+    def __init__(self, ws: WebSocket, lock: asyncio.Lock) -> None:
+        self._ws = ws
+        self._lock = lock
+
+    async def send_json(self, data: Any) -> None:
+        async with self._lock:
+            await self._ws.send_json(data)
+
+    async def send_text(self, data: str) -> None:
+        async with self._lock:
+            await self._ws.send_text(data)
+
+    async def send_bytes(self, data: bytes) -> None:
+        async with self._lock:
+            await self._ws.send_bytes(data)
+
+
 def create_launcher(
     clarity_agent_dir: Path,
     static_dir: Path | None = None,
@@ -230,6 +252,7 @@ def create_launcher(
     """
     registry = ProjectRegistry()
     processes = ProcessTable()
+    project_logs: dict[str, WebLogBroadcaster] = {}
     # ``id`` (the registry's stable path-derived hash) — unique
     # even when two projects share a display name.  See the
     # ProcessEntry docstring for why this matters.
@@ -248,6 +271,16 @@ def create_launcher(
     from clarity_agent.app_paths import clarity_env_path
     _env_path = env_path or clarity_env_path()
     _clarity_py = clarity_agent_dir / "clarity.py"
+
+    def _logs_for_project(project_id: str) -> WebLogBroadcaster:
+        broadcaster = project_logs.get(project_id)
+        if broadcaster is None:
+            broadcaster = WebLogBroadcaster(
+                default_source="project-server",
+                max_lines=250,
+            )
+            project_logs[project_id] = broadcaster
+        return broadcaster
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -291,7 +324,11 @@ def create_launcher(
     # Subprocess management
     # ------------------------------------------------------------------
 
-    def _pipe_output(stream: Any, prefix: str) -> None:
+    def _pipe_output(
+        stream: Any,
+        prefix: str,
+        broadcaster: WebLogBroadcaster,
+    ) -> None:
         """Read lines from a subprocess stream and print with a prefix.
 
         Runs in a daemon thread so the pipe buffer never fills up (which
@@ -300,6 +337,12 @@ def create_launcher(
         try:
             for line in stream:
                 text = line.decode("utf-8", errors="replace").rstrip("\n")
+                level = (
+                    "error"
+                    if text.lstrip().startswith(("ERROR", "Traceback", "Exception"))
+                    else "info"
+                )
+                broadcaster.publish(text, source=prefix, level=level)
                 print(f"  [{prefix}] {text}", flush=True)
         except ValueError:
             # Stream closed
@@ -310,6 +353,11 @@ def create_launcher(
         from clarity_agent.app_paths import is_frozen
 
         port = _find_free_port()
+        logs = _logs_for_project(project.id)
+        logs.publish(
+            f"spawning project server pid=pending port={port}",
+            source="launcher",
+        )
         # In a frozen (PyInstaller) build, sys.executable is the bundle
         # itself and handles subcommands directly.  In development,
         # we invoke Python with clarity.py as a script.
@@ -337,6 +385,7 @@ def create_launcher(
         existing_pp = env.get("PYTHONPATH", "")
         if src_dir not in existing_pp.split(os.pathsep):
             env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{existing_pp}" if existing_pp else src_dir
+        env["CLARITY_LAUNCHER_CHILD"] = "1"
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -351,7 +400,9 @@ def create_launcher(
             (proc.stderr, f"{project.name}:err"),
         ]:
             t = threading.Thread(
-                target=_pipe_output, args=(stream, label), daemon=True,
+                target=_pipe_output,
+                args=(stream, label, logs),
+                daemon=True,
             )
             t.start()
 
@@ -363,6 +414,10 @@ def create_launcher(
             process=proc,
         )
         processes.add(entry)
+        logs.publish(
+            f"spawned project server pid={proc.pid} port={port}",
+            source="launcher",
+        )
         return entry
 
     async def _ensure_running(project: ProjectEntry) -> ProcessEntry:
@@ -811,10 +866,12 @@ def create_launcher(
     @app.websocket("/ws/chat")
     async def websocket_proxy(ws: WebSocket) -> None:
         await ws.accept()
+        send_lock = asyncio.Lock()
+        out_ws = _LockedWebSocketSender(ws, send_lock)
 
         entry = await _ensure_active_running()
         if entry is None:
-            await ws.send_json({
+            await out_ws.send_json({
                 "type": "error",
                 "message": "No active project. Select a project first.",
                 "category": "no_project",
@@ -827,6 +884,7 @@ def create_launcher(
         assert project_id is not None  # guaranteed by _ensure_active_running success
 
         processes.touch(project_id)
+        log_queue, unsubscribe_logs = _logs_for_project(project_id).subscribe()
 
         # Connect to the project server's WebSocket.
         # websockets 13+ uses websockets.asyncio.client.
@@ -849,20 +907,31 @@ def create_launcher(
                     try:
                         async for message in upstream:
                             if isinstance(message, str):
-                                await ws.send_text(message)
+                                await out_ws.send_text(message)
                             else:
-                                await ws.send_bytes(message)
+                                await out_ws.send_bytes(message)
                     except ConnectionClosed:
                         pass
 
-                await asyncio.gather(
-                    browser_to_server(),
-                    server_to_browser(),
-                    return_exceptions=True,
+                async def logs_to_browser() -> None:
+                    while True:
+                        await out_ws.send_json(await log_queue.get())
+
+                tasks = [
+                    asyncio.create_task(browser_to_server()),
+                    asyncio.create_task(server_to_browser()),
+                    asyncio.create_task(logs_to_browser()),
+                ]
+                done, pending = await asyncio.wait(
+                    tasks,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*done, *pending, return_exceptions=True)
         except Exception as e:
             try:
-                await ws.send_json({
+                await out_ws.send_json({
                     "type": "error",
                     "message": f"Failed to connect to project server: {e}",
                     "category": "network",
@@ -871,6 +940,7 @@ def create_launcher(
             except Exception:
                 pass
         finally:
+            unsubscribe_logs()
             try:
                 await ws.close()
             except Exception:

@@ -50,6 +50,17 @@ def _make_app(project_dir: Path, *, provider: str = "anthropic") -> Any:
     )
 
 
+def _receive_event(ws: Any, event_type: str) -> dict[str, Any]:
+    """Receive until the requested event type arrives, skipping log frames."""
+    skipped: list[dict[str, Any]] = []
+    for _ in range(20):
+        msg = ws.receive_json()
+        if msg["type"] == event_type:
+            return msg
+        skipped.append(msg)
+    raise AssertionError(f"Did not receive {event_type!r}; skipped={skipped!r}")
+
+
 class TestSessionStartFailure:
     """Backend construction failure surfaces as a classified error."""
 
@@ -77,7 +88,7 @@ class TestSessionStartFailure:
         app = _make_app(tmp_path)
         client = TestClient(app)
         with client.websocket_connect("/ws/chat") as ws:
-            msg = ws.receive_json()
+            msg = _receive_event(ws, "error")
 
         assert msg["type"] == "error"
         assert msg["category"] == "auth"
@@ -107,12 +118,12 @@ class TestSessionStartFailure:
         app = _make_app(tmp_path)
         client = TestClient(app)
         with client.websocket_connect("/ws/chat") as ws:
-            initial = ws.receive_json()
+            initial = _receive_event(ws, "error")
             assert initial["type"] == "error"
             assert initial["category"] == "auth"
 
             ws.send_json({"type": "chat", "message": "hello"})
-            echoed = ws.receive_json()
+            echoed = _receive_event(ws, "error")
 
         assert echoed["type"] == "error"
         assert echoed["category"] == "auth"
@@ -139,7 +150,7 @@ class TestSessionStartFailure:
         app = _make_app(tmp_path)
         client = TestClient(app)
         with client.websocket_connect("/ws/chat") as ws:
-            msg = ws.receive_json()
+            msg = _receive_event(ws, "error")
 
         assert msg["type"] == "error"
         assert msg["category"] == "setup_required"
@@ -180,7 +191,7 @@ class TestChatTurnFailure:
         client = TestClient(app)
         with client.websocket_connect("/ws/chat") as ws:
             ws.send_json({"type": "chat", "message": "hi"})
-            msg = ws.receive_json()
+            msg = _receive_event(ws, "error")
 
         assert msg["type"] == "error"
         assert msg["category"] == "auth"
@@ -218,7 +229,7 @@ class TestChatTurnFailure:
         client = TestClient(app)
         with client.websocket_connect("/ws/chat") as ws:
             ws.send_json({"type": "chat", "message": "hi"})
-            msg = ws.receive_json()
+            msg = _receive_event(ws, "error")
 
         assert msg["type"] == "error"
         assert msg["category"] == "mcp_config"
