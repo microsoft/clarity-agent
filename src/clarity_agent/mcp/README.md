@@ -95,7 +95,7 @@ Replace `/path/to/clarity-agent` with the absolute path to your clarity-agent cl
 
 ## Available Tools
 
-The MCP server exposes 8 tools, designed around three moments in a coding agent's workflow:
+The MCP server exposes 9 tools, designed around four moments in a coding agent's workflow:
 
 ### Before acting: check for conflicts
 
@@ -120,6 +120,12 @@ The MCP server exposes 8 tools, designed around three moments in a coding agent'
 | `record_failure` | Record a failure mode or risk |
 | `record_suggestion` | Record a suggestion to update a project document |
 
+### Share and review
+
+| Tool | Purpose |
+|---|---|
+| `generate_packet` | Generate a shareable review packet from protocol content |
+
 ## How It Works
 
 The server uses two directories:
@@ -130,6 +136,8 @@ The server uses two directories:
 When the agent calls `run_clarity()`, the server checks the project directory for `.clarity-protocol/`. If none exists, it returns the startup guide. If one exists, it checks document staleness, recommends the next process, and inlines the process guide content so the agent can follow it immediately.
 
 `write_protocol_document` automatically records content hashes so the staleness tracker stays current without a separate `record_packet_status` call.
+
+`generate_packet` returns Markdown packets directly. For binary formats such as DOCX, it confirms the packet can be generated and reports the byte size; use the web UI or CLI to download the file.
 
 All read/write operations are scoped to the project directory with path traversal protection.
 
@@ -142,6 +150,7 @@ Before making choices that would be expensive to reverse, call check_decision.
 When starting work or returning after a break, call run_clarity.
 After completing significant implementation, call get_packet_status.
 Record significant choices with record_decision. Add risks with record_failure.
+Generate shareable review packets with generate_packet.
 ```
 
 **New project:**
