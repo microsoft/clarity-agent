@@ -35,6 +35,38 @@ from clarity_agent.web.session_state import (
 _APPROX_CHARS_PER_TOKEN = 4
 _PROVIDER_MANAGED_CONTEXT_PROVIDERS = {"anthropic", "github"}
 _PROVIDER_MANAGED_CONTEXT_BACKENDS = {"CopilotChatBackend", "SdkChatBackend"}
+_CONTEXT_SEGMENT_LABELS = {
+    "backend_system_prompt": "Backend system prompt",
+    "tool_schemas": "Tool schemas",
+    "project_behaviors": "Project instructions",
+    "transcript_restore": "Restored transcript",
+    "turn_system_prompt": "Turn/process instructions",
+    "prior_messages": "Prior chat messages",
+    "provider_session_history": "Provider-managed history",
+    "current_user_message": "Current user message",
+}
+_CONTEXT_SEGMENT_EXPLANATIONS = {
+    "backend_system_prompt": "Static instructions added by the selected backend.",
+    "tool_schemas": "Tool definitions passed with this request.",
+    "project_behaviors": "Repository and project instructions loaded from AGENTS.md.",
+    "transcript_restore": (
+        "Prior transcript content restored because no provider session was resumed."
+    ),
+    "turn_system_prompt": "Extra instructions added by the current process or call.",
+    "prior_messages": "Earlier messages visible in the local backend history.",
+    "provider_session_history": "Conversation state held inside the provider runtime.",
+    "current_user_message": "The message the user just sent.",
+}
+_CONTEXT_SOURCE_LABELS = {
+    "backend_static": "backend static prompt",
+    "adapter_passed_tools": "tools passed by Clarity",
+    "project_AGENTS": "project AGENTS.md",
+    "prior_transcript": "prior transcript",
+    "process_or_call": "current process or call",
+    "backend_conversation_history": "backend conversation history",
+    "provider_runtime": "provider runtime",
+    "current_turn": "current turn",
+}
 
 
 @dataclass(frozen=True)
@@ -413,17 +445,15 @@ class WebSessionAdapter:
         process = self.current_process or "chat"
         tool_count = len(self._tools or [])
         return (
-            "llm.request start "
-            f"provider={provider} "
-            f"model={model} "
-            f"tier={self.active_tier} "
-            f"process={process} "
-            f"auth_mode={auth_mode} "
-            f"credential={self._credential_summary()} "
-            f"endpoint={self._endpoint_summary()} "
-            f"tools={tool_count} "
-            f"user_message_chars={len(message)} "
-            f"system_prompt_chars={len(system_prompt or '')}"
+            "llm.request started. "
+            f"Sending this turn to provider {provider} with model {model}. "
+            f"Tier: {self.active_tier}. "
+            f"Process: {process}. "
+            f"Auth mode: {auth_mode}; credential {self._credential_summary()}; "
+            f"endpoint {self._endpoint_summary()}. "
+            f"Tools available: {tool_count}. "
+            f"User message: {len(message)} chars. "
+            f"Added system instructions: {len(system_prompt or '')} chars."
         )
 
     @staticmethod
@@ -489,6 +519,34 @@ class WebSessionAdapter:
             return "unknown"
         return f"{start_tokens / context_window:.1%}-{end_tokens / context_window:.1%}"
 
+    @staticmethod
+    def _window_fraction_label(tokens: int, context_window: int) -> str:
+        if context_window <= 0:
+            return "unknown"
+        return f"{tokens / context_window:.1%}"
+
+    @staticmethod
+    def _segment_position_explanation(position: str | None) -> str:
+        if position == "provider_managed":
+            return "provider-managed, exact position not visible to Clarity"
+        if position == "provider_specific":
+            return "provider-specific placement"
+        if position is None or position == "unknown":
+            return "unknown"
+        return f"about {position} of the known context window"
+
+    @staticmethod
+    def _segment_label(name: str) -> str:
+        return _CONTEXT_SEGMENT_LABELS.get(name, name.replace("_", " ").title())
+
+    @staticmethod
+    def _segment_explanation(name: str) -> str:
+        return _CONTEXT_SEGMENT_EXPLANATIONS.get(name, "Context passed with this request.")
+
+    @staticmethod
+    def _source_label(source: str) -> str:
+        return _CONTEXT_SOURCE_LABELS.get(source, source.replace("_", " "))
+
     def _context_segment_details(
         self,
         segments: list[_ContextSegment],
@@ -498,17 +556,20 @@ class WebSessionAdapter:
         details: list[str] = []
         cursor = 0
         known_tokens = 0
+        segment_count = len(segments)
         for index, segment in enumerate(segments, start=1):
+            label = self._segment_label(segment.name)
+            explanation = self._segment_explanation(segment.name)
+            source = self._source_label(segment.source)
             if segment.chars is None:
                 details.append(
-                    "llm.context_segment "
-                    f"index={index} "
-                    f"name={segment.name} "
-                    f"role={segment.role} "
-                    "chars=unknown "
-                    "estimated_tokens=unknown "
-                    f"position={segment.position or 'unknown'} "
-                    f"source={segment.source}"
+                    f"llm.context_segment {index}/{segment_count}: "
+                    f"{label}. {explanation} "
+                    f"Role: {segment.role}. "
+                    "Size: unknown. "
+                    f"Position: {self._segment_position_explanation(segment.position)}. "
+                    f"Source: {source}. "
+                    "Content: not visible to Clarity."
                 )
                 continue
 
@@ -524,14 +585,13 @@ class WebSessionAdapter:
             else:
                 position = segment.position
             details.append(
-                "llm.context_segment "
-                f"index={index} "
-                f"name={segment.name} "
-                f"role={segment.role} "
-                f"chars={segment.chars} "
-                f"estimated_tokens={tokens} "
-                f"position={position} "
-                f"source={segment.source}"
+                f"llm.context_segment {index}/{segment_count}: "
+                f"{label}. {explanation} "
+                f"Role: {segment.role}. "
+                f"Size: about {tokens:,} tokens from {segment.chars:,} chars. "
+                f"Position: {self._segment_position_explanation(position)}. "
+                f"Source: {source}. "
+                "Content: omitted."
             )
         return details, known_tokens
 
@@ -625,19 +685,18 @@ class WebSessionAdapter:
             context_window_tokens=context_window_tokens,
         )
         provider_visibility = (
-            "not_visible"
+            "not visible to Clarity after handoff"
             if provider_managed_context
-            else "visible_to_clarity"
+            else "visible to Clarity in local backend history"
         )
         manifest = (
-            "llm.context_manifest "
-            "visibility=clarity_assembled "
-            f"context_window_tokens={context_window_tokens} "
-            f"known_estimated_tokens={known_tokens} "
-            f"known_window_fraction={known_tokens / context_window_tokens:.1%} "
-            f"provider_internal_context={provider_visibility} "
-            "token_estimate=chars_div_4 "
-            "raw_prompt_content=omitted"
+            "llm.context_manifest Prompt map: "
+            f"Clarity can see about {known_tokens:,} tokens before the request leaves the app, "
+            f"about {self._window_fraction_label(known_tokens, context_window_tokens)} "
+            f"of the {context_window_tokens:,}-token model window. "
+            "Raw prompt text is omitted. "
+            f"Provider-managed context: {provider_visibility}. "
+            "Token counts are rough estimates from character counts."
         )
         return [manifest, *segment_details]
 
@@ -648,9 +707,10 @@ class WebSessionAdapter:
         if not self._stream_started:
             self._stream_started = True
             self._log_generation(
-                "llm.stream first_text_delta "
-                f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
-                f"model={self.active_model}"
+                "llm.stream started. "
+                "First text arrived from "
+                f"{getattr(self.llm_config, 'provider', 'unknown')} "
+                f"using {self.active_model}."
             )
         self._stream_chunk_count += 1
         self._stream_char_count += len(text)
@@ -850,23 +910,21 @@ class WebSessionAdapter:
         except Exception as exc:
             duration_ms = int((perf_counter() - started_at) * 1000)
             self._log_generation(
-                "llm.response failed "
-                f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
-                f"model={self.active_model} "
-                f"duration_ms={duration_ms} "
-                f"error_type={type(exc).__name__}"
+                f"llm.response failed after {duration_ms} ms. "
+                f"Provider: {getattr(self.llm_config, 'provider', 'unknown')}. "
+                f"Model: {self.active_model}. "
+                f"Error type: {type(exc).__name__}."
             )
             raise
 
         duration_ms = int((perf_counter() - started_at) * 1000)
         self._log_generation(
-            "llm.response complete "
-            f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
-            f"model={self.active_model} "
-            f"duration_ms={duration_ms} "
-            f"response_chars={len(response)} "
-            f"stream_chunks={self._stream_chunk_count} "
-            f"stream_chars={self._stream_char_count}"
+            f"llm.response complete in {duration_ms} ms. "
+            f"Provider: {getattr(self.llm_config, 'provider', 'unknown')}. "
+            f"Model: {self.active_model}. "
+            f"Response: {len(response)} chars. "
+            f"Streamed chunks: {self._stream_chunk_count}; "
+            f"streamed chars: {self._stream_char_count}."
         )
 
         # Persist the session ID so the next app launch can resume.
