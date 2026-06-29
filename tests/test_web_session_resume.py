@@ -357,7 +357,7 @@ class TestGenerationLogDetails:
 
         joined = "\n".join(details)
         assert details[0].startswith("llm.context_manifest Prompt map: ")
-        assert "Clarity can see about" in details[0]
+        assert "known context is about" in details[0]
         assert "1,000-token model window" in details[0]
         assert "visible to Clarity in local backend history" in details[0]
         assert "Raw prompt text is omitted" in details[0]
@@ -397,7 +397,7 @@ class TestGenerationLogDetails:
 
         joined = "\n".join(details)
         assert (
-            "Provider-managed context: not visible to Clarity after handoff"
+            "Provider-managed context is not visible to Clarity after handoff"
             in details[0]
         )
         assert "Provider-managed history" in joined

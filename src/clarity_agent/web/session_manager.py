@@ -9,10 +9,8 @@ tool-use events to an :class:`asyncio.Queue` that the WebSocket handler drains.
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -26,56 +24,23 @@ from clarity_agent.llm.config import get_auth_mode_info
 from clarity_agent.llm.types import TokenUsage, ToolHandler
 from clarity_agent.session import ClaritySession
 from clarity_agent.transcript import ChapterStarted, Transcript
+from clarity_agent.web.generation_log import (
+    ContextManifest,
+    ContextSegment,
+    RequestLogContext,
+    format_context_manifest,
+    format_request_started,
+    format_response_complete,
+    format_response_failed,
+    format_stream_started,
+    provider_manages_context,
+    serialized_char_count,
+)
 from clarity_agent.web.session_state import (
     clear_session_state,
     load_session_state,
     save_session_state,
 )
-
-_APPROX_CHARS_PER_TOKEN = 4
-_PROVIDER_MANAGED_CONTEXT_PROVIDERS = {"anthropic", "github"}
-_PROVIDER_MANAGED_CONTEXT_BACKENDS = {"CopilotChatBackend", "SdkChatBackend"}
-_CONTEXT_SEGMENT_LABELS = {
-    "backend_system_prompt": "Backend system prompt",
-    "tool_schemas": "Tool schemas",
-    "project_behaviors": "Project instructions",
-    "transcript_restore": "Restored transcript",
-    "turn_system_prompt": "Turn/process instructions",
-    "prior_messages": "Prior chat messages",
-    "provider_session_history": "Provider-managed history",
-    "current_user_message": "Current user message",
-}
-_CONTEXT_SEGMENT_EXPLANATIONS = {
-    "backend_system_prompt": "Static instructions added by the selected backend.",
-    "tool_schemas": "Tool definitions passed with this request.",
-    "project_behaviors": "Repository and project instructions loaded from AGENTS.md.",
-    "transcript_restore": (
-        "Prior transcript content restored because no provider session was resumed."
-    ),
-    "turn_system_prompt": "Extra instructions added by the current process or call.",
-    "prior_messages": "Earlier messages visible in the local backend history.",
-    "provider_session_history": "Conversation state held inside the provider runtime.",
-    "current_user_message": "The message the user just sent.",
-}
-_CONTEXT_SOURCE_LABELS = {
-    "backend_static": "backend static prompt",
-    "adapter_passed_tools": "tools passed by Clarity",
-    "project_AGENTS": "project AGENTS.md",
-    "prior_transcript": "prior transcript",
-    "process_or_call": "current process or call",
-    "backend_conversation_history": "backend conversation history",
-    "provider_runtime": "provider runtime",
-    "current_turn": "current turn",
-}
-
-
-@dataclass(frozen=True)
-class _ContextSegment:
-    name: str
-    role: str
-    chars: int | None
-    source: str
-    position: str | None = None
 
 
 class WebSessionAdapter:
@@ -444,35 +409,18 @@ class WebSessionAdapter:
         auth_mode = getattr(self.llm_config, "auth_mode", None) or "default"
         process = self.current_process or "chat"
         tool_count = len(self._tools or [])
-        return (
-            "llm.request started. "
-            f"Sending this turn to provider {provider} with model {model}. "
-            f"Tier: {self.active_tier}. "
-            f"Process: {process}. "
-            f"Auth mode: {auth_mode}; credential {self._credential_summary()}; "
-            f"endpoint {self._endpoint_summary()}. "
-            f"Tools available: {tool_count}. "
-            f"User message: {len(message)} chars. "
-            f"Added system instructions: {len(system_prompt or '')} chars."
-        )
-
-    @staticmethod
-    def _estimate_tokens(chars: int) -> int:
-        if chars <= 0:
-            return 0
-        return max(1, (chars + _APPROX_CHARS_PER_TOKEN - 1) // _APPROX_CHARS_PER_TOKEN)
-
-    @staticmethod
-    def _serialized_char_count(value: Any) -> int:
-        try:
-            return len(json.dumps(
-                value,
-                sort_keys=True,
-                separators=(",", ":"),
-                default=str,
-            ))
-        except (TypeError, ValueError):
-            return len(repr(value))
+        return format_request_started(RequestLogContext(
+            provider=provider,
+            model=model,
+            tier=self.active_tier,
+            process=process,
+            auth_mode=auth_mode,
+            credential=self._credential_summary(),
+            endpoint=self._endpoint_summary(),
+            tool_count=tool_count,
+            user_message_chars=len(message),
+            system_prompt_chars=len(system_prompt or ""),
+        ))
 
     def _backend_system_prompt_chars(self) -> int | None:
         backend = self._backend
@@ -497,103 +445,13 @@ class WebSessionAdapter:
         history = getattr(self._backend, "conversation_history", None)
         if not isinstance(history, list):
             return None
-        return self._serialized_char_count(history)
+        return serialized_char_count(history)
 
     def _context_window_tokens(self, model: str) -> int:
         backend = self._backend
         if backend is None:
             return ChatBackend.DEFAULT_CONTEXT_WINDOW
         return backend.context_window_for(model)
-
-    def _provider_manages_context(self) -> bool:
-        provider = getattr(self.llm_config, "provider", "unknown")
-        backend_name = type(self._backend).__name__ if self._backend is not None else ""
-        return (
-            provider in _PROVIDER_MANAGED_CONTEXT_PROVIDERS
-            or backend_name in _PROVIDER_MANAGED_CONTEXT_BACKENDS
-        )
-
-    @staticmethod
-    def _position_label(start_tokens: int, end_tokens: int, context_window: int) -> str:
-        if context_window <= 0:
-            return "unknown"
-        return f"{start_tokens / context_window:.1%}-{end_tokens / context_window:.1%}"
-
-    @staticmethod
-    def _window_fraction_label(tokens: int, context_window: int) -> str:
-        if context_window <= 0:
-            return "unknown"
-        return f"{tokens / context_window:.1%}"
-
-    @staticmethod
-    def _segment_position_explanation(position: str | None) -> str:
-        if position == "provider_managed":
-            return "provider-managed, exact position not visible to Clarity"
-        if position == "provider_specific":
-            return "provider-specific placement"
-        if position is None or position == "unknown":
-            return "unknown"
-        return f"about {position} of the known context window"
-
-    @staticmethod
-    def _segment_label(name: str) -> str:
-        return _CONTEXT_SEGMENT_LABELS.get(name, name.replace("_", " ").title())
-
-    @staticmethod
-    def _segment_explanation(name: str) -> str:
-        return _CONTEXT_SEGMENT_EXPLANATIONS.get(name, "Context passed with this request.")
-
-    @staticmethod
-    def _source_label(source: str) -> str:
-        return _CONTEXT_SOURCE_LABELS.get(source, source.replace("_", " "))
-
-    def _context_segment_details(
-        self,
-        segments: list[_ContextSegment],
-        *,
-        context_window_tokens: int,
-    ) -> tuple[list[str], int]:
-        details: list[str] = []
-        cursor = 0
-        known_tokens = 0
-        segment_count = len(segments)
-        for index, segment in enumerate(segments, start=1):
-            label = self._segment_label(segment.name)
-            explanation = self._segment_explanation(segment.name)
-            source = self._source_label(segment.source)
-            if segment.chars is None:
-                details.append(
-                    f"llm.context_segment {index}/{segment_count}: "
-                    f"{label}. {explanation} "
-                    f"Role: {segment.role}. "
-                    "Size: unknown. "
-                    f"Position: {self._segment_position_explanation(segment.position)}. "
-                    f"Source: {source}. "
-                    "Content: not visible to Clarity."
-                )
-                continue
-
-            tokens = self._estimate_tokens(segment.chars)
-            known_tokens += tokens
-            if segment.position is None:
-                position = self._position_label(
-                    cursor,
-                    cursor + tokens,
-                    context_window_tokens,
-                )
-                cursor += tokens
-            else:
-                position = segment.position
-            details.append(
-                f"llm.context_segment {index}/{segment_count}: "
-                f"{label}. {explanation} "
-                f"Role: {segment.role}. "
-                f"Size: about {tokens:,} tokens from {segment.chars:,} chars. "
-                f"Position: {self._segment_position_explanation(position)}. "
-                f"Source: {source}. "
-                "Content: omitted."
-            )
-        return details, known_tokens
 
     def _context_manifest_details(
         self,
@@ -604,101 +462,89 @@ class WebSessionAdapter:
         transcript_context_chars: int,
     ) -> list[str]:
         context_window_tokens = self._context_window_tokens(model)
-        provider_managed_context = self._provider_manages_context()
-        segments: list[_ContextSegment] = []
+        provider = getattr(self.llm_config, "provider", "unknown")
+        backend_name = type(self._backend).__name__ if self._backend is not None else ""
+        provider_managed_context = provider_manages_context(provider, backend_name)
+        segments: list[ContextSegment] = []
 
         backend_system_chars = self._backend_system_prompt_chars()
         if backend_system_chars is not None:
-            segments.append(_ContextSegment(
-                name="backend_system_prompt",
+            segments.append(ContextSegment(
+                name="Backend system prompt",
                 role="system",
                 chars=backend_system_chars,
-                source="backend_static",
+                source="backend static prompt",
             ))
 
         tool_schema_chars = (
-            self._serialized_char_count(self._tools)
+            serialized_char_count(self._tools)
             if self._tools
             else 0
         )
         if tool_schema_chars:
-            segments.append(_ContextSegment(
-                name="tool_schemas",
+            segments.append(ContextSegment(
+                name="Tool schemas",
                 role="tools",
                 chars=tool_schema_chars,
-                source="adapter_passed_tools",
+                source="tools passed by Clarity",
                 position="provider_specific",
             ))
 
         behavior_chars = self._project_behaviors_chars()
         if behavior_chars:
-            segments.append(_ContextSegment(
-                name="project_behaviors",
+            segments.append(ContextSegment(
+                name="Project instructions",
                 role="system",
                 chars=behavior_chars,
-                source="project_AGENTS",
+                source="project AGENTS.md",
             ))
 
         if transcript_context_chars:
-            segments.append(_ContextSegment(
-                name="transcript_restore",
+            segments.append(ContextSegment(
+                name="Restored transcript",
                 role="system",
                 chars=transcript_context_chars,
-                source="prior_transcript",
+                source="prior transcript",
             ))
 
         turn_system_chars = len(turn_system_prompt or "")
         if turn_system_chars:
-            segments.append(_ContextSegment(
-                name="turn_system_prompt",
+            segments.append(ContextSegment(
+                name="Turn/process instructions",
                 role="system",
                 chars=turn_system_chars,
-                source="process_or_call",
+                source="current process or call",
             ))
 
         history_chars = self._known_history_chars()
         if history_chars is None or provider_managed_context:
-            segments.append(_ContextSegment(
-                name="provider_session_history",
+            segments.append(ContextSegment(
+                name="Provider-managed history",
                 role="messages",
                 chars=None,
-                source="provider_runtime",
+                source="provider runtime",
                 position="provider_managed",
             ))
         else:
-            segments.append(_ContextSegment(
-                name="prior_messages",
+            segments.append(ContextSegment(
+                name="Prior chat messages",
                 role="messages",
                 chars=history_chars,
-                source="backend_conversation_history",
+                source="backend conversation history",
             ))
 
-        segments.append(_ContextSegment(
-            name="current_user_message",
+        segments.append(ContextSegment(
+            name="Current user message",
             role="user",
             chars=len(message),
-            source="current_turn",
+            source="current turn",
         ))
 
-        segment_details, known_tokens = self._context_segment_details(
-            segments,
+        return format_context_manifest(ContextManifest(
             context_window_tokens=context_window_tokens,
-        )
-        provider_visibility = (
-            "not visible to Clarity after handoff"
-            if provider_managed_context
-            else "visible to Clarity in local backend history"
-        )
-        manifest = (
-            "llm.context_manifest Prompt map: "
-            f"Clarity can see about {known_tokens:,} tokens before the request leaves the app, "
-            f"about {self._window_fraction_label(known_tokens, context_window_tokens)} "
-            f"of the {context_window_tokens:,}-token model window. "
-            "Raw prompt text is omitted. "
-            f"Provider-managed context: {provider_visibility}. "
-            "Token counts are rough estimates from character counts."
-        )
-        return [manifest, *segment_details]
+            provider_managed_context=provider_managed_context,
+            segments=segments,
+        ))
 
     def _on_text_delta(self, text: str) -> None:
         """Synchronous callback for streaming text chunks from the executor thread."""
@@ -707,10 +553,10 @@ class WebSessionAdapter:
         if not self._stream_started:
             self._stream_started = True
             self._log_generation(
-                "llm.stream started. "
-                "First text arrived from "
-                f"{getattr(self.llm_config, 'provider', 'unknown')} "
-                f"using {self.active_model}."
+                format_stream_started(
+                    getattr(self.llm_config, "provider", "unknown"),
+                    self.active_model,
+                )
             )
         self._stream_chunk_count += 1
         self._stream_char_count += len(text)
@@ -910,21 +756,25 @@ class WebSessionAdapter:
         except Exception as exc:
             duration_ms = int((perf_counter() - started_at) * 1000)
             self._log_generation(
-                f"llm.response failed after {duration_ms} ms. "
-                f"Provider: {getattr(self.llm_config, 'provider', 'unknown')}. "
-                f"Model: {self.active_model}. "
-                f"Error type: {type(exc).__name__}."
+                format_response_failed(
+                    provider=getattr(self.llm_config, "provider", "unknown"),
+                    model=self.active_model,
+                    duration_ms=duration_ms,
+                    error_type=type(exc).__name__,
+                )
             )
             raise
 
         duration_ms = int((perf_counter() - started_at) * 1000)
         self._log_generation(
-            f"llm.response complete in {duration_ms} ms. "
-            f"Provider: {getattr(self.llm_config, 'provider', 'unknown')}. "
-            f"Model: {self.active_model}. "
-            f"Response: {len(response)} chars. "
-            f"Streamed chunks: {self._stream_chunk_count}; "
-            f"streamed chars: {self._stream_char_count}."
+            format_response_complete(
+                provider=getattr(self.llm_config, "provider", "unknown"),
+                model=self.active_model,
+                duration_ms=duration_ms,
+                response_chars=len(response),
+                stream_chunks=self._stream_chunk_count,
+                stream_chars=self._stream_char_count,
+            )
         )
 
         # Persist the session ID so the next app launch can resume.
