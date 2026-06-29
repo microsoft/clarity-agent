@@ -60,6 +60,7 @@ export default function ChatPanel() {
     [messages],
   );
   const logLineCount = logLines.length;
+  const unreadLogCount = Math.max(0, logLineCount - seenLogCount);
 
   // Check if a protocol directory exists
   useEffect(() => {
@@ -410,7 +411,7 @@ export default function ChatPanel() {
         <ToolLogPane
           events={logLines}
           open={logPaneOpen}
-          unread={logLineCount > seenLogCount}
+          unreadCount={unreadLogCount}
           width={logPaneWidth}
           onOpenChange={handleLogPaneOpenChange}
           onWidthChange={setLogPaneWidth}

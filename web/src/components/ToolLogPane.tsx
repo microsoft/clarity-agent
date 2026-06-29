@@ -9,7 +9,7 @@ const UNREAD_BADGE_LIMIT = 99;
 interface ToolLogPaneProps {
   events: ToolEvent[];
   open: boolean;
-  unread: boolean;
+  unreadCount: number;
   width: number;
   onOpenChange: (open: boolean) => void;
   onWidthChange: (width: number) => void;
@@ -55,7 +55,7 @@ function CopyButton({ text }: { text: string }) {
 export default function ToolLogPane({
   events,
   open,
-  unread,
+  unreadCount,
   width,
   onOpenChange,
   onWidthChange,
@@ -65,6 +65,7 @@ export default function ToolLogPane({
   const commands = events.map(formatToolCommand);
   const script = commands.map((command) => `PS clarity> ${command}`).join("\n");
   const paneWidth = open ? clampPaneWidth(width) : COLLAPSED_PANE_WIDTH;
+  const unread = unreadCount > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -130,9 +131,11 @@ export default function ToolLogPane({
               <path d="M13 15h3" />
               <rect x="3.5" y="5" width="17" height="14" rx="2" />
             </svg>
-            <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#14b8a6] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
-              {events.length > UNREAD_BADGE_LIMIT ? `${UNREAD_BADGE_LIMIT}+` : events.length}
-            </span>
+            {unread ? (
+              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#14b8a6] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
+                {unreadCount > UNREAD_BADGE_LIMIT ? `${UNREAD_BADGE_LIMIT}+` : unreadCount}
+              </span>
+            ) : null}
           </button>
         </div>
       ) : (

@@ -14,7 +14,7 @@ describe("ToolLogPane", () => {
       <ToolLogPane
         events={events}
         open={false}
-        unread
+        unreadCount={2}
         width={460}
         onOpenChange={() => {}}
         onWidthChange={() => {}}
@@ -23,7 +23,24 @@ describe("ToolLogPane", () => {
 
     expect(screen.getByTestId("log-pane-toggle")).toHaveAttribute("data-unread", "true");
     expect(screen.getByTestId("log-side-pane")).toHaveAttribute("data-open", "false");
+    expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText(/npm run build/)).not.toBeInTheDocument();
+  });
+
+  it("does not render an unread counter when all log lines have been seen", () => {
+    render(
+      <ToolLogPane
+        events={events}
+        open={false}
+        unreadCount={0}
+        width={460}
+        onOpenChange={() => {}}
+        onWidthChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("log-pane-toggle")).toHaveAttribute("data-unread", "false");
+    expect(screen.queryByText("2")).not.toBeInTheDocument();
   });
 
   it("opens the split pane and stops marking the trigger unread", async () => {
@@ -33,7 +50,7 @@ describe("ToolLogPane", () => {
       <ToolLogPane
         events={events}
         open={false}
-        unread
+        unreadCount={2}
         width={460}
         onOpenChange={onOpenChange}
         onWidthChange={() => {}}
@@ -47,7 +64,7 @@ describe("ToolLogPane", () => {
       <ToolLogPane
         events={events}
         open
-        unread={false}
+        unreadCount={0}
         width={460}
         onOpenChange={onOpenChange}
         onWidthChange={() => {}}
@@ -66,7 +83,7 @@ describe("ToolLogPane", () => {
       <ToolLogPane
         events={events}
         open
-        unread={false}
+        unreadCount={0}
         width={460}
         onOpenChange={() => {}}
         onWidthChange={onWidthChange}
@@ -88,7 +105,7 @@ describe("ToolLogPane", () => {
       <ToolLogPane
         events={[]}
         open={false}
-        unread={false}
+        unreadCount={0}
         width={460}
         onOpenChange={() => {}}
         onWidthChange={() => {}}
