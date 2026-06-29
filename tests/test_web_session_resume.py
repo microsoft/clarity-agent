@@ -300,10 +300,10 @@ class TestGenerationLogDetails:
 
         assert "secret-api-key" not in detail
         assert "api-key=secret" not in detail
-        assert "credential=AZURE_AI_API_KEY=configured(redacted)" in detail
-        assert "endpoint=https://example.openai.azure.com/openai" in detail
-        assert "provider=azure" in detail
-        assert "model=deployment-a" in detail
+        assert "credential AZURE_AI_API_KEY=configured(redacted)" in detail
+        assert "endpoint https://example.openai.azure.com/openai" in detail
+        assert "provider azure" in detail
+        assert "model deployment-a" in detail
 
     def test_default_auth_logs_no_api_key_mode(self, tmp_path):
         cfg = LLMConfig(
@@ -321,9 +321,9 @@ class TestGenerationLogDetails:
             system_prompt=None,
         )
 
-        assert "auth_mode=default" in detail
-        assert "credential=default=configured(no-api-key)" in detail
-        assert "system_prompt_chars=0" in detail
+        assert "Auth mode: default" in detail
+        assert "credential default=configured(no-api-key)" in detail
+        assert "Added system instructions: 0 chars." in detail
 
     def test_context_manifest_logs_redacted_segments_in_order(self, tmp_path):
         cfg = LLMConfig(
@@ -356,25 +356,26 @@ class TestGenerationLogDetails:
         )
 
         joined = "\n".join(details)
-        assert details[0].startswith("llm.context_manifest ")
-        assert "visibility=clarity_assembled" in details[0]
-        assert "context_window_tokens=1000" in details[0]
-        assert "provider_internal_context=visible_to_clarity" in details[0]
-        assert "raw_prompt_content=omitted" in details[0]
+        assert details[0].startswith("llm.context_manifest Prompt map: ")
+        assert "Clarity can see about" in details[0]
+        assert "1,000-token model window" in details[0]
+        assert "visible to Clarity in local backend history" in details[0]
+        assert "Raw prompt text is omitted" in details[0]
         assert "private" not in joined
-        assert [
-            line.split("name=", 1)[1].split(" ", 1)[0]
-            for line in details[1:]
-        ] == [
-            "backend_system_prompt",
-            "tool_schemas",
-            "project_behaviors",
-            "transcript_restore",
-            "turn_system_prompt",
-            "prior_messages",
-            "current_user_message",
+        expected_segments = [
+            "Backend system prompt",
+            "Tool schemas",
+            "Project instructions",
+            "Restored transcript",
+            "Turn/process instructions",
+            "Prior chat messages",
+            "Current user message",
         ]
-        assert all("position=" in line for line in details[1:])
+        assert [
+            line.split(": ", 1)[1].split(".", 1)[0]
+            for line in details[1:]
+        ] == expected_segments
+        assert all("Position:" in line for line in details[1:])
 
     def test_context_manifest_marks_provider_managed_history(self, tmp_path):
         cfg = LLMConfig(
@@ -395,10 +396,13 @@ class TestGenerationLogDetails:
         )
 
         joined = "\n".join(details)
-        assert "provider_internal_context=not_visible" in details[0]
-        assert "name=provider_session_history" in joined
-        assert "chars=unknown" in joined
-        assert "position=provider_managed" in joined
+        assert (
+            "Provider-managed context: not visible to Clarity after handoff"
+            in details[0]
+        )
+        assert "Provider-managed history" in joined
+        assert "Size: unknown" in joined
+        assert "provider-managed, exact position not visible to Clarity" in joined
 
 
 class TestStartNewChapter:
