@@ -32,6 +32,7 @@ from typing import Any
 
 import pytest
 
+from clarity_agent.llm import LLMConfig
 from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.transcript import (
     AssistantText,
@@ -250,6 +251,7 @@ class TestEnsureAgentsMdHook:
         # Sanity: the adapter started cleanly.
         assert adapter._backend is not None
 
+
     def test_skips_when_layout_undetectable(self, tmp_path):
         # Bare project with no Clarity markers at all.  detect_layout
         # returns None; the hook no-ops; start() succeeds; no file
@@ -267,6 +269,51 @@ class TestEnsureAgentsMdHook:
 
         assert not (project / "AGENTS.md").exists()
         assert adapter._backend is not None  # start still succeeded
+
+
+class TestGenerationLogDetails:
+    def test_redacts_api_key_while_identifying_credential_source(self, tmp_path):
+        cfg = LLMConfig(
+            provider="azure",
+            api_key="secret-api-key",
+            endpoint="https://example.openai.azure.com/openai?api-key=secret",
+            auth_mode="api_key",
+            tiers={"default": "deployment-a"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+
+        detail = adapter._generation_start_detail(
+            model="deployment-a",
+            message="hello",
+            system_prompt="system",
+        )
+
+        assert "secret-api-key" not in detail
+        assert "api-key=secret" not in detail
+        assert "credential=AZURE_AI_API_KEY=configured(redacted)" in detail
+        assert "endpoint=https://example.openai.azure.com/openai" in detail
+        assert "provider=azure" in detail
+        assert "model=deployment-a" in detail
+
+    def test_default_auth_logs_no_api_key_mode(self, tmp_path):
+        cfg = LLMConfig(
+            provider="azure",
+            api_key=None,
+            endpoint="https://example.openai.azure.com",
+            auth_mode="default",
+            tiers={"default": "deployment-a"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+
+        detail = adapter._generation_start_detail(
+            model="deployment-a",
+            message="hello",
+            system_prompt=None,
+        )
+
+        assert "auth_mode=default" in detail
+        assert "credential=default=configured(no-api-key)" in detail
+        assert "system_prompt_chars=0" in detail
 
 
 class TestStartNewChapter:
