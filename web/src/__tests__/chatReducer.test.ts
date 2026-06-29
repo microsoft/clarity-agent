@@ -375,6 +375,7 @@ describe("chatReducer", () => {
           { id: "1", role: "user", content: "Hi", timestamp: 1 },
           { id: "2", role: "assistant", content: "Hello", timestamp: 2 },
         ],
+        logLines: [{ tool: "backend", detail: "ready" }],
         pendingTools: [{ tool: "t", detail: "d" }],
         turnCost: 0.05,
         turnTokens: 500,
@@ -393,6 +394,7 @@ describe("chatReducer", () => {
       };
       const next = chatReducer(populated, { type: "clear" });
       expect(next.messages).toEqual([]);
+      expect(next.logLines).toEqual([]);
       expect(next.pendingTools).toEqual([]);
       expect(next.outgoingQueue).toEqual([]);
       expect(next.turnCost).toBe(0);
@@ -402,6 +404,70 @@ describe("chatReducer", () => {
       expect(next.activeModel).toBe("claude-sonnet");
       expect(next.activeTier).toBe("default");
       expect(next.autoModel).toBe(false);
+    });
+  });
+
+  describe("logLines", () => {
+    it("accumulates tool_events in logLines", () => {
+      let state = chatReducer(initialState, {
+        type: "tool_event",
+        tool: "read_file",
+        detail: "a.txt",
+      });
+      state = chatReducer(state, {
+        type: "tool_event",
+        tool: "write_file",
+        detail: "b.txt",
+      });
+      expect(state.logLines).toEqual([
+        { tool: "read_file", detail: "a.txt" },
+        { tool: "write_file", detail: "b.txt" },
+      ]);
+    });
+
+    it("accumulates log_events in logLines", () => {
+      const state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "chat backend ready",
+      });
+      expect(state.logLines).toEqual([
+        { tool: "backend", detail: "chat backend ready" },
+      ]);
+    });
+
+    it("logLines is NOT reset by load_history", () => {
+      let state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "server started",
+      });
+      state = chatReducer(state, {
+        type: "load_history",
+        messages: [
+          { id: "u1", role: "user", content: "Hello", timestamp: 1 },
+          { id: "a1", role: "assistant", content: "Hi", timestamp: 2 },
+        ],
+      });
+      expect(state.logLines).toEqual([
+        { tool: "backend", detail: "server started" },
+      ]);
+      // messages were replaced
+      expect(state.messages).toHaveLength(2);
+      expect(state.messages[0].role).toBe("user");
+    });
+
+    it("logLines IS reset by clear", () => {
+      let state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "server started",
+      });
+      state = chatReducer(state, { type: "clear" });
+      expect(state.logLines).toEqual([]);
     });
   });
 

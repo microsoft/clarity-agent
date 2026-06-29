@@ -27,6 +27,8 @@ export interface ErrorInfo {
 
 export interface ChatState {
   messages: ChatMessage[];
+  /** Flat log of all tool/log events, never reset by load_history. */
+  logLines: ToolEvent[];
   pendingTools: ToolEvent[];
   /** Cumulative cost (USD) for the current streaming turn. */
   turnCost: number;
@@ -143,6 +145,7 @@ function appendTurnLog(state: ChatState, event: ToolEvent): ChatState {
   return {
     ...state,
     messages: appendToolLogMessage(state.messages, event),
+    logLines: [...state.logLines, event],
     pendingTools: [],
   };
 }
@@ -351,6 +354,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "clear":
       return {
         messages: [],
+        logLines: [],
         pendingTools: [],
         turnCost: 0,
         turnTokens: 0,
@@ -420,6 +424,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
 export const initialState: ChatState = {
   messages: [],
+  logLines: [],
   pendingTools: [],
   turnCost: 0,
   turnTokens: 0,
@@ -443,6 +448,8 @@ export const initialState: ChatState = {
 
 export interface UseChatReturn {
   messages: ChatMessage[];
+  /** All log/tool events accumulated since page load, never wiped by history loads. */
+  logLines: ToolEvent[];
   pendingTools: ToolEvent[];
   turnCost: number;
   turnTokens: number;
@@ -639,6 +646,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const value: UseChatReturn = {
     messages: state.messages,
+    logLines: state.logLines,
     pendingTools: state.pendingTools,
     turnCost: state.turnCost,
     turnTokens: state.turnTokens,

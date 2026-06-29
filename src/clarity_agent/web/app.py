@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import LLMConfig
-from clarity_agent.web.log_broadcast import WebLogBroadcaster, install_logging_broadcaster
+from clarity_agent.web.log_broadcast import WebLogBroadcaster, install_stdio_broadcaster
 from clarity_agent.web.models import FeedbackRequest, ModelOverrideRequest, PacketRequest
 from clarity_agent.web.session_manager import WebSessionAdapter
 
@@ -228,7 +228,7 @@ def create_app(
     app = FastAPI(title="Clarity Agent", lifespan=lifespan)
     log_broadcaster = WebLogBroadcaster(default_source="backend", max_lines=250)
     if os.environ.get("CLARITY_LAUNCHER_CHILD") != "1":
-        install_logging_broadcaster(log_broadcaster, source="backend")
+        install_stdio_broadcaster(log_broadcaster)
 
     # Setup wizard routes — pass state so configure can reload the LLM config
     from clarity_agent.app_paths import clarity_env_path

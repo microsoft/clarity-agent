@@ -76,7 +76,7 @@ export default function ToolLogPane({
     return () => dragCleanupRef.current?.();
   }, []);
 
-  if (events.length === 0) return null;
+  if (events.length === 0 && !open) return null;
 
   const handleResizeStart = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -147,7 +147,7 @@ export default function ToolLogPane({
           <div className="flex items-center justify-between border-b border-white/10 bg-[#121a20] px-2 py-3 sm:px-4">
             <div className="min-w-0">
               <div className="truncate font-mono text-xs uppercase tracking-[0.16em] text-white/55">
-                PowerShell
+                Execution Log
               </div>
               <div className="mt-0.5 text-xs text-white/40">
                 {events.length} {events.length === 1 ? "line" : "lines"}
@@ -170,6 +170,9 @@ export default function ToolLogPane({
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+            {commands.length === 0 ? (
+              <span className="font-mono text-xs text-white/35">Waiting for logs…</span>
+            ) : (
             <pre className="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[#d6e2ef]">
               {commands.map((command, index) => (
                 <span className="block" key={`${command}-${index}`}>
@@ -178,6 +181,7 @@ export default function ToolLogPane({
                 </span>
               ))}
             </pre>
+            )}
             <div ref={bottomRef} />
           </div>
         </div>
