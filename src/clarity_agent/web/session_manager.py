@@ -9,8 +9,10 @@ tool-use events to an :class:`asyncio.Queue` that the WebSocket handler drains.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -29,6 +31,19 @@ from clarity_agent.web.session_state import (
     load_session_state,
     save_session_state,
 )
+
+_APPROX_CHARS_PER_TOKEN = 4
+_PROVIDER_MANAGED_CONTEXT_PROVIDERS = {"anthropic", "github"}
+_PROVIDER_MANAGED_CONTEXT_BACKENDS = {"CopilotChatBackend", "SdkChatBackend"}
+
+
+@dataclass(frozen=True)
+class _ContextSegment:
+    name: str
+    role: str
+    chars: int | None
+    source: str
+    position: str | None = None
 
 
 class WebSessionAdapter:
@@ -411,6 +426,221 @@ class WebSessionAdapter:
             f"system_prompt_chars={len(system_prompt or '')}"
         )
 
+    @staticmethod
+    def _estimate_tokens(chars: int) -> int:
+        if chars <= 0:
+            return 0
+        return max(1, (chars + _APPROX_CHARS_PER_TOKEN - 1) // _APPROX_CHARS_PER_TOKEN)
+
+    @staticmethod
+    def _serialized_char_count(value: Any) -> int:
+        try:
+            return len(json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ))
+        except (TypeError, ValueError):
+            return len(repr(value))
+
+    def _backend_system_prompt_chars(self) -> int | None:
+        backend = self._backend
+        build_system_prompt = getattr(backend, "_build_system_prompt", None)
+        if not callable(build_system_prompt):
+            return None
+        try:
+            built_prompt = build_system_prompt(None)
+        except Exception:
+            return None
+        if isinstance(built_prompt, str):
+            return len(built_prompt)
+        return len(str(built_prompt))
+
+    def _project_behaviors_chars(self) -> int:
+        session = self._session
+        if session is None:
+            return 0
+        return len(session.load_behaviors())
+
+    def _known_history_chars(self) -> int | None:
+        history = getattr(self._backend, "conversation_history", None)
+        if not isinstance(history, list):
+            return None
+        return self._serialized_char_count(history)
+
+    def _context_window_tokens(self, model: str) -> int:
+        backend = self._backend
+        if backend is None:
+            return ChatBackend.DEFAULT_CONTEXT_WINDOW
+        return backend.context_window_for(model)
+
+    def _provider_manages_context(self) -> bool:
+        provider = getattr(self.llm_config, "provider", "unknown")
+        backend_name = type(self._backend).__name__ if self._backend is not None else ""
+        return (
+            provider in _PROVIDER_MANAGED_CONTEXT_PROVIDERS
+            or backend_name in _PROVIDER_MANAGED_CONTEXT_BACKENDS
+        )
+
+    @staticmethod
+    def _position_label(start_tokens: int, end_tokens: int, context_window: int) -> str:
+        if context_window <= 0:
+            return "unknown"
+        return f"{start_tokens / context_window:.1%}-{end_tokens / context_window:.1%}"
+
+    def _context_segment_details(
+        self,
+        segments: list[_ContextSegment],
+        *,
+        context_window_tokens: int,
+    ) -> tuple[list[str], int]:
+        details: list[str] = []
+        cursor = 0
+        known_tokens = 0
+        for index, segment in enumerate(segments, start=1):
+            if segment.chars is None:
+                details.append(
+                    "llm.context_segment "
+                    f"index={index} "
+                    f"name={segment.name} "
+                    f"role={segment.role} "
+                    "chars=unknown "
+                    "estimated_tokens=unknown "
+                    f"position={segment.position or 'unknown'} "
+                    f"source={segment.source}"
+                )
+                continue
+
+            tokens = self._estimate_tokens(segment.chars)
+            known_tokens += tokens
+            if segment.position is None:
+                position = self._position_label(
+                    cursor,
+                    cursor + tokens,
+                    context_window_tokens,
+                )
+                cursor += tokens
+            else:
+                position = segment.position
+            details.append(
+                "llm.context_segment "
+                f"index={index} "
+                f"name={segment.name} "
+                f"role={segment.role} "
+                f"chars={segment.chars} "
+                f"estimated_tokens={tokens} "
+                f"position={position} "
+                f"source={segment.source}"
+            )
+        return details, known_tokens
+
+    def _context_manifest_details(
+        self,
+        *,
+        model: str,
+        message: str,
+        turn_system_prompt: str | None,
+        transcript_context_chars: int,
+    ) -> list[str]:
+        context_window_tokens = self._context_window_tokens(model)
+        provider_managed_context = self._provider_manages_context()
+        segments: list[_ContextSegment] = []
+
+        backend_system_chars = self._backend_system_prompt_chars()
+        if backend_system_chars is not None:
+            segments.append(_ContextSegment(
+                name="backend_system_prompt",
+                role="system",
+                chars=backend_system_chars,
+                source="backend_static",
+            ))
+
+        tool_schema_chars = (
+            self._serialized_char_count(self._tools)
+            if self._tools
+            else 0
+        )
+        if tool_schema_chars:
+            segments.append(_ContextSegment(
+                name="tool_schemas",
+                role="tools",
+                chars=tool_schema_chars,
+                source="adapter_passed_tools",
+                position="provider_specific",
+            ))
+
+        behavior_chars = self._project_behaviors_chars()
+        if behavior_chars:
+            segments.append(_ContextSegment(
+                name="project_behaviors",
+                role="system",
+                chars=behavior_chars,
+                source="project_AGENTS",
+            ))
+
+        if transcript_context_chars:
+            segments.append(_ContextSegment(
+                name="transcript_restore",
+                role="system",
+                chars=transcript_context_chars,
+                source="prior_transcript",
+            ))
+
+        turn_system_chars = len(turn_system_prompt or "")
+        if turn_system_chars:
+            segments.append(_ContextSegment(
+                name="turn_system_prompt",
+                role="system",
+                chars=turn_system_chars,
+                source="process_or_call",
+            ))
+
+        history_chars = self._known_history_chars()
+        if history_chars is None or provider_managed_context:
+            segments.append(_ContextSegment(
+                name="provider_session_history",
+                role="messages",
+                chars=None,
+                source="provider_runtime",
+                position="provider_managed",
+            ))
+        else:
+            segments.append(_ContextSegment(
+                name="prior_messages",
+                role="messages",
+                chars=history_chars,
+                source="backend_conversation_history",
+            ))
+
+        segments.append(_ContextSegment(
+            name="current_user_message",
+            role="user",
+            chars=len(message),
+            source="current_turn",
+        ))
+
+        segment_details, known_tokens = self._context_segment_details(
+            segments,
+            context_window_tokens=context_window_tokens,
+        )
+        provider_visibility = (
+            "not_visible"
+            if provider_managed_context
+            else "visible_to_clarity"
+        )
+        manifest = (
+            "llm.context_manifest "
+            "visibility=clarity_assembled "
+            f"context_window_tokens={context_window_tokens} "
+            f"known_estimated_tokens={known_tokens} "
+            f"known_window_fraction={known_tokens / context_window_tokens:.1%} "
+            f"provider_internal_context={provider_visibility} "
+            "token_estimate=chars_div_4 "
+            "raw_prompt_content=omitted"
+        )
+        return [manifest, *segment_details]
+
     def _on_text_delta(self, text: str) -> None:
         """Synchronous callback for streaming text chunks from the executor thread."""
         if self._loop is None or self._cancelled:
@@ -573,9 +803,12 @@ class WebSessionAdapter:
         self._stream_chunk_count = 0
         self._stream_char_count = 0
 
+        turn_system_prompt = system_prompt
+        transcript_context_chars = 0
         # On the first call, inject transcript context if we have it.
         if self._transcript_context is not None:
             ctx = self._transcript_context
+            transcript_context_chars = len(ctx)
             self._transcript_context = None  # consume — only inject once
             # Signal the UI so the user sees why startup takes longer.
             await self._event_queue.put({
@@ -597,6 +830,13 @@ class WebSessionAdapter:
                 system_prompt=system_prompt,
             )
         )
+        for detail in self._context_manifest_details(
+            model=model,
+            message=message,
+            turn_system_prompt=turn_system_prompt,
+            transcript_context_chars=transcript_context_chars,
+        ):
+            self._log_generation(detail)
 
         func = partial(
             self._session.chat, message, system_prompt, model=model,
