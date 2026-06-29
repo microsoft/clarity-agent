@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getProtocolTree, getSession } from "../api/client";
 import { useChat } from "../hooks/useChat";
-import type { ChatMessage as ChatMessageType, SessionInfo, ToolEvent } from "../types";
+import type { ChatMessage as ChatMessageType, SessionInfo } from "../types";
 import ChatMessage from "./ChatMessage";
 import EmptyState from "./EmptyState";
 import ErrorBanner from "./ErrorBanner";
@@ -20,15 +20,12 @@ function isVisibleChatMessage(message: ChatMessageType): boolean {
   return message.role !== "tool" && message.content.trim().length > 0;
 }
 
-function collectToolEvents(messages: ChatMessageType[]): ToolEvent[] {
-  return messages.flatMap((message) => message.toolEvents ?? []);
-}
-
 const DEFAULT_LOG_PANE_WIDTH = 460;
 
 export default function ChatPanel() {
   const {
     messages,
+    logLines,
     turnCost,
     turnTokens,
     sessionTokens,
@@ -55,15 +52,14 @@ export default function ChatPanel() {
   const autoStarted = useRef(false);
   const [protocolExists, setProtocolExists] = useState<boolean | null>(null);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
-  const [logPaneOpen, setLogPaneOpen] = useState(false);
+  const [logPaneOpen, setLogPaneOpen] = useState(true);
   const [logPaneWidth, setLogPaneWidth] = useState(DEFAULT_LOG_PANE_WIDTH);
   const [seenLogCount, setSeenLogCount] = useState(0);
   const visibleMessages = useMemo(
     () => messages.filter(isVisibleChatMessage),
     [messages],
   );
-  const toolEvents = useMemo(() => collectToolEvents(messages), [messages]);
-  const logLineCount = toolEvents.length;
+  const logLineCount = logLines.length;
 
   // Check if a protocol directory exists
   useEffect(() => {
@@ -412,7 +408,7 @@ export default function ChatPanel() {
         </div>
 
         <ToolLogPane
-          events={toolEvents}
+          events={logLines}
           open={logPaneOpen}
           unread={logLineCount > seenLogCount}
           width={logPaneWidth}

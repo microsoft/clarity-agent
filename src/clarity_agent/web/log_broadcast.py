@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import sys
 import threading
 from collections import deque
 from collections.abc import Callable
@@ -112,6 +113,147 @@ class BroadcastLogHandler(logging.Handler):
             )
         except Exception:
             self.handleError(record)
+
+
+@dataclass(frozen=True)
+class _StreamPublisher:
+    broadcaster: WebLogBroadcaster
+    source: str
+    level: str
+
+
+class BroadcastStream:
+    """Text stream wrapper that tees terminal output to log subscribers."""
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+        self._publishers: dict[int, _StreamPublisher] = {}
+        self._line_buffer = ""
+        self._lock = threading.Lock()
+
+    @property
+    def wrapped(self) -> Any:
+        return self._stream
+
+    @property
+    def has_publishers(self) -> bool:
+        return bool(self._publishers)
+
+    def add_publisher(
+        self,
+        broadcaster: WebLogBroadcaster,
+        *,
+        source: str,
+        level: str,
+    ) -> None:
+        with self._lock:
+            self._publishers[id(broadcaster)] = _StreamPublisher(
+                broadcaster=broadcaster,
+                source=source,
+                level=level,
+            )
+
+    def remove_publisher(self, broadcaster: WebLogBroadcaster) -> None:
+        with self._lock:
+            self._publishers.pop(id(broadcaster), None)
+
+    def write(self, text: str) -> int:
+        written = self._stream.write(text)
+        self._publish(text)
+        return written
+
+    def flush(self) -> None:
+        self._stream.flush()
+        self.flush_pending()
+
+    def flush_pending(self) -> None:
+        with self._lock:
+            if not self._line_buffer:
+                return
+            line = self._line_buffer
+            self._line_buffer = ""
+            publishers = list(self._publishers.values())
+
+        for publisher in publishers:
+            publisher.broadcaster.publish(
+                line,
+                source=publisher.source,
+                level=publisher.level,
+            )
+
+    def _publish(self, text: str) -> None:
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        with self._lock:
+            buffered = self._line_buffer + normalized
+            lines = buffered.split("\n")
+            self._line_buffer = lines.pop()
+            publishers = list(self._publishers.values())
+
+        for line in lines:
+            for publisher in publishers:
+                publisher.broadcaster.publish(
+                    line,
+                    source=publisher.source,
+                    level=publisher.level,
+                )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+
+def install_stdio_broadcaster(
+    broadcaster: WebLogBroadcaster,
+    *,
+    stdout_source: str = "stdout",
+    stderr_source: str = "stderr",
+) -> Callable[[], None]:
+    """Mirror process stdout and stderr into a broadcaster until restored."""
+    restore_stdout = _install_stream_broadcaster(
+        "stdout",
+        broadcaster,
+        source=stdout_source,
+        level="info",
+    )
+    restore_stderr = _install_stream_broadcaster(
+        "stderr",
+        broadcaster,
+        source=stderr_source,
+        level="info",
+    )
+
+    def restore() -> None:
+        restore_stdout()
+        restore_stderr()
+
+    return restore
+
+
+def _install_stream_broadcaster(
+    stream_name: str,
+    broadcaster: WebLogBroadcaster,
+    *,
+    source: str,
+    level: str,
+) -> Callable[[], None]:
+    current = getattr(sys, stream_name)
+    if isinstance(current, BroadcastStream):
+        stream = current
+    else:
+        stream = BroadcastStream(current)
+        setattr(sys, stream_name, stream)
+
+    stream.add_publisher(broadcaster, source=source, level=level)
+
+    def restore() -> None:
+        active = getattr(sys, stream_name)
+        if active is not stream:
+            return
+        stream.flush_pending()
+        stream.remove_publisher(broadcaster)
+        if not stream.has_publishers:
+            setattr(sys, stream_name, stream.wrapped)
+
+    return restore
 
 
 def install_logging_broadcaster(
