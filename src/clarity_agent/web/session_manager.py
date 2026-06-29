@@ -14,10 +14,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from time import perf_counter
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import ChatBackend, LLMConfig
+from clarity_agent.llm.config import get_auth_mode_info
 from clarity_agent.llm.types import TokenUsage, ToolHandler
 from clarity_agent.session import ClaritySession
 from clarity_agent.transcript import ChapterStarted, Transcript
@@ -72,6 +75,9 @@ class WebSessionAdapter:
         self._cancelled = False
         # Partial text accumulated from events before cancellation.
         self._partial_text: list[str] = []
+        self._stream_started = False
+        self._stream_chunk_count = 0
+        self._stream_char_count = 0
 
     def _setup_feedback_tools(self) -> None:
         """Set up the feedback tool as baseline for all chat calls."""
@@ -353,10 +359,71 @@ class WebSessionAdapter:
             {"type": "tool_use", "tool": tool_name, "detail": detail},
         )
 
+    def _log_generation(self, detail: str) -> None:
+        print(f"[generation] {detail}", flush=True)
+
+    def _credential_summary(self) -> str:
+        provider = getattr(self.llm_config, "provider", "unknown")
+        auth_mode = getattr(self.llm_config, "auth_mode", None) or "default"
+        mode_info = get_auth_mode_info(provider, auth_mode) or {}
+        credential_name = mode_info.get("env_var") or auth_mode
+        api_key = getattr(self.llm_config, "api_key", None)
+        if api_key:
+            return f"{credential_name}=configured(redacted)"
+        if auth_mode in ("api_key", "token"):
+            return f"{credential_name}=missing"
+        return f"{auth_mode}=configured(no-api-key)"
+
+    def _endpoint_summary(self) -> str:
+        endpoint = getattr(self.llm_config, "endpoint", None)
+        if not endpoint:
+            return "none"
+        try:
+            parsed = urlsplit(endpoint)
+        except ValueError:
+            return "configured(redacted-invalid-url)"
+        if not parsed.scheme or not parsed.netloc:
+            return "configured(redacted-invalid-url)"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+
+    def _generation_start_detail(
+        self,
+        *,
+        model: str,
+        message: str,
+        system_prompt: str | None,
+    ) -> str:
+        provider = getattr(self.llm_config, "provider", "unknown")
+        auth_mode = getattr(self.llm_config, "auth_mode", None) or "default"
+        process = self.current_process or "chat"
+        tool_count = len(self._tools or [])
+        return (
+            "llm.request start "
+            f"provider={provider} "
+            f"model={model} "
+            f"tier={self.active_tier} "
+            f"process={process} "
+            f"auth_mode={auth_mode} "
+            f"credential={self._credential_summary()} "
+            f"endpoint={self._endpoint_summary()} "
+            f"tools={tool_count} "
+            f"user_message_chars={len(message)} "
+            f"system_prompt_chars={len(system_prompt or '')}"
+        )
+
     def _on_text_delta(self, text: str) -> None:
         """Synchronous callback for streaming text chunks from the executor thread."""
         if self._loop is None or self._cancelled:
             return
+        if not self._stream_started:
+            self._stream_started = True
+            self._log_generation(
+                "llm.stream first_text_delta "
+                f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
+                f"model={self.active_model}"
+            )
+        self._stream_chunk_count += 1
+        self._stream_char_count += len(text)
         self._loop.call_soon_threadsafe(
             self._event_queue.put_nowait,
             {"type": "text_delta", "content": text},
@@ -389,6 +456,11 @@ class WebSessionAdapter:
         """Synchronous callback for token usage events from the executor thread."""
         if self._loop is None:
             return
+        self._log_generation(
+            "llm.usage "
+            f"input_tokens={usage.input_tokens} "
+            f"output_tokens={usage.output_tokens}"
+        )
         self._loop.call_soon_threadsafe(
             self._event_queue.put_nowait,
             {
@@ -497,6 +569,9 @@ class WebSessionAdapter:
         assert self._session is not None
         self._cancelled = False
         self._partial_text.clear()
+        self._stream_started = False
+        self._stream_chunk_count = 0
+        self._stream_char_count = 0
 
         # On the first call, inject transcript context if we have it.
         if self._transcript_context is not None:
@@ -515,13 +590,43 @@ class WebSessionAdapter:
 
         model = self._resolve_model(self.current_process)
         self._update_active_model(model, self.current_process)
+        self._log_generation(
+            self._generation_start_detail(
+                model=model,
+                message=message,
+                system_prompt=system_prompt,
+            )
+        )
 
         func = partial(
             self._session.chat, message, system_prompt, model=model,
             tools=self._tools, tool_handler=self._tool_handler,
         )
-        response = await self._loop.run_in_executor(  # type: ignore[union-attr]
-            self._executor, func,
+        started_at = perf_counter()
+        try:
+            response = await self._loop.run_in_executor(  # type: ignore[union-attr]
+                self._executor, func,
+            )
+        except Exception as exc:
+            duration_ms = int((perf_counter() - started_at) * 1000)
+            self._log_generation(
+                "llm.response failed "
+                f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
+                f"model={self.active_model} "
+                f"duration_ms={duration_ms} "
+                f"error_type={type(exc).__name__}"
+            )
+            raise
+
+        duration_ms = int((perf_counter() - started_at) * 1000)
+        self._log_generation(
+            "llm.response complete "
+            f"provider={getattr(self.llm_config, 'provider', 'unknown')} "
+            f"model={self.active_model} "
+            f"duration_ms={duration_ms} "
+            f"response_chars={len(response)} "
+            f"stream_chunks={self._stream_chunk_count} "
+            f"stream_chars={self._stream_char_count}"
         )
 
         # Persist the session ID so the next app launch can resume.
