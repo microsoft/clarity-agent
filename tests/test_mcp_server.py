@@ -58,6 +58,7 @@ def test_all_tools_registered() -> None:
         "write_protocol_document",
         "record_decision",
         "record_failure",
+        "generate_packet",
         "record_suggestion",
     }
     assert expected == tool_names, (
@@ -81,7 +82,6 @@ def test_no_internal_tools_exposed() -> None:
         "list_thinkers",
         "read_thinker_guide",
         "read_behaviors",
-        "generate_packet",
         "get_mailbox_status",
         "check_failure_state",
         "snapshot_mailbox",
@@ -385,6 +385,28 @@ class TestGeneratePacket:
         write_protocol_document("goal/problem.md", "# Test Problem\n\nA real problem.")
         result = generate_packet()
         assert isinstance(result, str)
+        assert "Test Problem" in result
+
+    def test_accepts_comma_separated_sections(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import generate_packet, write_protocol_document
+
+        write_protocol_document("goal/problem.md", "# Test Problem\n\nA real problem.")
+        write_protocol_document("solution/solution.md", "# Test Solution\n\nA real solution.")
+
+        result = generate_packet(sections="problem, solution")
+        assert "Test Problem" in result
+        assert "Test Solution" in result
+
+    def test_returns_packet_errors(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import generate_packet
+
+        result = generate_packet(output_format="unknown")
+        assert result.startswith("Error generating packet:")
+        assert "Unknown format" in result
 
 
 class TestCheckFailureState:

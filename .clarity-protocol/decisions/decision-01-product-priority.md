@@ -11,7 +11,7 @@
 |------|--------|
 | 2026-03-03 | Decision made. Three existing products (AGENTS.md snippet, web app, CLI); six new products prioritized. |
 | 2026-04-06 | Integration strategy exploration validated MCP-first approach; confirmed "MCP as universal connector" thesis is strong given near-universal adoption across professional tools. |
-| 2026-06-08 | Review: 3 of 6 priorities now implemented. #1 MCP hybrid (8-tool server + `clarity embed` + npx runner). #3 IDE integration (VS Code extension with protocol sidebar). #5 Desktop app (Windows + Linux). Original products also evolved: coding agent integration now uses MCP instead of shell invocations. |
+| 2026-06-08 | Review: 3 of 6 priorities implemented. #1 MCP hybrid (focused MCP server + `clarity embed` + npx runner). #3 IDE integration (VS Code extension with protocol sidebar). #5 Desktop app (Windows + Linux). Original products also evolved: coding agent integration uses MCP instead of shell invocations. |
 
 ## Question
 
@@ -40,7 +40,7 @@ Which new products should we prioritize exploring beyond the existing three (AGE
 
 **Priority order:**
 
-1. **MCP-enhanced hybrid** — first new product to explore. The path to implementation is shortest from where we are: MCP exposure of Layer 3 is already in the near-term work plan, and the hybrid combines that with a light guide loaded as context. Validates the Layer 3 portability thesis. Medium reach today, but MCP adoption is growing. ✅ *Implemented: MCP server with 8-tool surface, `clarity embed` for project setup, npx runner built (not yet published).*
+1. **MCP-enhanced hybrid** — first new product to explore. The path to implementation is shortest from where we are: MCP exposure of Layer 3 is already in the near-term work plan, and the hybrid combines that with a light guide loaded as context. Validates the Layer 3 portability thesis. Medium reach today, but MCP adoption is growing. ✅ *Implemented: MCP server with focused tool surface, `clarity embed` for project setup, npx runner built (not yet published).*
 
 2. **General-purpose AI integration (light)** — second priority. Higher reach than the hybrid (anyone with any AI tool), but blocked on Layer 1 formalization → light expression, which is on a separate timeline. When it ships, this is likely the highest-reach product form.
 

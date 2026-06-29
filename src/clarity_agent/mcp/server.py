@@ -2,10 +2,10 @@
 
 Exposes the clarity-agent process as MCP tools and resources using the
 FastMCP framework. The tool surface is intentionally small: a coding
-agent needs only a handful of tools to integrate clarity into its
-workflow. Internal helper functions (process guide access, mailbox
-management, packet generation) remain available as plain functions for
-the desktop/web/CLI modes but are not exposed as MCP tools.
+agent needs only a focused set of tools to integrate clarity into its
+workflow. Internal helper functions (process guide access and mailbox
+management) remain available as plain functions for the desktop/web/CLI
+modes but are not exposed as MCP tools.
 
 Run via::
 
@@ -47,7 +47,8 @@ mcp = FastMCP(
         "Call run_clarity when starting work on a project or returning "
         "after a break. "
         "After completing significant implementation, call "
-        "get_packet_status to check if protocol documents need updating."
+        "get_packet_status to check if protocol documents need updating. "
+        "Call generate_packet when the user needs a shareable review packet."
     ),
 )
 
@@ -97,7 +98,7 @@ def _resolve_agent_dir() -> Path:
 
 
 # ===================================================================
-# MCP TOOLS (8 tools — the coding agent surface)
+# MCP TOOLS (9 tools — the coding agent surface)
 # ===================================================================
 
 
@@ -416,6 +417,56 @@ def record_failure(
 
 
 @mcp.tool()
+def generate_packet(
+    output_format: str = "markdown",
+    sections: str | None = None,
+    view: str | None = None,
+    project_dir: str | None = None,
+) -> str:
+    """Generate a review packet document from protocol content.
+
+    Use this when the user wants a shareable packet from the current
+    protocol. Markdown output is returned directly. Binary formats such
+    as docx are generated to confirm availability, but MCP returns only
+    a status message because text tools cannot return binary files.
+
+    Args:
+        output_format: Packet renderer to use, such as "markdown" or "docx".
+        sections: Optional comma-separated source IDs to include.
+        view: Optional packet view ID, such as "complete", "short", or "engineer".
+        project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+    """
+    from clarity_agent.packet import PacketError
+    from clarity_agent.packet import generate_packet as _generate
+
+    proto_dir = _resolve_protocol_dir(project_dir)
+    if not proto_dir.exists():
+        return "No protocol directory found."
+
+    include = (
+        [section.strip() for section in sections.split(",") if section.strip()]
+        if sections
+        else None
+    )
+    try:
+        content: bytes = _generate(
+            proto_dir,
+            include=include,
+            format=output_format,
+            view=view,
+        )
+    except PacketError as exc:
+        return f"Error generating packet: {exc}"
+
+    if output_format == "markdown":
+        return content.decode("utf-8")
+    return (
+        f"Generated {output_format} packet ({len(content)} bytes). "
+        "Use the web UI or CLI to download binary formats."
+    )
+
+
+@mcp.tool()
 def record_suggestion(
     title: str,
     target_document: str,
@@ -627,35 +678,6 @@ def read_behaviors(project_dir: str | None = None) -> str:
             "Re-open the project in Clarity to refresh it."
         )
     return block
-
-
-def generate_packet(
-    output_format: str = "markdown",
-    sections: str | None = None,
-    view: str | None = None,
-    project_dir: str | None = None,
-) -> str:
-    """Generate a review packet document from protocol content."""
-    from clarity_agent.packet import generate_packet as _generate
-
-    proto_dir = _resolve_protocol_dir(project_dir)
-    if not proto_dir.exists():
-        return "No protocol directory found."
-
-    include = sections.split(",") if sections else None
-    try:
-        content: bytes = _generate(
-            proto_dir,
-            include=include,
-            format=output_format,
-            view=view,
-        )
-        if output_format == "markdown":
-            return content.decode("utf-8")
-        else:
-            return f"Generated {output_format} packet ({len(content)} bytes). Use the web UI or CLI to download binary formats."
-    except Exception as e:
-        return f"Error generating packet: {e}"
 
 
 def get_mailbox_status(project_dir: str | None = None) -> str:

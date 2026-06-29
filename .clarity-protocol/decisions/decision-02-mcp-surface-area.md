@@ -5,22 +5,23 @@
 
 ## Context
 
-The MCP server needed a tool surface for coding agents. The Python codebase has ~20+ callable functions (init_protocol, list_processes, read_process_guide, generate_packet, get_mailbox_status, check_failure_state, snapshot_mailbox, list_mailbox_items, read_mailbox_item, archive_mailbox_item, etc.). Exposing all of them would create a large, confusing tool surface that coding agents would struggle to navigate effectively.
+The MCP server needed a tool surface for coding agents. The Python codebase has many callable functions (init_protocol, list_processes, read_process_guide, get_mailbox_status, check_failure_state, snapshot_mailbox, list_mailbox_items, read_mailbox_item, archive_mailbox_item, etc.). Exposing all of them would create a large, confusing tool surface that coding agents would struggle to navigate effectively.
 
 ## Decision
 
-Expose exactly 8 tools as the public MCP surface. All other functions remain importable Python for the web/CLI/desktop modes but are hidden from MCP clients.
+Expose exactly 9 tools as the public MCP surface. All other functions remain importable Python for the web/CLI/desktop modes but are hidden from MCP clients.
 
-The 8 tools are organized around three workflow moments:
+The 9 tools are organized around four workflow moments:
 - **Before acting:** `check_decision`
 - **Assess and navigate:** `run_clarity`, `get_packet_status`
 - **Read, write, record:** `read_protocol_document`, `write_protocol_document`, `record_decision`, `record_failure`, `record_suggestion`
+- **Share and review:** `generate_packet`
 
 Additionally, 6 MCP resources provide passive context: `clarity://summary`, `clarity://decisions`, `clarity://behaviors`, `clarity://processes/{name}`, `clarity://thinkers/{name}`, and `clarity://protocol/{path}`.
 
 ## Rationale
 
-A coding agent needs a focused set of actions, not a menu of everything the system can do. The key insight: `run_clarity` handles routing (it inlines the appropriate process guide), so the agent doesn't need separate process-discovery or process-selection tools. Similarly, `write_protocol_document` auto-records content hashes, eliminating the need for a separate `record_packet_status` tool.
+A coding agent needs a focused set of actions, not a menu of everything the system can do. The key insight: `run_clarity` handles routing (it inlines the appropriate process guide), so the agent doesn't need separate process-discovery or process-selection tools. Similarly, `write_protocol_document` auto-records content hashes, eliminating the need for a separate `record_packet_status` tool. `generate_packet` is exposed because sharing a synthesized packet is a common endpoint for MCP users, and Markdown output can be returned directly without adding file-write permissions.
 
 The internal functions remain available for the web UI, CLI, and desktop app where a richer interface is appropriate and the user has different interaction patterns (browsing, clicking, selecting).
 

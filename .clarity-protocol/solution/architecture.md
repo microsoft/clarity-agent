@@ -364,7 +364,7 @@ The staleness tracking infrastructure (Layer 3) could potentially be extended to
 
 Infrastructure is exposed via **MCP** rather than invoked directly as Python commands. The MCP server (`src/clarity_agent/mcp/server.py`) wraps existing Python infrastructure with a focused tool surface designed for how coding agents actually work.
 
-**The 8-tool public surface:**
+**The 9-tool public surface:**
 
 | Tool | Purpose | Workflow moment |
 |---|---|---|
@@ -376,8 +376,9 @@ Infrastructure is exposed via **MCP** rather than invoked directly as Python com
 | `record_decision` | Create a structured decision record with context, rationale, alternatives | After making a significant choice |
 | `record_failure` | Record a potential failure mode to the brainstorm mailbox | During failure brainstorming |
 | `record_suggestion` | Record a suggestion to update a protocol document | Anytime |
+| `generate_packet` | Generate a shareable review packet from protocol content | When sharing or reviewing the protocol |
 
-**Design decision: small public surface, rich internal library.** Only these 8 tools are exposed as MCP tools. Additional functions (`init_protocol`, `list_processes`, `read_process_guide`, `generate_packet`, `get_mailbox_status`, `check_failure_state`, `snapshot_mailbox`, etc.) remain importable Python for the web/CLI/desktop modes but are deliberately hidden from the MCP surface. The rationale: a coding agent needs a focused set of actions; the `run_clarity` tool handles routing and inlines process guides, so the agent doesn't need separate process-discovery tools.
+**Design decision: small public surface, rich internal library.** Only these 9 tools are exposed as MCP tools. Additional functions (`init_protocol`, `list_processes`, `read_process_guide`, `get_mailbox_status`, `check_failure_state`, `snapshot_mailbox`, etc.) remain importable Python for the web/CLI/desktop modes but are deliberately hidden from the MCP surface. The rationale: a coding agent needs a focused set of actions; the `run_clarity` tool handles routing and inlines process guides, so the agent doesn't need separate process-discovery tools.
 
 **MCP resources** (passive context, not actions):
 
