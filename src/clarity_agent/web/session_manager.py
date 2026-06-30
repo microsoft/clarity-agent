@@ -14,13 +14,28 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from time import perf_counter
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import ChatBackend, LLMConfig
+from clarity_agent.llm.config import get_auth_mode_info
 from clarity_agent.llm.types import TokenUsage, ToolHandler
 from clarity_agent.session import ClaritySession
 from clarity_agent.transcript import ChapterStarted, Transcript
+from clarity_agent.web.generation_log import (
+    ContextManifest,
+    ContextSegment,
+    RequestLogContext,
+    format_context_manifest,
+    format_request_started,
+    format_response_complete,
+    format_response_failed,
+    format_stream_started,
+    provider_manages_context,
+    serialized_char_count,
+)
 from clarity_agent.web.session_state import (
     clear_session_state,
     load_session_state,
@@ -72,6 +87,9 @@ class WebSessionAdapter:
         self._cancelled = False
         # Partial text accumulated from events before cancellation.
         self._partial_text: list[str] = []
+        self._stream_started = False
+        self._stream_chunk_count = 0
+        self._stream_char_count = 0
 
     def _setup_feedback_tools(self) -> None:
         """Set up the feedback tool as baseline for all chat calls."""
@@ -353,10 +371,195 @@ class WebSessionAdapter:
             {"type": "tool_use", "tool": tool_name, "detail": detail},
         )
 
+    def _log_generation(self, detail: str) -> None:
+        print(f"[generation] {detail}", flush=True)
+
+    def _credential_summary(self) -> str:
+        provider = getattr(self.llm_config, "provider", "unknown")
+        auth_mode = getattr(self.llm_config, "auth_mode", None) or "default"
+        mode_info = get_auth_mode_info(provider, auth_mode) or {}
+        credential_name = mode_info.get("env_var") or auth_mode
+        api_key = getattr(self.llm_config, "api_key", None)
+        if api_key:
+            return f"{credential_name}=configured(redacted)"
+        if auth_mode in ("api_key", "token"):
+            return f"{credential_name}=missing"
+        return f"{auth_mode}=configured(no-api-key)"
+
+    def _endpoint_summary(self) -> str:
+        endpoint = getattr(self.llm_config, "endpoint", None)
+        if not endpoint:
+            return "none"
+        try:
+            parsed = urlsplit(endpoint)
+        except ValueError:
+            return "configured(redacted-invalid-url)"
+        if not parsed.scheme or not parsed.netloc:
+            return "configured(redacted-invalid-url)"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+
+    def _generation_start_detail(
+        self,
+        *,
+        model: str,
+        message: str,
+        system_prompt: str | None,
+    ) -> str:
+        provider = getattr(self.llm_config, "provider", "unknown")
+        auth_mode = getattr(self.llm_config, "auth_mode", None) or "default"
+        process = self.current_process or "chat"
+        tool_count = len(self._tools or [])
+        return format_request_started(RequestLogContext(
+            provider=provider,
+            model=model,
+            tier=self.active_tier,
+            process=process,
+            auth_mode=auth_mode,
+            credential=self._credential_summary(),
+            endpoint=self._endpoint_summary(),
+            tool_count=tool_count,
+            user_message_chars=len(message),
+            system_prompt_chars=len(system_prompt or ""),
+        ))
+
+    def _backend_system_prompt_chars(self) -> int | None:
+        backend = self._backend
+        build_system_prompt = getattr(backend, "_build_system_prompt", None)
+        if not callable(build_system_prompt):
+            return None
+        try:
+            built_prompt = build_system_prompt(None)
+        except Exception:
+            return None
+        if isinstance(built_prompt, str):
+            return len(built_prompt)
+        return len(str(built_prompt))
+
+    def _project_behaviors_chars(self) -> int:
+        session = self._session
+        if session is None:
+            return 0
+        return len(session.load_behaviors())
+
+    def _known_history_chars(self) -> int | None:
+        history = getattr(self._backend, "conversation_history", None)
+        if not isinstance(history, list):
+            return None
+        return serialized_char_count(history)
+
+    def _context_window_tokens(self, model: str) -> int:
+        backend = self._backend
+        if backend is None:
+            return ChatBackend.DEFAULT_CONTEXT_WINDOW
+        return backend.context_window_for(model)
+
+    def _context_manifest_details(
+        self,
+        *,
+        model: str,
+        message: str,
+        turn_system_prompt: str | None,
+        transcript_context_chars: int,
+    ) -> list[str]:
+        context_window_tokens = self._context_window_tokens(model)
+        provider = getattr(self.llm_config, "provider", "unknown")
+        backend_name = type(self._backend).__name__ if self._backend is not None else ""
+        provider_managed_context = provider_manages_context(provider, backend_name)
+        segments: list[ContextSegment] = []
+
+        backend_system_chars = self._backend_system_prompt_chars()
+        if backend_system_chars is not None:
+            segments.append(ContextSegment(
+                name="Backend system prompt",
+                role="system",
+                chars=backend_system_chars,
+                source="backend static prompt",
+            ))
+
+        tool_schema_chars = (
+            serialized_char_count(self._tools)
+            if self._tools
+            else 0
+        )
+        if tool_schema_chars:
+            segments.append(ContextSegment(
+                name="Tool schemas",
+                role="tools",
+                chars=tool_schema_chars,
+                source="tools passed by Clarity",
+                position="provider_specific",
+            ))
+
+        behavior_chars = self._project_behaviors_chars()
+        if behavior_chars:
+            segments.append(ContextSegment(
+                name="Project instructions",
+                role="system",
+                chars=behavior_chars,
+                source="project AGENTS.md",
+            ))
+
+        if transcript_context_chars:
+            segments.append(ContextSegment(
+                name="Restored transcript",
+                role="system",
+                chars=transcript_context_chars,
+                source="prior transcript",
+            ))
+
+        turn_system_chars = len(turn_system_prompt or "")
+        if turn_system_chars:
+            segments.append(ContextSegment(
+                name="Turn/process instructions",
+                role="system",
+                chars=turn_system_chars,
+                source="current process or call",
+            ))
+
+        history_chars = self._known_history_chars()
+        if history_chars is None or provider_managed_context:
+            segments.append(ContextSegment(
+                name="Provider-managed history",
+                role="messages",
+                chars=None,
+                source="provider runtime",
+                position="provider_managed",
+            ))
+        else:
+            segments.append(ContextSegment(
+                name="Prior chat messages",
+                role="messages",
+                chars=history_chars,
+                source="backend conversation history",
+            ))
+
+        segments.append(ContextSegment(
+            name="Current user message",
+            role="user",
+            chars=len(message),
+            source="current turn",
+        ))
+
+        return format_context_manifest(ContextManifest(
+            context_window_tokens=context_window_tokens,
+            provider_managed_context=provider_managed_context,
+            segments=segments,
+        ))
+
     def _on_text_delta(self, text: str) -> None:
         """Synchronous callback for streaming text chunks from the executor thread."""
         if self._loop is None or self._cancelled:
             return
+        if not self._stream_started:
+            self._stream_started = True
+            self._log_generation(
+                format_stream_started(
+                    getattr(self.llm_config, "provider", "unknown"),
+                    self.active_model,
+                )
+            )
+        self._stream_chunk_count += 1
+        self._stream_char_count += len(text)
         self._loop.call_soon_threadsafe(
             self._event_queue.put_nowait,
             {"type": "text_delta", "content": text},
@@ -389,6 +592,11 @@ class WebSessionAdapter:
         """Synchronous callback for token usage events from the executor thread."""
         if self._loop is None:
             return
+        self._log_generation(
+            "llm.usage "
+            f"input_tokens={usage.input_tokens} "
+            f"output_tokens={usage.output_tokens}"
+        )
         self._loop.call_soon_threadsafe(
             self._event_queue.put_nowait,
             {
@@ -497,10 +705,16 @@ class WebSessionAdapter:
         assert self._session is not None
         self._cancelled = False
         self._partial_text.clear()
+        self._stream_started = False
+        self._stream_chunk_count = 0
+        self._stream_char_count = 0
 
+        turn_system_prompt = system_prompt
+        transcript_context_chars = 0
         # On the first call, inject transcript context if we have it.
         if self._transcript_context is not None:
             ctx = self._transcript_context
+            transcript_context_chars = len(ctx)
             self._transcript_context = None  # consume — only inject once
             # Signal the UI so the user sees why startup takes longer.
             await self._event_queue.put({
@@ -515,13 +729,52 @@ class WebSessionAdapter:
 
         model = self._resolve_model(self.current_process)
         self._update_active_model(model, self.current_process)
+        self._log_generation(
+            self._generation_start_detail(
+                model=model,
+                message=message,
+                system_prompt=system_prompt,
+            )
+        )
+        for detail in self._context_manifest_details(
+            model=model,
+            message=message,
+            turn_system_prompt=turn_system_prompt,
+            transcript_context_chars=transcript_context_chars,
+        ):
+            self._log_generation(detail)
 
         func = partial(
             self._session.chat, message, system_prompt, model=model,
             tools=self._tools, tool_handler=self._tool_handler,
         )
-        response = await self._loop.run_in_executor(  # type: ignore[union-attr]
-            self._executor, func,
+        started_at = perf_counter()
+        try:
+            response = await self._loop.run_in_executor(  # type: ignore[union-attr]
+                self._executor, func,
+            )
+        except Exception as exc:
+            duration_ms = int((perf_counter() - started_at) * 1000)
+            self._log_generation(
+                format_response_failed(
+                    provider=getattr(self.llm_config, "provider", "unknown"),
+                    model=self.active_model,
+                    duration_ms=duration_ms,
+                    error_type=type(exc).__name__,
+                )
+            )
+            raise
+
+        duration_ms = int((perf_counter() - started_at) * 1000)
+        self._log_generation(
+            format_response_complete(
+                provider=getattr(self.llm_config, "provider", "unknown"),
+                model=self.active_model,
+                duration_ms=duration_ms,
+                response_chars=len(response),
+                stream_chunks=self._stream_chunk_count,
+                stream_chars=self._stream_char_count,
+            )
         )
 
         # Persist the session ID so the next app launch can resume.

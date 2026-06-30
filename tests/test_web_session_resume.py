@@ -28,10 +28,11 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from clarity_agent.llm import LLMConfig
 from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.transcript import (
     AssistantText,
@@ -48,10 +49,12 @@ class _StubBackend(ChatBackend):
 
     supports_tools = True
     TIER_DEFAULTS = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
+    MODEL_CONTEXT_WINDOWS = {"stub-model": 1_000}
 
     def __init__(self) -> None:
         # ``_session_id`` mirrors the real backends' settable id.
         self._session_id: str | None = None
+        self.conversation_history: list[dict[str, Any]] = []
 
     @property
     def llm_session_id(self) -> str | None:
@@ -72,14 +75,22 @@ class _StubBackend(ChatBackend):
     ) -> str:
         return "ok"
 
+    def _build_system_prompt(self, system_prompt: str | None = None) -> str:
+        base = "base system prompt"
+        return f"{base}\n\n{system_prompt}" if system_prompt else base
 
-class _StubLLMConfig:
+
+class _StubLLMConfig(LLMConfig):
     """Minimal :class:`LLMConfig`-shaped object the adapter needs."""
 
-    provider = "stub"
-    tiers = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
-
     def __init__(self) -> None:
+        super().__init__(
+            provider="stub",
+            api_key=None,
+            endpoint=None,
+            auth_mode="default",
+            tiers={"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"},
+        )
         self.last_backend: _StubBackend | None = None
 
     def create_chat_backend(
@@ -87,7 +98,7 @@ class _StubLLMConfig:
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
-        transcript: object = None,
+        transcript: Transcript | None = None,
     ) -> _StubBackend:
         # Stash the backend so tests can interrogate it post-start.
         self.last_backend = _StubBackend()
@@ -250,6 +261,7 @@ class TestEnsureAgentsMdHook:
         # Sanity: the adapter started cleanly.
         assert adapter._backend is not None
 
+
     def test_skips_when_layout_undetectable(self, tmp_path):
         # Bare project with no Clarity markers at all.  detect_layout
         # returns None; the hook no-ops; start() succeeds; no file
@@ -267,6 +279,130 @@ class TestEnsureAgentsMdHook:
 
         assert not (project / "AGENTS.md").exists()
         assert adapter._backend is not None  # start still succeeded
+
+
+class TestGenerationLogDetails:
+    def test_redacts_api_key_while_identifying_credential_source(self, tmp_path):
+        cfg = LLMConfig(
+            provider="azure",
+            api_key="secret-api-key",
+            endpoint="https://example.openai.azure.com/openai?api-key=secret",
+            auth_mode="api_key",
+            tiers={"default": "deployment-a"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+
+        detail = adapter._generation_start_detail(
+            model="deployment-a",
+            message="hello",
+            system_prompt="system",
+        )
+
+        assert "secret-api-key" not in detail
+        assert "api-key=secret" not in detail
+        assert "credential AZURE_AI_API_KEY=configured(redacted)" in detail
+        assert "endpoint https://example.openai.azure.com/openai" in detail
+        assert "provider azure" in detail
+        assert "model deployment-a" in detail
+
+    def test_default_auth_logs_no_api_key_mode(self, tmp_path):
+        cfg = LLMConfig(
+            provider="azure",
+            api_key=None,
+            endpoint="https://example.openai.azure.com",
+            auth_mode="default",
+            tiers={"default": "deployment-a"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+
+        detail = adapter._generation_start_detail(
+            model="deployment-a",
+            message="hello",
+            system_prompt=None,
+        )
+
+        assert "Auth mode: default" in detail
+        assert "credential default=configured(no-api-key)" in detail
+        assert "Added system instructions: 0 chars." in detail
+
+    def test_context_manifest_logs_redacted_segments_in_order(self, tmp_path):
+        cfg = LLMConfig(
+            provider="azure",
+            api_key="secret-api-key",
+            endpoint="https://example.openai.azure.com",
+            auth_mode="api_key",
+            tiers={"default": "stub-model"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+        backend = _StubBackend()
+        backend.conversation_history.append({
+            "role": "assistant",
+            "content": "prior private answer",
+        })
+        adapter._backend = backend
+        adapter._tools = [{"name": "feedback", "description": "private tool schema"}]
+
+        class _SessionWithBehaviors:
+            def load_behaviors(self) -> str:
+                return "private managed behavior"
+
+        adapter._session = cast(Any, _SessionWithBehaviors())
+
+        details = adapter._context_manifest_details(
+            model="stub-model",
+            message="current private question",
+            turn_system_prompt="private process prompt",
+            transcript_context_chars=32,
+        )
+
+        joined = "\n".join(details)
+        assert details[0].startswith("llm.context_manifest Prompt map: ")
+        assert "known context is about" in details[0]
+        assert "1,000-token model window" in details[0]
+        assert "visible to Clarity in local backend history" in details[0]
+        assert "Raw prompt text is omitted" in details[0]
+        assert "private" not in joined
+        expected_segments = [
+            "Backend system prompt",
+            "Tool schemas",
+            "Project instructions",
+            "Restored transcript",
+            "Turn/process instructions",
+            "Prior chat messages",
+            "Current user message",
+        ]
+        assert [
+            line.split(": ", 1)[1].split(".", 1)[0]
+            for line in details[1:]
+        ] == expected_segments
+        assert all("Position:" in line for line in details[1:])
+
+    def test_context_manifest_marks_provider_managed_history(self, tmp_path):
+        cfg = LLMConfig(
+            provider="github",
+            api_key=None,
+            endpoint=None,
+            auth_mode="sdk_native",
+            tiers={"default": "stub-model"},
+        )
+        adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
+        adapter._backend = _StubBackend()
+
+        details = adapter._context_manifest_details(
+            model="stub-model",
+            message="hello",
+            turn_system_prompt=None,
+            transcript_context_chars=0,
+        )
+
+        joined = "\n".join(details)
+        assert (
+            "Provider-managed context is not visible to Clarity after handoff"
+            in details[0]
+        )
+        assert "Provider-managed history" in joined
+        assert "Size: unknown" in joined
+        assert "provider-managed, exact position not visible to Clarity" in joined
 
 
 class TestStartNewChapter:
@@ -553,7 +689,7 @@ class TestCompactionBridge:
         # compaction can record into it without racing the first
         # turn's events.
         adapter = _start_adapter(project)
-        cfg = adapter.llm_config
+        cfg = cast(_StubLLMConfig, adapter.llm_config)
         assert cfg.last_backend is not None
         # Stub records the transcript kwarg on a dedicated attr.
         assert cfg.last_backend._transcript is adapter._project_transcript

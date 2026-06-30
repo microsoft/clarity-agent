@@ -49,7 +49,7 @@ describe("chatReducer", () => {
   });
 
   describe("tool_event", () => {
-    it("commits each tool event as its own message in time order", () => {
+    it("accumulates consecutive tool events in one terminal message", () => {
       let state = chatReducer(initialState, {
         type: "send_message",
         content: "Do something",
@@ -64,21 +64,20 @@ describe("chatReducer", () => {
         tool: "write_file",
         detail: "b.txt",
       });
-      // Tool events become standalone tool-role messages in the
-      // history (preserves chronological order with interleaved text).
       const toolMsgs = state.messages.filter((m) => m.role === "tool");
-      expect(toolMsgs).toHaveLength(2);
+      expect(toolMsgs).toHaveLength(1);
       expect(toolMsgs[0].toolEvents?.[0]).toEqual({
         tool: "read_file",
         detail: "a.txt",
       });
-      expect(toolMsgs[1].toolEvents?.[0]).toEqual({
+      expect(toolMsgs[0].toolEvents?.[1]).toEqual({
         tool: "write_file",
         detail: "b.txt",
       });
+      expect(toolMsgs[0].content).toBe("read_file: a.txt\nwrite_file: b.txt");
     });
 
-    it("commits streaming text before a tool event", () => {
+    it("keeps streaming text live while appending the terminal log", () => {
       let state = chatReducer(initialState, {
         type: "send_message",
         content: "Help me",
@@ -90,14 +89,140 @@ describe("chatReducer", () => {
         tool: "read_file",
         detail: "a.txt",
       });
-      // Streaming text should be flushed as a message before the tool.
-      expect(state.streamingText).toBe("");
-      // After the user message, there should be: assistant text, tool.
+      expect(state.streamingText).toBe("Let me check.");
       const afterUser = state.messages.slice(1);
-      expect(afterUser).toHaveLength(2);
-      expect(afterUser[0].role).toBe("assistant");
-      expect(afterUser[0].content).toBe("Let me check.");
-      expect(afterUser[1].role).toBe("tool");
+      expect(afterUser).toHaveLength(1);
+      expect(afterUser[0].role).toBe("tool");
+    });
+  });
+
+  describe("log_event", () => {
+    it("initializes a terminal log even when no answer is streaming", () => {
+      const state = chatReducer(initialState, {
+        type: "log_event",
+        source: "launcher",
+        level: "info",
+        message: "spawned project server pid=123 port=456",
+      });
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].role).toBe("tool");
+      expect(state.messages[0].toolEvents).toEqual([
+        {
+          tool: "launcher",
+          detail: "spawned project server pid=123 port=456",
+        },
+      ]);
+    });
+
+    it("appends idle backend logs after conversation history", () => {
+      const historyState = chatReducer(initialState, {
+        type: "load_history",
+        messages: [
+          { id: "u1", role: "user", content: "Question", timestamp: 1 },
+          { id: "a1", role: "assistant", content: "Answer", timestamp: 2 },
+        ],
+      });
+
+      const next = chatReducer(historyState, {
+        type: "log_event",
+        source: "food-match-clarity",
+        level: "info",
+        message: 'INFO: 127.0.0.1:61245 - "GET /api/session HTTP/1.1" 200 OK',
+      });
+
+      expect(next.messages.map((m) => m.role)).toEqual([
+        "user",
+        "assistant",
+        "tool",
+      ]);
+      expect(next.messages[2].toolEvents).toEqual([
+        {
+          tool: "food-match-clarity",
+          detail: 'INFO: 127.0.0.1:61245 - "GET /api/session HTTP/1.1" 200 OK',
+        },
+      ]);
+    });
+
+    it("still appends idle backend errors after conversation history", () => {
+      const historyState = chatReducer(initialState, {
+        type: "load_history",
+        messages: [
+          { id: "u1", role: "user", content: "Question", timestamp: 1 },
+          { id: "a1", role: "assistant", content: "Answer", timestamp: 2 },
+        ],
+      });
+
+      const next = chatReducer(historyState, {
+        type: "log_event",
+        source: "backend",
+        level: "error",
+        message: "connection failed",
+      });
+
+      expect(next.messages.map((m) => m.role)).toEqual([
+        "user",
+        "assistant",
+        "tool",
+      ]);
+      expect(next.messages[2].toolEvents).toEqual([
+        { tool: "backend", detail: "error: connection failed" },
+      ]);
+    });
+
+    it("accumulates backend logs after a user message in the active terminal", () => {
+      let state = chatReducer(initialState, {
+        type: "send_message",
+        content: "Question",
+      });
+      state = chatReducer(state, {
+        type: "log_event",
+        source: "food-match-clarity:err",
+        level: "error",
+        message: "INFO: connection open",
+      });
+      state = chatReducer(state, {
+        type: "tool_event",
+        tool: "view",
+        detail: "README.md",
+      });
+
+      expect(state.messages.map((m) => m.role)).toEqual(["user", "tool"]);
+      expect(state.messages[1].toolEvents).toEqual([
+        {
+          tool: "food-match-clarity:err",
+          detail: "error: INFO: connection open",
+        },
+        { tool: "view", detail: "README.md" },
+      ]);
+    });
+
+    it("merges runtime logs into a terminal-only assistant message", () => {
+      const state = chatReducer(
+        {
+          ...initialState,
+          messages: [
+            {
+              id: "terminal-assistant",
+              role: "assistant",
+              content: "",
+              toolEvents: [{ tool: "bash", detail: "npm run build" }],
+              timestamp: 1,
+            },
+          ],
+        },
+        {
+          type: "log_event",
+          source: "backend",
+          level: "info",
+          message: "chat backend ready",
+        },
+      );
+
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].toolEvents).toEqual([
+        { tool: "bash", detail: "npm run build" },
+        { tool: "backend", detail: "chat backend ready" },
+      ]);
     });
   });
 
@@ -118,6 +243,18 @@ describe("chatReducer", () => {
       state = chatReducer(state, { type: "cost_event", cost_usd: 0.03 });
       expect(state.turnCost).toBe(0.03);
     });
+
+    it("adds cost to the active terminal log while streaming", () => {
+      let state = chatReducer(initialState, {
+        type: "send_message",
+        content: "Q",
+      });
+      state = chatReducer(state, { type: "cost_event", cost_usd: 0.03 });
+      expect(state.messages[1].role).toBe("tool");
+      expect(state.messages[1].toolEvents).toEqual([
+        { tool: "cost", detail: "$0.0300" },
+      ]);
+    });
   });
 
   describe("receive_response", () => {
@@ -136,7 +273,7 @@ describe("chatReducer", () => {
       expect(state.streaming).toBe(false);
     });
 
-    it("keeps tool events as their own messages in time order", () => {
+    it("keeps the terminal log between user and assistant messages", () => {
       let state = chatReducer(initialState, {
         type: "send_message",
         content: "Q",
@@ -150,8 +287,12 @@ describe("chatReducer", () => {
         type: "receive_response",
         content: "Found it",
       });
-      // user + tool + assistant = 3 messages.
       expect(state.messages).toHaveLength(3);
+      expect(state.messages.map((m) => m.role)).toEqual([
+        "user",
+        "tool",
+        "assistant",
+      ]);
       expect(state.messages[1].role).toBe("tool");
       expect(state.messages[1].toolEvents).toEqual([
         { tool: "search", detail: "query" },
@@ -173,7 +314,12 @@ describe("chatReducer", () => {
         type: "receive_response",
         content: "A",
       });
-      expect(state.messages[1].costUsd).toBe(0.042);
+      expect(state.messages.map((m) => m.role)).toEqual([
+        "user",
+        "tool",
+        "assistant",
+      ]);
+      expect(state.messages[2].costUsd).toBe(0.042);
     });
 
     it("omits toolEvents and costUsd when there are none", () => {
@@ -200,6 +346,11 @@ describe("chatReducer", () => {
       expect(next.streaming).toBe(true);
       expect(next.pendingTools).toEqual([]);
       expect(next.turnCost).toBe(0);
+      expect(next.messages).toHaveLength(1);
+      expect(next.messages[0].role).toBe("tool");
+      expect(next.messages[0].toolEvents).toEqual([
+        { tool: "process", detail: "starting problem-clarification" },
+      ]);
     });
   });
 
@@ -224,6 +375,7 @@ describe("chatReducer", () => {
           { id: "1", role: "user", content: "Hi", timestamp: 1 },
           { id: "2", role: "assistant", content: "Hello", timestamp: 2 },
         ],
+        logLines: [{ tool: "backend", detail: "ready" }],
         pendingTools: [{ tool: "t", detail: "d" }],
         turnCost: 0.05,
         turnTokens: 500,
@@ -242,6 +394,7 @@ describe("chatReducer", () => {
       };
       const next = chatReducer(populated, { type: "clear" });
       expect(next.messages).toEqual([]);
+      expect(next.logLines).toEqual([]);
       expect(next.pendingTools).toEqual([]);
       expect(next.outgoingQueue).toEqual([]);
       expect(next.turnCost).toBe(0);
@@ -254,6 +407,70 @@ describe("chatReducer", () => {
     });
   });
 
+  describe("logLines", () => {
+    it("accumulates tool_events in logLines", () => {
+      let state = chatReducer(initialState, {
+        type: "tool_event",
+        tool: "read_file",
+        detail: "a.txt",
+      });
+      state = chatReducer(state, {
+        type: "tool_event",
+        tool: "write_file",
+        detail: "b.txt",
+      });
+      expect(state.logLines).toEqual([
+        { tool: "read_file", detail: "a.txt" },
+        { tool: "write_file", detail: "b.txt" },
+      ]);
+    });
+
+    it("accumulates log_events in logLines", () => {
+      const state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "chat backend ready",
+      });
+      expect(state.logLines).toEqual([
+        { tool: "backend", detail: "chat backend ready" },
+      ]);
+    });
+
+    it("logLines is NOT reset by load_history", () => {
+      let state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "server started",
+      });
+      state = chatReducer(state, {
+        type: "load_history",
+        messages: [
+          { id: "u1", role: "user", content: "Hello", timestamp: 1 },
+          { id: "a1", role: "assistant", content: "Hi", timestamp: 2 },
+        ],
+      });
+      expect(state.logLines).toEqual([
+        { tool: "backend", detail: "server started" },
+      ]);
+      // messages were replaced
+      expect(state.messages).toHaveLength(2);
+      expect(state.messages[0].role).toBe("user");
+    });
+
+    it("logLines IS reset by clear", () => {
+      let state = chatReducer(initialState, {
+        type: "log_event",
+        source: "backend",
+        level: "info",
+        message: "server started",
+      });
+      state = chatReducer(state, { type: "clear" });
+      expect(state.logLines).toEqual([]);
+    });
+  });
+
   describe("status_event", () => {
     it("stores the phase from a status event", () => {
       const next = chatReducer(initialState, {
@@ -261,6 +478,7 @@ describe("chatReducer", () => {
         phase: "reasoning",
       });
       expect(next.statusPhase).toBe("reasoning");
+      expect(next.messages).toHaveLength(0);
     });
 
     it("overwrites previous phase on transition", () => {
@@ -273,6 +491,26 @@ describe("chatReducer", () => {
         phase: "tool:read_file",
       });
       expect(state.statusPhase).toBe("tool:read_file");
+    });
+
+    it("adds status transitions to the active terminal log while streaming", () => {
+      let state = chatReducer(initialState, {
+        type: "send_message",
+        content: "Q",
+      });
+      state = chatReducer(state, {
+        type: "status_event",
+        phase: "thinking",
+      });
+      state = chatReducer(state, {
+        type: "status_event",
+        phase: "tool:view (README.md)",
+      });
+      expect(state.messages.map((m) => m.role)).toEqual(["user", "tool"]);
+      expect(state.messages[1].toolEvents).toEqual([
+        { tool: "status", detail: "thinking" },
+        { tool: "status", detail: "tool:view (README.md)" },
+      ]);
     });
 
     it("is cleared by receive_response", () => {
@@ -352,7 +590,11 @@ describe("chatReducer", () => {
       expect(s.messages).toHaveLength(1);
       expect(s.streaming).toBe(true);
 
-      // Server streams tool events — each becomes a tool-role message.
+      // Server streams status and tool events into one terminal log.
+      s = chatReducer(s, {
+        type: "status_event",
+        phase: "thinking",
+      });
       s = chatReducer(s, {
         type: "tool_event",
         tool: "read_file",
@@ -363,27 +605,70 @@ describe("chatReducer", () => {
         tool: "read_file",
         detail: "tests.py",
       });
-      // After 2 tool events: user msg + 2 tool msgs = 3.
-      expect(s.messages).toHaveLength(3);
+      expect(s.messages).toHaveLength(2);
       expect(s.messages[1].role).toBe("tool");
-      expect(s.messages[2].role).toBe("tool");
+      expect(s.messages[1].toolEvents).toHaveLength(3);
 
       // Server sends cost
       s = chatReducer(s, { type: "cost_event", cost_usd: 0.015 });
+      expect(s.messages[1].toolEvents).toHaveLength(4);
 
-      // Server sends response — appends the assistant message with text + cost.
+      // Server sends response, then appends the assistant message with text and cost.
       s = chatReducer(s, {
         type: "receive_response",
         content: "Here's my analysis",
       });
-      // Now: user + 2 tool + assistant = 4.
-      expect(s.messages).toHaveLength(4);
+      expect(s.messages).toHaveLength(3);
       expect(s.streaming).toBe(false);
-      const finalMsg = s.messages[3];
+      expect(s.messages.map((m) => m.role)).toEqual([
+        "user",
+        "tool",
+        "assistant",
+      ]);
+      const finalMsg = s.messages[2];
       expect(finalMsg.role).toBe("assistant");
       expect(finalMsg.content).toBe("Here's my analysis");
       expect(finalMsg.costUsd).toBe(0.015);
       expect(s.pendingTools).toEqual([]);
+    });
+
+    it("starts a fresh terminal log for each user turn", () => {
+      let s = initialState;
+
+      s = chatReducer(s, { type: "send_message", content: "First" });
+      s = chatReducer(s, { type: "status_event", phase: "thinking" });
+      s = chatReducer(s, {
+        type: "tool_event",
+        tool: "view",
+        detail: "a.md",
+      });
+      s = chatReducer(s, { type: "receive_response", content: "First answer" });
+
+      s = chatReducer(s, { type: "send_message", content: "Second" });
+      s = chatReducer(s, { type: "status_event", phase: "thinking" });
+      s = chatReducer(s, {
+        type: "tool_event",
+        tool: "view",
+        detail: "b.md",
+      });
+      s = chatReducer(s, { type: "receive_response", content: "Second answer" });
+
+      expect(s.messages.map((m) => m.role)).toEqual([
+        "user",
+        "tool",
+        "assistant",
+        "user",
+        "tool",
+        "assistant",
+      ]);
+      expect(s.messages[1].toolEvents).toEqual([
+        { tool: "status", detail: "thinking" },
+        { tool: "view", detail: "a.md" },
+      ]);
+      expect(s.messages[4].toolEvents).toEqual([
+        { tool: "status", detail: "thinking" },
+        { tool: "view", detail: "b.md" },
+      ]);
     });
   });
 
@@ -405,7 +690,7 @@ describe("chatReducer", () => {
     });
 
     it("flips historyLoaded even when payload is empty", () => {
-      // Empty history is a meaningful "fresh project" signal — the
+      // Empty history is a meaningful "fresh project" signal. The
       // auto-start needs to fire in that case, which requires
       // historyLoaded=true.
       const next = chatReducer(initialState, {
@@ -416,8 +701,25 @@ describe("chatReducer", () => {
       expect(next.historyLoaded).toBe(true);
     });
 
+    it("keeps launch terminal logs when empty history resolves after them", () => {
+      const withLaunchLog = chatReducer(initialState, {
+        type: "log_event",
+        source: "launcher",
+        level: "info",
+        message: "spawned project server pid=123 port=456",
+      });
+
+      const next = chatReducer(withLaunchLog, {
+        type: "load_history",
+        messages: [],
+      });
+
+      expect(next.messages).toEqual(withLaunchLog.messages);
+      expect(next.historyLoaded).toBe(true);
+    });
+
     it("doesn't disturb non-message state fields", () => {
-      // The reducer should narrow its blast radius — model state,
+      // The reducer should narrow its blast radius. Model state,
       // session totals, errors etc. should pass through unchanged.
       const seeded = {
         ...initialState,
@@ -439,7 +741,7 @@ describe("chatReducer", () => {
     it("clear after history-load keeps historyLoaded=true", () => {
       // After "Start new chapter" we dispatch ``clear``.  The new
       // chapter is empty so re-fetching history would return an
-      // empty list anyway — but we shouldn't reset the flag,
+      // empty list anyway, but we shouldn't reset the flag,
       // otherwise the auto-start would race the second fetch.
       const populated = chatReducer(initialState, {
         type: "load_history",

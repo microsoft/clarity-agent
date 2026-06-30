@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from clarity_agent.app_paths import protocol_dir as _protocol_dir
 from clarity_agent.llm import LLMConfig
+from clarity_agent.web.log_broadcast import WebLogBroadcaster, install_stdio_broadcaster
 from clarity_agent.web.models import FeedbackRequest, ModelOverrideRequest, PacketRequest
 from clarity_agent.web.session_manager import WebSessionAdapter
 
@@ -29,6 +30,18 @@ from clarity_agent.web.session_manager import WebSessionAdapter
 _DIR_ORDER: list[str] = [
     ".", "goal", "solution", "failures", "decisions", "mailboxes", "archive",
 ]
+
+
+class _LockedWebSocketSender:
+    """Serialize writes to a WebSocket from multiple tasks."""
+
+    def __init__(self, ws: WebSocket, lock: asyncio.Lock) -> None:
+        self._ws = ws
+        self._lock = lock
+
+    async def send_json(self, data: Any) -> None:
+        async with self._lock:
+            await self._ws.send_json(data)
 
 
 def _dir_sort_key(rel_path: str) -> tuple[int, str]:
@@ -213,6 +226,9 @@ def create_app(
             await state["session"].stop()
 
     app = FastAPI(title="Clarity Agent", lifespan=lifespan)
+    log_broadcaster = WebLogBroadcaster(default_source="backend", max_lines=250)
+    if os.environ.get("CLARITY_LAUNCHER_CHILD") != "1":
+        install_stdio_broadcaster(log_broadcaster)
 
     # Setup wizard routes — pass state so configure can reload the LLM config
     from clarity_agent.app_paths import clarity_env_path
@@ -233,185 +249,209 @@ def create_app(
     @app.websocket("/ws/chat")
     async def websocket_chat(ws: WebSocket) -> None:
         await ws.accept()
+        send_lock = asyncio.Lock()
+        out_ws = _LockedWebSocketSender(ws, send_lock)
+        log_queue, unsubscribe_logs = log_broadcaster.subscribe()
+        log_broadcaster.publish(
+            f"chat websocket connected: {project_dir}",
+            source="backend",
+        )
+
+        async def _send_logs() -> None:
+            while True:
+                await out_ws.send_json(await log_queue.get())
+
+        log_task = asyncio.create_task(_send_logs())
 
         # Guard: if no LLM provider is configured, tell the frontend.
-        current_config: LLMConfig = state["llm_config"]
-        if current_config.provider == "none":
-            await ws.send_json({
-                "type": "error",
-                "message": "No LLM provider configured.",
-                "category": "setup_required",
-                "hint": "Complete the setup wizard to configure an LLM provider.",
-                "retryable": False,
-            })
-            # Reject everything until setup completes.  The frontend
-            # finishes setup with ``window.location.reload()``, which
-            # drops this socket; the next connection re-evaluates
-            # provider config from scratch.
-            try:
-                while True:
-                    await ws.receive_json()
-                    await ws.send_json({
-                        "type": "error",
-                        "message": "No LLM provider configured. Complete setup first.",
-                        "category": "setup_required",
-                        "retryable": False,
-                    })
-            except WebSocketDisconnect:
-                return
-
-        # Create session on first connection (or after config reload).
-        if state["session"] is None:
-            # Pick up the latest config in case activate_provider rebuilt it.
-            current_config = state["llm_config"]
-            session = WebSessionAdapter(
-                project_dir, clarity_agent_dir, current_config,
-                llm_session_id=llm_session_id,
-            )
-            try:
-                await session.start()
-            except (RuntimeError, OSError, ValueError) as e:
-                # Backend construction failed before we ever got to a
-                # chat turn — e.g. ``gh`` CLI missing on the github
-                # provider, claude CLI missing on the SDK auth path,
-                # malformed API key.  Without this branch the error
-                # propagates out of ``websocket_chat`` and uvicorn
-                # logs it to stderr while closing the socket with no
-                # message; the FE then reconnects, hits the same
-                # failure, and the user just sees "thinking" dots
-                # forever (issue #47).  Surface it as a classified
-                # error_event and keep the socket open the way the
-                # no-provider path does, so a banner has a chance to
-                # render.  The session ``state["session"]`` stays
-                # ``None`` — once the user resolves the underlying
-                # problem (e.g. installs gh) and reloads, the next
-                # connection retries ``session.start()`` from scratch.
-                error_event = _classify_ws_error(e, current_config.provider)
+        try:
+            current_config: LLMConfig = state["llm_config"]
+            if current_config.provider == "none":
+                await out_ws.send_json({
+                    "type": "error",
+                    "message": "No LLM provider configured.",
+                    "category": "setup_required",
+                    "hint": "Complete the setup wizard to configure an LLM provider.",
+                    "retryable": False,
+                })
+                # Reject everything until setup completes.  The frontend
+                # finishes setup with ``window.location.reload()``, which
+                # drops this socket; the next connection re-evaluates
+                # provider config from scratch.
                 try:
-                    await ws.send_json(error_event)
                     while True:
                         await ws.receive_json()
-                        await ws.send_json(error_event)
-                except (WebSocketDisconnect, RuntimeError):
+                        await out_ws.send_json({
+                            "type": "error",
+                            "message": "No LLM provider configured. Complete setup first.",
+                            "category": "setup_required",
+                            "retryable": False,
+                        })
+                except WebSocketDisconnect:
                     return
-            state["session"] = session
 
-        session: WebSessionAdapter = state["session"]
+            # Create session on first connection (or after config reload).
+            if state["session"] is None:
+                # Pick up the latest config in case activate_provider rebuilt it.
+                current_config = state["llm_config"]
+                session = WebSessionAdapter(
+                    project_dir, clarity_agent_dir, current_config,
+                    llm_session_id=llm_session_id,
+                )
+                try:
+                    log_broadcaster.publish("starting chat backend", source="backend")
+                    await session.start()
+                    log_broadcaster.publish("chat backend ready", source="backend")
+                except (RuntimeError, OSError, ValueError) as e:
+                    # Backend construction failed before we ever got to a
+                    # chat turn — e.g. ``gh`` CLI missing on the github
+                    # provider, claude CLI missing on the SDK auth path,
+                    # malformed API key.  Without this branch the error
+                    # propagates out of ``websocket_chat`` and uvicorn
+                    # logs it to stderr while closing the socket with no
+                    # message; the FE then reconnects, hits the same
+                    # failure, and the user just sees "thinking" dots
+                    # forever (issue #47).  Surface it as a classified
+                    # error_event and keep the socket open the way the
+                    # no-provider path does, so a banner has a chance to
+                    # render.  The session ``state["session"]`` stays
+                    # ``None`` — once the user resolves the underlying
+                    # problem (e.g. installs gh) and reloads, the next
+                    # connection retries ``session.start()`` from scratch.
+                    error_event = _classify_ws_error(e, current_config.provider)
+                    log_broadcaster.publish(
+                        f"backend start failed: {error_event['message']}",
+                        source="backend",
+                        level="error",
+                    )
+                    try:
+                        await out_ws.send_json(error_event)
+                        while True:
+                            await ws.receive_json()
+                            await out_ws.send_json(error_event)
+                    except (WebSocketDisconnect, RuntimeError):
+                        return
+                state["session"] = session
 
-        # Message queue: a single WS reader task puts messages here,
-        # and the main loop consumes them. This avoids concurrent
-        # ws.receive_json() calls which Starlette doesn't support.
-        msg_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        stop_event = asyncio.Event()
+            session: WebSessionAdapter = state["session"]
 
-        async def _ws_reader() -> None:
-            """Read WS messages in a loop, dispatch to queue or stop event."""
+            # Message queue: a single WS reader task puts messages here,
+            # and the main loop consumes them. This avoids concurrent
+            # ws.receive_json() calls which Starlette doesn't support.
+            msg_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+            stop_event = asyncio.Event()
+
+            async def _ws_reader() -> None:
+                """Read WS messages in a loop, dispatch to queue or stop event."""
+                try:
+                    while True:
+                        data = await ws.receive_json()
+                        if data.get("type") == "stop":
+                            stop_event.set()
+                        else:
+                            await msg_queue.put(data)
+                except (WebSocketDisconnect, RuntimeError):
+                    # Connection closed — put a sentinel to unblock the main loop.
+                    await msg_queue.put({"type": "_disconnect"})
+
+            reader_task = asyncio.create_task(_ws_reader())
+
             try:
                 while True:
-                    data = await ws.receive_json()
-                    if data.get("type") == "stop":
-                        stop_event.set()
-                    else:
-                        await msg_queue.put(data)
-            except (WebSocketDisconnect, RuntimeError):
-                # Connection closed — put a sentinel to unblock the main loop.
-                await msg_queue.put({"type": "_disconnect"})
+                    data: dict[str, Any] = await msg_queue.get()
+                    msg_type: str = data.get("type", "")
 
-        reader_task = asyncio.create_task(_ws_reader())
-
-        try:
-            while True:
-                data: dict[str, Any] = await msg_queue.get()
-                msg_type: str = data.get("type", "")
-
-                if msg_type == "_disconnect":
-                    return
-
-                if msg_type == "chat":
-                    message: str = data.get("message", "")
-                    if not message:
-                        await ws.send_json({"type": "error", "message": "Empty message"})
-                        continue
-
-                    stop_event.clear()
-                    try:
-                        chat_task = asyncio.create_task(
-                            session.chat(message, data.get("system_prompt")),
-                        )
-                        await _drain_events(session, chat_task, ws, stop_event)
-                    except WebSocketDisconnect:
+                    if msg_type == "_disconnect":
                         return
-                    except Exception as e:
-                        # Backend errors (RuntimeError from a CLI
-                        # crash, auth failures, network blips) all
-                        # land here: surface as a classified
-                        # error_event so the user sees what went
-                        # wrong, then ``continue`` the outer loop so
-                        # they can retry without reconnecting.
-                        # ``ws.send_json`` itself can raise
-                        # ``RuntimeError`` / ``WebSocketDisconnect``
-                        # if the socket died between turns — in that
-                        # case there's nothing left to surface to,
-                        # exit cleanly.
-                        import traceback
-                        tb = traceback.format_exc()
-                        print(f"  [Chat error] {e}\n{tb}", flush=True)
+
+                    if msg_type == "chat":
+                        message: str = data.get("message", "")
+                        if not message:
+                            await out_ws.send_json({"type": "error", "message": "Empty message"})
+                            continue
+
+                        stop_event.clear()
                         try:
-                            await ws.send_json(_classify_ws_error(e, current_config.provider))
-                        except (WebSocketDisconnect, RuntimeError):
+                            chat_task = asyncio.create_task(
+                                session.chat(message, data.get("system_prompt")),
+                            )
+                            await _drain_events(session, chat_task, out_ws, stop_event)
+                        except WebSocketDisconnect:
                             return
+                        except Exception as e:
+                            # Backend errors (RuntimeError from a CLI
+                            # crash, auth failures, network blips) all
+                            # land here: surface as a classified
+                            # error_event so the user sees what went
+                            # wrong, then ``continue`` the outer loop so
+                            # they can retry without reconnecting.
+                            # ``ws.send_json`` itself can raise
+                            # ``RuntimeError`` / ``WebSocketDisconnect``
+                            # if the socket died between turns — in that
+                            # case there's nothing left to surface to,
+                            # exit cleanly.
+                            import traceback
+                            tb = traceback.format_exc()
+                            print(f"  [Chat error] {e}\n{tb}", flush=True)
+                            try:
+                                await out_ws.send_json(_classify_ws_error(e, current_config.provider))
+                            except (WebSocketDisconnect, RuntimeError):
+                                return
 
-                elif msg_type == "start_process":
-                    process_name: str = data.get("process", "")
-                    if not process_name:
-                        await ws.send_json({"type": "error", "message": "No process name"})
-                        continue
+                    elif msg_type == "start_process":
+                        process_name: str = data.get("process", "")
+                        if not process_name:
+                            await out_ws.send_json({"type": "error", "message": "No process name"})
+                            continue
 
-                    stop_event.clear()
-                    try:
-                        chat_task = asyncio.create_task(
-                            session.start_process(process_name),
-                        )
-                        await _drain_events(session, chat_task, ws, stop_event)
-                    except WebSocketDisconnect:
-                        return
-                    except Exception as e:
-                        # Same handling as the ``chat`` branch above —
-                        # see the comment there for the rationale.
-                        import traceback
-                        tb = traceback.format_exc()
-                        print(f"  [Process error] {e}\n{tb}", flush=True)
+                        stop_event.clear()
                         try:
-                            await ws.send_json(_classify_ws_error(e, current_config.provider))
-                        except (WebSocketDisconnect, RuntimeError):
+                            chat_task = asyncio.create_task(
+                                session.start_process(process_name),
+                            )
+                            await _drain_events(session, chat_task, out_ws, stop_event)
+                        except WebSocketDisconnect:
                             return
+                        except Exception as e:
+                            # Same handling as the ``chat`` branch above —
+                            # see the comment there for the rationale.
+                            import traceback
+                            tb = traceback.format_exc()
+                            print(f"  [Process error] {e}\n{tb}", flush=True)
+                            try:
+                                await out_ws.send_json(_classify_ws_error(e, current_config.provider))
+                            except (WebSocketDisconnect, RuntimeError):
+                                return
 
-                elif msg_type == "set_model_override":
-                    tier: str = data.get("tier", "auto")
-                    if tier == "auto" or tier == "default":
-                        session.model_override = None
+                    elif msg_type == "set_model_override":
+                        tier: str = data.get("tier", "auto")
+                        if tier == "auto" or tier == "default":
+                            session.model_override = None
+                        else:
+                            session.model_override = tier
+                        # Re-resolve active model from current state.
+                        resolved = session._resolve_model(session.current_process)
+                        session._update_active_model(resolved, session.current_process)
+                        await out_ws.send_json({
+                            "type": "model_changed",
+                            "tier": session.active_tier,
+                            "model": session.active_model,
+                            "auto": session.model_override is None,
+                        })
+
                     else:
-                        session.model_override = tier
-                    # Re-resolve active model from current state.
-                    resolved = session._resolve_model(session.current_process)
-                    session._update_active_model(resolved, session.current_process)
-                    await ws.send_json({
-                        "type": "model_changed",
-                        "tier": session.active_tier,
-                        "model": session.active_model,
-                        "auto": session.model_override is None,
-                    })
+                        await out_ws.send_json({
+                            "type": "error",
+                            "message": f"Unknown message type: {msg_type}",
+                        })
 
-                else:
-                    await ws.send_json({
-                        "type": "error",
-                        "message": f"Unknown message type: {msg_type}",
-                    })
-
-        except WebSocketDisconnect:
-            pass
+            except WebSocketDisconnect:
+                pass
+            finally:
+                reader_task.cancel()
         finally:
-            reader_task.cancel()
+            unsubscribe_logs()
+            log_task.cancel()
 
     # ------------------------------------------------------------------
     # REST: Version + update status
