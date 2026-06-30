@@ -28,12 +28,18 @@ from __future__ import annotations
 
 import json
 import os
+from base64 import b64encode
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
+from mcp import types
 from mcp.server.fastmcp import FastMCP
+from pydantic import AnyUrl
 
 DEFAULT_SSE_PORT = 8421
+MCP_PACKET_FORMATS = frozenset({"markdown", "docx"})
+PACKET_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 mcp = FastMCP(
     "clarity-agent",
@@ -419,16 +425,22 @@ def record_failure(
 @mcp.tool()
 def generate_packet(
     view: str = "complete",
+    output_format: str = "markdown",
     project_dir: str | None = None,
-) -> str:
+) -> str | types.EmbeddedResource:
     """Generate a review packet document from protocol content.
 
     Use this when the user wants a shareable packet from the current
-    protocol. Markdown output is returned directly.
+    protocol. Markdown output is returned directly. DOCX output is returned
+    as an MCP embedded resource with a base64-encoded blob.
 
     Args:
         view: Packet view ID, such as "complete", "short", or "engineer".
+        output_format: Output format to return, either "markdown" or "docx".
         project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
+
+    Returns:
+        Markdown text, or an embedded DOCX resource.
     """
     from clarity_agent.packet import PacketError
     from clarity_agent.packet import generate_packet as _generate
@@ -438,16 +450,35 @@ def generate_packet(
         return "No protocol directory found."
 
     selected_view = view.strip() or "complete"
+    selected_format = output_format.strip().lower() or "markdown"
+    if selected_format not in MCP_PACKET_FORMATS:
+        available = ", ".join(sorted(MCP_PACKET_FORMATS))
+        return (
+            f"Error generating packet: Unsupported MCP packet output format "
+            f"'{output_format}'. Available: {available}"
+        )
+
     try:
         content: bytes = _generate(
             proto_dir,
-            format="markdown",
+            format=selected_format,
             view=selected_view,
         )
     except PacketError as exc:
         return f"Error generating packet: {exc}"
 
-    return content.decode("utf-8")
+    if selected_format == "markdown":
+        return content.decode("utf-8")
+
+    filename = f"packet-{selected_view}.docx"
+    return types.EmbeddedResource(
+        type="resource",
+        resource=types.BlobResourceContents(
+            uri=AnyUrl(f"clarity-packet://generated/{quote(filename)}"),
+            mimeType=PACKET_DOCX_MIME_TYPE,
+            blob=b64encode(content).decode("ascii"),
+        ),
+    )
 
 
 @mcp.tool()

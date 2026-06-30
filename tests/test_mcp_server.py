@@ -6,10 +6,12 @@ core tools produce sensible output when pointed at test fixtures.
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
 import pytest
+from mcp import types
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -387,6 +389,27 @@ class TestGeneratePacket:
         assert isinstance(result, str)
         assert "Test Problem" in result
 
+    def test_generates_docx_embedded_resource(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import (
+            PACKET_DOCX_MIME_TYPE,
+            generate_packet,
+            write_protocol_document,
+        )
+
+        write_protocol_document("goal/problem.md", "# Test Problem\n\nA real problem.")
+
+        result = generate_packet(output_format="docx")
+
+        assert isinstance(result, types.EmbeddedResource)
+        resource = result.resource
+        assert isinstance(resource, types.BlobResourceContents)
+        assert str(resource.uri) == "clarity-packet://generated/packet-complete.docx"
+        assert resource.mimeType == PACKET_DOCX_MIME_TYPE
+        assert base64.b64decode(resource.blob)[:2] == b"PK"
+
     def test_accepts_packet_view(
         self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -409,6 +432,18 @@ class TestGeneratePacket:
         result = generate_packet(view="unknown")
         assert result.startswith("Error generating packet:")
         assert "Unknown view" in result
+
+    def test_rejects_unsupported_output_format(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import generate_packet
+
+        result = generate_packet(output_format="html")
+
+        assert isinstance(result, str)
+        assert result.startswith("Error generating packet:")
+        assert "Unsupported MCP packet output format" in result
 
 
 class TestCheckFailureState:

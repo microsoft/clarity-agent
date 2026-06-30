@@ -378,6 +378,8 @@ Infrastructure is exposed via **MCP** rather than invoked directly as Python com
 | `record_suggestion` | Record a suggestion to update a protocol document | Anytime |
 | `generate_packet` | Generate a shareable review packet from protocol content | When sharing or reviewing the protocol |
 
+`generate_packet` keeps selection at the view level (`complete`, `short`, `engineer`, etc.) and does not expose lower-level packet source IDs. It returns Markdown text by default, or an MCP embedded DOCX resource when `output_format="docx"`.
+
 **Design decision: small public surface, rich internal library.** Only these 9 tools are exposed as MCP tools. Additional functions (`init_protocol`, `list_processes`, `read_process_guide`, `get_mailbox_status`, `check_failure_state`, `snapshot_mailbox`, etc.) remain importable Python for the web/CLI/desktop modes but are deliberately hidden from the MCP surface. The rationale: a coding agent needs a focused set of actions; the `run_clarity` tool handles routing and inlines process guides, so the agent doesn't need separate process-discovery tools.
 
 **MCP resources** (passive context, not actions):
