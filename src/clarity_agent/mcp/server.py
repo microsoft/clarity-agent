@@ -419,8 +419,7 @@ def record_failure(
 @mcp.tool()
 def generate_packet(
     output_format: str = "markdown",
-    sections: str | None = None,
-    view: str | None = None,
+    view: str = "complete",
     project_dir: str | None = None,
 ) -> str:
     """Generate a review packet document from protocol content.
@@ -432,8 +431,7 @@ def generate_packet(
 
     Args:
         output_format: Packet renderer to use, such as "markdown" or "docx".
-        sections: Optional comma-separated source IDs to include.
-        view: Optional packet view ID, such as "complete", "short", or "engineer".
+        view: Packet view ID, such as "complete", "short", or "engineer".
         project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
     """
     from clarity_agent.packet import PacketError
@@ -443,17 +441,12 @@ def generate_packet(
     if not proto_dir.exists():
         return "No protocol directory found."
 
-    include = (
-        [section.strip() for section in sections.split(",") if section.strip()]
-        if sections
-        else None
-    )
+    selected_view = view.strip() or "complete"
     try:
         content: bytes = _generate(
             proto_dir,
-            include=include,
             format=output_format,
-            view=view,
+            view=selected_view,
         )
     except PacketError as exc:
         return f"Error generating packet: {exc}"
