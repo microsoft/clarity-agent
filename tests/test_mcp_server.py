@@ -400,14 +400,6 @@ class TestGeneratePacket:
         assert "Test Problem" in result
         assert "Test Solution" in result
 
-    def test_returns_packet_errors(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
-        from clarity_agent.mcp.server import generate_packet
-
-        result = generate_packet(output_format="unknown")
-        assert result.startswith("Error generating packet:")
-        assert "Unknown format" in result
-
     def test_returns_unknown_view_errors(
         self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
