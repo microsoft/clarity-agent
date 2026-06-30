@@ -387,7 +387,7 @@ class TestGeneratePacket:
         assert isinstance(result, str)
         assert "Test Problem" in result
 
-    def test_accepts_comma_separated_sections(
+    def test_accepts_packet_view(
         self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
@@ -396,7 +396,7 @@ class TestGeneratePacket:
         write_protocol_document("goal/problem.md", "# Test Problem\n\nA real problem.")
         write_protocol_document("solution/solution.md", "# Test Solution\n\nA real solution.")
 
-        result = generate_packet(sections="problem, solution")
+        result = generate_packet(view="engineer")
         assert "Test Problem" in result
         assert "Test Solution" in result
 
@@ -407,6 +407,16 @@ class TestGeneratePacket:
         result = generate_packet(output_format="unknown")
         assert result.startswith("Error generating packet:")
         assert "Unknown format" in result
+
+    def test_returns_unknown_view_errors(
+        self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
+        from clarity_agent.mcp.server import generate_packet
+
+        result = generate_packet(view="unknown")
+        assert result.startswith("Error generating packet:")
+        assert "Unknown view" in result
 
 
 class TestCheckFailureState:
