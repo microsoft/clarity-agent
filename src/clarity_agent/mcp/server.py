@@ -418,19 +418,15 @@ def record_failure(
 
 @mcp.tool()
 def generate_packet(
-    output_format: str = "markdown",
     view: str = "complete",
     project_dir: str | None = None,
 ) -> str:
     """Generate a review packet document from protocol content.
 
     Use this when the user wants a shareable packet from the current
-    protocol. Markdown output is returned directly. Binary formats such
-    as docx are generated to confirm availability, but MCP returns only
-    a status message because text tools cannot return binary files.
+    protocol. Markdown output is returned directly.
 
     Args:
-        output_format: Packet renderer to use, such as "markdown" or "docx".
         view: Packet view ID, such as "complete", "short", or "engineer".
         project_dir: Project directory (default: CLARITY_PROJECT_DIR or cwd).
     """
@@ -445,18 +441,13 @@ def generate_packet(
     try:
         content: bytes = _generate(
             proto_dir,
-            format=output_format,
+            format="markdown",
             view=selected_view,
         )
     except PacketError as exc:
         return f"Error generating packet: {exc}"
 
-    if output_format == "markdown":
-        return content.decode("utf-8")
-    return (
-        f"Generated {output_format} packet ({len(content)} bytes). "
-        "Use the web UI or CLI to download binary formats."
-    )
+    return content.decode("utf-8")
 
 
 @mcp.tool()
