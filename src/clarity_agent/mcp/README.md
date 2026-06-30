@@ -137,7 +137,7 @@ When the agent calls `run_clarity()`, the server checks the project directory fo
 
 `write_protocol_document` automatically records content hashes so the staleness tracker stays current without a separate `record_packet_status` call.
 
-`generate_packet` takes a packet view name such as `complete`, `short`, or `engineer` and returns the selected packet as Markdown text. Use the web UI or CLI for file formats such as DOCX.
+`generate_packet` takes a packet view name such as `complete`, `short`, or `engineer`. By default it returns the selected packet as Markdown text. With `output_format="docx"`, it returns an MCP embedded resource whose blob is a base64-encoded DOCX file with MIME type `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
 
 All read/write operations are scoped to the project directory with path traversal protection.
 

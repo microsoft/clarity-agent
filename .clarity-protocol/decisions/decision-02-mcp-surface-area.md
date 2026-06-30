@@ -21,7 +21,7 @@ Additionally, 6 MCP resources provide passive context: `clarity://summary`, `cla
 
 ## Rationale
 
-A coding agent needs a focused set of actions, not a menu of everything the system can do. The key insight: `run_clarity` handles routing (it inlines the appropriate process guide), so the agent doesn't need separate process-discovery or process-selection tools. Similarly, `write_protocol_document` auto-records content hashes, eliminating the need for a separate `record_packet_status` tool. `generate_packet` is exposed because sharing a synthesized packet is a common endpoint for MCP users, and Markdown output can be returned directly without adding file-write permissions.
+A coding agent needs a focused set of actions, not a menu of everything the system can do. The key insight: `run_clarity` handles routing (it inlines the appropriate process guide), so the agent doesn't need separate process-discovery or process-selection tools. Similarly, `write_protocol_document` auto-records content hashes, eliminating the need for a separate `record_packet_status` tool. `generate_packet` is exposed because sharing a synthesized packet is a common endpoint for MCP users. It returns Markdown directly by default and DOCX as an MCP embedded resource, avoiding file-write permissions while preserving a binary document path.
 
 The internal functions remain available for the web UI, CLI, and desktop app where a richer interface is appropriate and the user has different interaction patterns (browsing, clicking, selecting).
 
