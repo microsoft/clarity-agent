@@ -119,6 +119,18 @@ class TestRenderSnippet:
         # Absolute path from tmp_path must NOT leak in.
         assert str(tmp_path) not in out
 
+    def test_render_directs_agents_to_mcp_outputs(
+        self, tmp_path: Path,
+    ) -> None:
+        layout = _embedded_layout(tmp_path)
+        out = render_snippet(layout)
+
+        assert "run_clarity" in out
+        assert "MCP responses include the relevant process guidance" in out
+        assert "do not inspect the clarity-agent repository" in out
+        assert "searching the repo for Clarity instructions" in out
+        assert "processes/clarity-agent.md" not in out
+
     def test_returns_only_marker_bounded_block(self, tmp_path: Path) -> None:
         # The template carries an out-of-band ``markdownlint-disable``
         # comment above ``<!-- clarity-begin -->`` to suppress an

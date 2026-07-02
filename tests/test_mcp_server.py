@@ -120,6 +120,7 @@ class TestRunClarity:
         from clarity_agent.mcp.server import run_clarity
         result = run_clarity()
         assert "New Project" in result
+        assert "Do not inspect the clarity-agent source repository" in result
 
     def test_existing_project(self, initialized_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CLARITY_PROJECT_DIR", str(initialized_project))
@@ -134,6 +135,7 @@ class TestRunClarity:
         result = run_clarity()
         if "Process Guide:" in result:
             assert "##" in result
+            assert "Do not inspect the clarity-agent source repository" in result
 
 
 class TestCheckDecision:

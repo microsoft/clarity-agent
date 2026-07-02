@@ -1010,9 +1010,11 @@ def format_for_agent(report: PacketStatusReport) -> str:
     lines.append("### Process Availability")
     lines.append("")
     lines.append(
-        "Each process name below corresponds to a process guide in `processes/`. "
-        "To run a recommended process, load and follow that guide — "
-        "do not attempt the task directly."
+        "Each process name below identifies the next Clarity workflow. "
+        "If you are using MCP, call `run_clarity` for the inline guide and "
+        "follow the returned guidance. Do not inspect the clarity-agent "
+        "repository or run Clarity CLI commands to find Clarity process "
+        "instructions."
     )
     lines.append("")
     if recommended:
