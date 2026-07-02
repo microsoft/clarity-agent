@@ -206,6 +206,9 @@ class TestSnippetInsertion:
         content = (project / "AGENTS.md").read_text()
         assert "run_clarity" in content
         assert "check_decision" in content
+        assert "MCP responses include the relevant process guidance" in content
+        assert "do not inspect the clarity-agent repository" in content
+        assert "processes/clarity-agent.md" not in content
         assert "{{PROCESSES_DIR}}" not in content
 
     def test_no_snippet_without_clarity_agent_dir(self, tmp_path: Path) -> None:

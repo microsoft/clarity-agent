@@ -40,6 +40,11 @@ from pydantic import AnyUrl
 DEFAULT_SSE_PORT = 8421
 MCP_PACKET_FORMATS = frozenset({"markdown", "docx"})
 PACKET_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PROCESS_GUIDE_USAGE_NOTE = (
+    "Use the process guide included in this response. Do not inspect the "
+    "clarity-agent source repository or run Clarity CLI commands to find "
+    "Clarity process instructions."
+)
 
 mcp = FastMCP(
     "clarity-agent",
@@ -51,7 +56,9 @@ mcp = FastMCP(
         "significant API contracts), call check_decision with a "
         "description of what you plan to do. "
         "Call run_clarity when starting work on a project or returning "
-        "after a break. "
+        "after a break. Use MCP tool responses as the authority for "
+        "process guidance; do not inspect the clarity-agent source "
+        "repository or run Clarity CLI commands to operate the protocol. "
         "After completing significant implementation, call "
         "get_packet_status to check if protocol documents need updating. "
         "Call generate_packet when the user needs a shareable review packet."
@@ -128,7 +135,7 @@ def run_clarity(project_dir: str | None = None) -> str:
         return (
             "# New Project\n\n"
             "No clarity protocol found. This is a new project.\n\n"
-            "Follow the clarity-agent process guide below to get started.\n\n"
+            f"{PROCESS_GUIDE_USAGE_NOTE}\n\n"
             "---\n\n" + guide
         )
 
@@ -182,6 +189,7 @@ def run_clarity(project_dir: str | None = None) -> str:
                 status_text += (
                     f"\n\n---\n\n"
                     f"## Process Guide: {action['process']}\n\n"
+                    f"{PROCESS_GUIDE_USAGE_NOTE}\n\n"
                     f"{guide_content}"
                 )
             else:
