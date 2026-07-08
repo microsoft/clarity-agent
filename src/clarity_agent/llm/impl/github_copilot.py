@@ -37,13 +37,17 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from clarity_agent.transcript import Transcript
 
-from copilot import CopilotClient, SubprocessConfig
-from copilot.generated.session_events import SessionEvent, SessionEventType
-from copilot.session import (
-    CopilotSession,
-    PermissionHandler,
-    SystemMessageCustomizeConfig,
-)
+try:
+    from copilot import CopilotClient, SubprocessConfig
+    from copilot.generated.session_events import SessionEvent, SessionEventType
+    from copilot.session import (
+        CopilotSession,
+        PermissionHandler,
+        SystemMessageCustomizeConfig,
+    )
+except ImportError:
+    CopilotClient = None  # type: ignore[assignment,misc]
+    SubprocessConfig = None  # type: ignore[assignment,misc]
 
 from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.llm.types import CompactionInfo, ToolHandler, ToolUseBlock
