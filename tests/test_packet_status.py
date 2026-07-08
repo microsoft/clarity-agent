@@ -740,6 +740,9 @@ class TestFormatForAgent:
         report = check_packet_status(protocol_dir)
         output = format_for_agent(report)
         assert "Process Availability" in output
+        assert "call `run_clarity` for the inline guide" in output
+        assert "Do not inspect the clarity-agent repository" in output
+        assert "load and follow that guide" not in output
         # The old Failure Management State section no longer appears.
         assert "Failure Management State" not in output
 
@@ -843,5 +846,3 @@ class TestCheckMailboxStatus:
         result = check_mailbox_status(protocol_dir)
         names = [r["name"] for r in result]
         assert names == sorted(names)
-
-
