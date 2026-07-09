@@ -5,6 +5,34 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-09
+
+### Added
+- Add MCP generate packet tool
+- Add execution log side pane
+
+### Changed
+- Clarify MCP-first process guidance
+- Return MCP packet DOCX as resource
+- Make MCP packet generation Markdown-only
+- Simplify MCP packet view selection
+- Extract generic generation log formatting
+- Make generation logs readable
+- Log LLM context manifest
+- Log LLM generation lifecycle
+- Clear execution log unread badge
+- Mirror terminal output in log
+- Bump pydantic-settings from 2.13.1 to 2.14.2 (#134)
+- docs: list all supported providers in .env.sample (#133)
+- Bump python-multipart from 0.0.27 to 0.0.31 (#112)
+- Bump js-yaml from 4.1.1 to 4.2.0 in /web (#114)
+- Bump undici from 7.24.4 to 7.28.0 in /web (#131)
+- Surface missing dependency websocket errors (#128)
+- Bump version to 0.1.3 (#130)
+
+### Fixed
+- Fix GitHub Copilot CLI setup wording (#129)
+
 ## [0.1.3] - 2026-06-18
 
 ### Changed
@@ -120,7 +148,8 @@ Initial release.
 - Credential storage via system keyring.
 - DOCX export for protocol documents.
 
-[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/microsoft/clarity-agent/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/microsoft/clarity-agent/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/microsoft/clarity-agent/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/microsoft/clarity-agent/compare/v0.1.0...v0.1.1
