@@ -5,6 +5,10 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
+### Fixed
+- Guard optional GitHub Copilot SDK imports so an incompatible `github-copilot-sdk`
+  version (e.g. 1.0.4, which dropped `SubprocessConfig`) no longer crashes every
+  command at startup.
 ## [0.1.4] - 2026-07-09
 
 ### Added
