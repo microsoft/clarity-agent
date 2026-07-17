@@ -170,6 +170,11 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
                 ),
                 "package": "azure.identity",
                 "env_var": None,
+                "setup_help": (
+                    "This uses your existing Azure CLI session. You must have "
+                    "installed the Azure CLI and run 'az login' first."
+                ),
+                "setup_url": "https://learn.microsoft.com/cli/azure/install-azure-cli",
                 "fields": [],
             },
             {
