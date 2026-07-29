@@ -120,8 +120,36 @@ def _write_env(
     s.save()
 
 
+def _setup_url(provider: str, auth_mode: str) -> str | None:
+    """Return the download / credential URL for a provider's auth mode.
+
+    Falls back to the provider-level ``setup_url`` when the specific
+    auth mode doesn't define one, so a failure always has somewhere to
+    point the user.  The registry (``_PROVIDERS``) is the single source
+    of truth — e.g. the ``gh`` auth mode carries
+    ``https://cli.github.com/``, so a "GitHub CLI is not installed"
+    error can surface a clickable install link rather than bare prose.
+    """
+    from clarity_agent.llm.config import _PROVIDERS, get_auth_mode_info
+
+    mode = get_auth_mode_info(provider, auth_mode)
+    if mode and mode.get("setup_url"):
+        return mode["setup_url"]
+    info = _PROVIDERS.get(provider)
+    if info and info.get("setup_url"):
+        return info["setup_url"]
+    return None
+
+
 def _test_connection(provider: str, auth_mode: str) -> dict[str, Any]:
-    """Probe the provider and return {ok, message, hint?}."""
+    """Probe the provider and return ``{ok, message, hint?, setup_url?}``.
+
+    On failure we attach ``setup_url`` — a direct link to the tool's
+    download / credential page — so the wizard can render a clickable
+    install link right next to the error.  Without it a user who is
+    missing a required CLI (e.g. ``gh``) only sees prose telling them
+    to "install it" with no link to follow (issue #124).
+    """
     from clarity_agent.setup.doctor import _classify_error, _probe_api, _probe_sdk
 
     try:
@@ -132,10 +160,28 @@ def _test_connection(provider: str, auth_mode: str) -> dict[str, Any]:
             result = _probe_copilot(_clarity_agent_dir)
         else:
             result = _probe_api(_clarity_agent_dir, provider)
-        return {"ok": result.status.value == "pass", "message": result.message}
+        ok = result.status.value == "pass"
+        response: dict[str, Any] = {"ok": ok, "message": result.message}
+        if not ok:
+            _attach_setup_url(response, provider, auth_mode)
+        return response
     except Exception as e:
-        hint = _classify_error(e, provider)
-        return {"ok": False, "message": str(e), "hint": hint}
+        response = {
+            "ok": False,
+            "message": str(e),
+            "hint": _classify_error(e, provider),
+        }
+        _attach_setup_url(response, provider, auth_mode)
+        return response
+
+
+def _attach_setup_url(
+    response: dict[str, Any], provider: str, auth_mode: str,
+) -> None:
+    """Add ``setup_url`` to a failed-probe *response* when one exists."""
+    url = _setup_url(provider, auth_mode)
+    if url:
+        response["setup_url"] = url
 
 
 # ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string; hint?: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; hint?: string; setup_url?: string } | null>(null);
 
   useEffect(() => {
     getSetupProviders()
@@ -428,6 +428,19 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
                       }`}>
                         {result.ok ? "\u2713" : "\u2717"} {result.message}
                         {result.hint && <p className="text-xs mt-1 opacity-80">{result.hint}</p>}
+                        {!result.ok && result.setup_url && (
+                          <p className="text-xs mt-2">
+                            <span className="opacity-80">Get it here: </span>
+                            <a
+                              href={result.setup_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-accent-focus hover:underline break-all"
+                            >
+                              {result.setup_url}
+                            </a>
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

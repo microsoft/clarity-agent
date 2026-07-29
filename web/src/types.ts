@@ -225,6 +225,9 @@ export interface ConfigureResult {
   ok: boolean;
   message: string;
   hint?: string;
+  // On failure, a direct link to the tool's download / credential page
+  // so the UI can render a clickable install link next to the error.
+  setup_url?: string;
 }
 
 // Projects (launcher mode)
