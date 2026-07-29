@@ -52,7 +52,7 @@ export default function ChatPanel() {
   const autoStarted = useRef(false);
   const [protocolExists, setProtocolExists] = useState<boolean | null>(null);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
-  const [logPaneOpen, setLogPaneOpen] = useState(true);
+  const [logPaneOpen, setLogPaneOpen] = useState(false);
   const [logPaneWidth, setLogPaneWidth] = useState(DEFAULT_LOG_PANE_WIDTH);
   const [seenLogCount, setSeenLogCount] = useState(0);
   const visibleMessages = useMemo(
