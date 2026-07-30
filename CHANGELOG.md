@@ -5,10 +5,21 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-30
+
+### Changed
+- Default execution log side pane to closed (#155)
+- Update web build and parsing dependencies: esbuild, @vitejs/plugin-react, Vite,
+  js-yaml, and postcss (#110, #156, #157).
+- Update Python and MCP dependencies: mistune, mcp, pyasn1, and setuptools
+  (#144, #147, #153, #154).
+- Update Tauri Rust dependency serde_with (#145).
+
 ### Fixed
-- Guard optional GitHub Copilot SDK imports so an incompatible `github-copilot-sdk`
-  version (e.g. 1.0.4, which dropped `SubprocessConfig`) no longer crashes every
-  command at startup.
+- Guard optional GitHub Copilot SDK imports so incompatible SDK releases no
+  longer crash commands at startup (#142).
+- Show tool download link when setup connection test fails (#149).
+
 ## [0.1.4] - 2026-07-09
 
 ### Added
@@ -152,7 +163,8 @@ Initial release.
 - Credential storage via system keyring.
 - DOCX export for protocol documents.
 
-[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/microsoft/clarity-agent/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/microsoft/clarity-agent/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/microsoft/clarity-agent/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/microsoft/clarity-agent/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/microsoft/clarity-agent/compare/v0.1.1...v0.1.2
