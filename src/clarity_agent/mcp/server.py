@@ -692,7 +692,7 @@ def read_behaviors(project_dir: str | None = None) -> str:
     if not agents_md.exists():
         return (
             "AGENTS.md not found in this project. Open the project in "
-            "Clarity (or run `clarity install --embedded` for a git "
+            "Clarity (or run `clarity embed <dir>` for a git "
             "repo) to create it."
         )
     block = _extract_block(agents_md.read_text(encoding="utf-8"))

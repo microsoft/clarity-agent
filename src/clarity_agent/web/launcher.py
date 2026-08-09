@@ -557,7 +557,7 @@ def create_launcher(
           USERSPACE setup, registers.  Returns 200.
         - ``intent="open_existing"`` + ``mode="embedded"``: returns
           200 ``{status: "embedded_install_required", command}`` with
-          the ``clarity install --embedded <path>`` command.  Does
+          the ``clarity embed <path>`` command.  Does
           NOT register — the install hasn't happened yet; the user
           will reopen once it has.
         """
@@ -647,7 +647,7 @@ def create_launcher(
                     # — the project isn't a valid Clarity setup yet.
                     return {
                         "status": "embedded_install_required",
-                        "command": f"clarity install --embedded {project_path}",
+                        "command": f"clarity embed {project_path}",
                         "path": str(project_path),
                     }
 

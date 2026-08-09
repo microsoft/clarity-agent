@@ -153,7 +153,7 @@ class WebSessionAdapter:
         # (neither ``.clarity-protocol/`` nor ``Clarity Protocol/``
         # nor ``.clarity-agent/``), we skip the reconcile rather than
         # implicitly creating one: per-mode setup belongs in the
-        # explicit entry points (``clarity install --embedded`` for
+        # explicit entry points (``clarity embed`` for
         # git repos, the desktop "new project" flow for userspace),
         # not in every session-open.  Failures here log but don't
         # block the session — a stale AGENTS.md is preferable to a

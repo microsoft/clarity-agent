@@ -324,8 +324,24 @@ def clone_or_update(target: Path, clone_url: str) -> StepResult:
     return StepResult(Outcome.OK, f"Cloned clarity agent into {CLARITY_DIR}")
 
 
-def update_gitignore(layout: ProjectLayout) -> list[StepResult]:  # noqa: F821
-    """Ensure ``.clarity-agent/`` and clarity wrappers are in ``.gitignore``.
+def update_gitignore(  # noqa: F821
+    layout: ProjectLayout,
+    *,
+    ignore_agent_dir: bool = True,
+) -> list[StepResult]:
+    """Ensure the machine-specific Clarity artifacts are in ``.gitignore``.
+
+    Always ignores the ``clarity`` wrappers — they hardcode local
+    paths or resolve against the local PATH.
+
+    ``.clarity-agent/`` is ignored only when *ignore_agent_dir* is true,
+    i.e. when it's a symlink or a per-machine clone.  A ``--copy``
+    embed produces a real, portable snapshot that the repo may
+    legitimately want to commit, so that caller opts out.
+
+    Protocol *contents* — including ``transcripts/`` — are never
+    ignored: they're the record the protocol exists to produce, and
+    they belong in the repo with everything else.
 
     Reads the protocol-dir name from *layout* rather than re-deriving
     it via ``app_paths.protocol_dir`` — single source of truth for
@@ -339,9 +355,18 @@ def update_gitignore(layout: ProjectLayout) -> list[StepResult]:  # noqa: F821
 
     results: list[StepResult] = []
     additions: list[str] = []
-    proto_name = layout.protocol_dir_name()
-    entries = [f"/{CLARITY_DIR}", "/clarity", "/clarity.ps1", "/clarity.bat",
-               f"/{proto_name}/transcripts/"]
+    entries = ["/clarity", "/clarity.ps1", "/clarity.bat"]
+    if ignore_agent_dir:
+        entries.insert(0, f"/{CLARITY_DIR}")
+    elif f"/{CLARITY_DIR}" in existing or CLARITY_DIR in existing:
+        # Left over from an earlier link-style embed; it would hide the
+        # copy we just made.  Removing lines from a user's .gitignore
+        # is their call, not ours — say so instead.
+        results.append(StepResult(
+            Outcome.WARN,
+            f"/{CLARITY_DIR} is in .gitignore, so the copied install "
+            f"won't be committed — remove that line to commit it",
+        ))
     for entry in entries:
         if entry in existing or entry.lstrip("/") in existing:
             results.append(

@@ -745,7 +745,7 @@ export default function ProjectSwitcher({ currentProject }: ProjectSwitcherProps
                 <p className="text-xs text-body-muted mb-4">
                   {prompt.brokenness === "ambiguous_protocol_dirs"
                     ? "Both .clarity-protocol/ and Clarity Protocol/ are present. Please remove one before reopening."
-                    : "Found a partial embedded install (.clarity-agent/ or .clarity-protocol/ but not both). Either complete the install with `clarity install --embedded`, or remove the stray directory and reopen as a userspace project."}
+                    : "Found a partial embedded install (.clarity-agent/ or .clarity-protocol/ but not both). Either complete the install with `clarity embed`, or remove the stray directory and reopen as a userspace project."}
                 </p>
                 <button
                   onClick={() => setPrompt(null)}
