@@ -124,8 +124,7 @@ class SdkChatBackend(ChatBackend):
             import claude_agent_sdk
         except ImportError:
             raise ImportError(
-                "claude-agent-sdk is not installed. "
-                "Install it with: pip install claude-agent-sdk"
+                "claude-agent-sdk is not installed. Install it with: pip install claude-agent-sdk"
             ) from None
 
         super().__init__(transcript=transcript)
@@ -155,7 +154,6 @@ class SdkChatBackend(ChatBackend):
         # compaction twice across multiple ``_run_query`` calls.
         self._seen_compact_summary_uuids: set[str] = set()
 
-
     @property
     def llm_session_id(self) -> str | None:
         return self._session_id
@@ -172,7 +170,10 @@ class SdkChatBackend(ChatBackend):
         self._seen_compact_summary_uuids.clear()
 
     async def _on_pre_compact(
-        self, hook_input: dict, tool_use_id: str | None, context: dict,
+        self,
+        hook_input: dict,
+        tool_use_id: str | None,
+        context: dict,
     ) -> dict:
         """PreCompact hook handler.
 
@@ -267,13 +268,16 @@ class SdkChatBackend(ChatBackend):
             self.on_compaction_started()
         result = self._transcript.external_compaction_occurred(summary=summary)
         if self.on_compaction_complete:
-            self.on_compaction_complete(CompactionInfo(
-                summary=result.summary,
-                source_turn_count=result.source_turn_count,
-            ))
+            self.on_compaction_complete(
+                CompactionInfo(
+                    summary=result.summary,
+                    source_turn_count=result.source_turn_count,
+                )
+            )
 
     def _build_system_prompt(self, system_prompt: str | None = None) -> str:
         from clarity_agent.app_paths import protocol_dir as _protocol_dir
+
         pd = _protocol_dir(self.project_dir)
         base: str = (
             "You are running the Clarity Agent framework.  Clarity "
@@ -346,9 +350,7 @@ class SdkChatBackend(ChatBackend):
         # contain ``ANTHROPIC_API_KEY``.  ``env`` merges with parent
         # env (only the keys we list override), so omitting it when
         # we have no key is the equivalent of "inherit parent".
-        sdk_env: dict[str, str] = (
-            {"ANTHROPIC_API_KEY": self._api_key} if self._api_key else {}
-        )
+        sdk_env: dict[str, str] = {"ANTHROPIC_API_KEY": self._api_key} if self._api_key else {}
         options = self._sdk.ClaudeAgentOptions(
             system_prompt=self._current_system_prompt,
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
@@ -363,7 +365,7 @@ class SdkChatBackend(ChatBackend):
             permission_mode="bypassPermissions",
             model=self.resolve_model(model),
             cwd=str(self.project_dir),
-            max_turns=25,
+            max_turns=200,
             resume=self._session_id,
             env=sdk_env,
             # PreCompact fires immediately before the SDK compacts
@@ -410,11 +412,13 @@ class SdkChatBackend(ChatBackend):
                             # parallel; consumers subscribe to
                             # whichever fits their needs.
                             if self.on_tool_call:
-                                self.on_tool_call(ToolUseBlock(
-                                    id=block.id,
-                                    name=block.name,
-                                    input=block.input,
-                                ))
+                                self.on_tool_call(
+                                    ToolUseBlock(
+                                        id=block.id,
+                                        name=block.name,
+                                        input=block.input,
+                                    )
+                                )
                 elif isinstance(message, self._sdk.ResultMessage):
                     self._session_id = message.session_id
                     if message.total_cost_usd is not None:
@@ -441,9 +445,7 @@ class SdkChatBackend(ChatBackend):
                     self.on_warning(warn_msg)
             elif stderr_lines:
                 stderr_text = "\n".join(stderr_lines[-20:])
-                raise RuntimeError(
-                    f"Claude CLI failed: {e}\n\nCLI stderr:\n{stderr_text}"
-                ) from e
+                raise RuntimeError(f"Claude CLI failed: {e}\n\nCLI stderr:\n{stderr_text}") from e
             else:
                 # No stderr captured.  If this looks like a CLI exit-code
                 # failure, provide an actionable message instead of the raw
@@ -490,6 +492,7 @@ class SdkChatBackend(ChatBackend):
         _ = tool_handler
         if tools and system_prompt is not None:
             from clarity_agent.ai_actions import format_tools_as_cli
+
             cli_section = format_tools_as_cli(tools)
             system_prompt = cli_section + "\n\n" + system_prompt
         return asyncio.run(self._async_chat(user_message, system_prompt, model=model))
@@ -530,12 +533,14 @@ class SdkChatBackend(ChatBackend):
         return "\n".join(parts)
 
     _TOOL_CALL_RE = re.compile(
-        r"```tool_call\s*\n(.*?)\n\s*```", re.DOTALL,
+        r"```tool_call\s*\n(.*?)\n\s*```",
+        re.DOTALL,
     )
 
     @classmethod
     def _parse_text_tool_calls(
-        cls, text: str,
+        cls,
+        text: str,
     ) -> list[dict[str, Any]]:
         """Extract tool-call JSON blocks from model text output."""
         results: list[dict[str, Any]] = []
@@ -645,11 +650,13 @@ class SdkChatBackend(ChatBackend):
                 if block.type == "text":
                     content.append(TextBlock(text=block.text))
                 elif block.type == "tool_use":
-                    content.append(ToolUseBlock(
-                        id=block.id,
-                        name=block.name,
-                        input=block.input,
-                    ))
+                    content.append(
+                        ToolUseBlock(
+                            id=block.id,
+                            name=block.name,
+                            input=block.input,
+                        )
+                    )
 
             usage = None
             if hasattr(api_response, "usage") and api_response.usage:
@@ -660,7 +667,9 @@ class SdkChatBackend(ChatBackend):
                 if self.on_usage:
                     self.on_usage(usage)
 
-            response = LLMResponse(content=content, stop_reason=api_response.stop_reason, usage=usage)
+            response = LLMResponse(
+                content=content, stop_reason=api_response.stop_reason, usage=usage
+            )
 
             # Process tool calls via handler and fire callbacks.
             tool_results: list[dict[str, Any]] = []
@@ -679,20 +688,24 @@ class SdkChatBackend(ChatBackend):
                 result_text: str = "OK"
                 if tool_handler is not None:
                     result_text = tool_handler(tc)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": result_text,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": result_text,
+                    }
+                )
 
             if api_response.stop_reason != "tool_use":
                 return response
 
             # Feed assistant response and tool results back.
-            messages.append({
-                "role": "assistant",
-                "content": response.content_as_dicts,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.content_as_dicts,
+                }
+            )
             messages.append({"role": "user", "content": tool_results})
 
     # ------------------------------------------------------------------
@@ -744,7 +757,8 @@ class SdkChatBackend(ChatBackend):
 
         text_parts: list[str] = []
         async for message in self._sdk.query(
-            prompt=enhanced_prompt, options=options,
+            prompt=enhanced_prompt,
+            options=options,
         ):
             if isinstance(message, self._sdk.AssistantMessage):
                 for block in message.content:
