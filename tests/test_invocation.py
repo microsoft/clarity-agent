@@ -126,9 +126,12 @@ class TestClarityStatusSubcommand:
     """`clarity status` must behave exactly like the module entry point."""
 
     def _run(self, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        # encoding is explicit: the CLI emits UTF-8 (see
+        # ``clarity_agent.console``), while ``text=True`` alone would
+        # decode with the parent's locale — cp1252 on a Windows runner.
         return subprocess.run(
             [sys.executable, str(REPO_ROOT / "clarity.py"), *args],
-            cwd=cwd, capture_output=True, text=True,
+            cwd=cwd, capture_output=True, text=True, encoding="utf-8",
         )
 
     @pytest.fixture
@@ -142,7 +145,7 @@ class TestClarityStatusSubcommand:
     def test_matches_the_module_entry_point(self, project: Path):
         via_module = subprocess.run(
             [sys.executable, "-m", "clarity_agent.protocol.packet_status", ".", "--agent"],
-            cwd=project, capture_output=True, text=True,
+            cwd=project, capture_output=True, text=True, encoding="utf-8",
         )
         via_subcommand = self._run(["status", ".", "--agent"], project)
         assert via_subcommand.stdout == via_module.stdout

@@ -853,6 +853,9 @@ def run_install(
 
 def _cli_main(argv: Sequence[str] | None = None) -> None:
     """Parse args and run install, printing coloured results."""
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(
         description="Install clarity-agent (standalone or embedded mode)",
     )

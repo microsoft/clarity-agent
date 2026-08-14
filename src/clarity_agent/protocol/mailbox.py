@@ -517,6 +517,9 @@ def ensure_suggestion_box(protocol_dir: Path) -> Mailbox:
 def main() -> None:
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="Manage clarity protocol mailboxes for async operations",
     )

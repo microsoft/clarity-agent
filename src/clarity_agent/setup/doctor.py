@@ -1118,6 +1118,9 @@ def _run_repairs(results: list[CheckResult]) -> list[CheckResult]:
 def cli_main() -> None:
     """Full doctor CLI: run checks, display results, offer repairs."""
     from clarity_agent import get_agent_dir
+    from clarity_agent.console import configure_stdio
+
+    configure_stdio()
 
     agent_dir = get_agent_dir()
 

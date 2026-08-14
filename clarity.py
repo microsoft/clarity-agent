@@ -36,6 +36,7 @@ if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from clarity_agent.app_paths import clarity_env_path, get_bundle_dir
+from clarity_agent.console import configure_stdio
 from clarity_agent.env_path import ensure_tool_paths
 
 # Ensure Homebrew, ~/.local/bin, etc. are visible — macOS GUI apps
@@ -470,6 +471,10 @@ def _cmd_status() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # Before anything prints: a redirected stdout defaults to the locale
+    # encoding, which can't carry our status glyphs on Windows.
+    configure_stdio()
+
     # Handled before the parser is built: `status` is a pass-through to the
     # packet-status CLI, which owns its own (larger) flag surface.
     if len(sys.argv) >= 2 and sys.argv[1] == "status":

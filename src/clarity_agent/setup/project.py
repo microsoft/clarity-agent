@@ -616,6 +616,9 @@ def run_project_embed(
 def _cli_main(argv: Sequence[str] | None = None, agent_dir: Path | None = None) -> None:
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(
         description="Embed Clarity into a git project",
     )
