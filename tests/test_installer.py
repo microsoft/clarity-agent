@@ -275,22 +275,48 @@ class TestUpdateGitignore:
     def test_adds_all_entries(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()  # simulate git repo
         results = update_gitignore(_embedded_layout(tmp_path))
-        assert len(results) == 5
+        assert len(results) == 4
         assert all(r.outcome == Outcome.OK for r in results)
         content = (tmp_path / ".gitignore").read_text()
         assert f"/{CLARITY_DIR}" in content
         assert "/clarity\n" in content
         assert "/clarity.ps1" in content
         assert "/clarity.bat" in content
-        assert "/.clarity-protocol/transcripts/" in content
+
+    def test_does_not_ignore_protocol_contents(self, tmp_path: Path) -> None:
+        """Transcripts are protocol output — they belong in the repo."""
+        (tmp_path / ".git").mkdir()
+        update_gitignore(_embedded_layout(tmp_path))
+        content = (tmp_path / ".gitignore").read_text()
+        assert ".clarity-protocol" not in content
+
+    def test_copy_style_leaves_agent_dir_committable(self, tmp_path: Path) -> None:
+        """``embed --copy`` produces a real directory the repo may want
+        to commit, so the agent-dir entry is not added."""
+        (tmp_path / ".git").mkdir()
+        results = update_gitignore(
+            _embedded_layout(tmp_path), ignore_agent_dir=False,
+        )
+        assert len(results) == 3
+        content = (tmp_path / ".gitignore").read_text()
+        assert CLARITY_DIR not in content
+
+    def test_copy_style_warns_about_stale_ignore(self, tmp_path: Path) -> None:
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".gitignore").write_text(f"/{CLARITY_DIR}\n")
+        results = update_gitignore(
+            _embedded_layout(tmp_path), ignore_agent_dir=False,
+        )
+        assert results[0].outcome == Outcome.WARN
+        assert CLARITY_DIR in results[0].message
 
     def test_already_present(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()  # simulate git repo
         (tmp_path / ".gitignore").write_text(
-            f"/{CLARITY_DIR}\n/clarity\n/clarity.ps1\n/clarity.bat\n/.clarity-protocol/transcripts/\n"
+            f"/{CLARITY_DIR}\n/clarity\n/clarity.ps1\n/clarity.bat\n"
         )
         results = update_gitignore(_embedded_layout(tmp_path))
-        assert len(results) == 5
+        assert len(results) == 4
         assert all(r.outcome == Outcome.OK for r in results)
         assert "already" in results[0].message
 
@@ -298,7 +324,7 @@ class TestUpdateGitignore:
         (tmp_path / ".git").mkdir()  # simulate git repo
         (tmp_path / ".gitignore").write_text(f"/{CLARITY_DIR}\n")
         results = update_gitignore(_embedded_layout(tmp_path))
-        assert len(results) == 5
+        assert len(results) == 4
         content = (tmp_path / ".gitignore").read_text()
         assert "/clarity\n" in content
         assert "/clarity.ps1" in content

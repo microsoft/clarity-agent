@@ -265,7 +265,7 @@ class TestOpenExistingWithExplicitMode:
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["status"] == "embedded_install_required"
-        assert "clarity install --embedded" in body["command"]
+        assert "clarity embed" in body["command"]
         assert str(project) in body["command"]
         # Verify nothing was registered.
         listing = client.get("/api/projects").json()

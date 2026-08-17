@@ -297,8 +297,8 @@ def ensure_for_project(
       Clarity markers, or a partial/ambiguous install that the
       caller should surface a repair prompt for.  We don't
       implicitly create directories here; mode selection belongs in
-      the explicit setup entry points (``clarity install --embedded``
-      for git repos, the desktop "new project" flow for userspace).
+      the explicit setup entry points (``clarity embed`` for
+      git repos, the desktop "new project" flow for userspace).
     - **Write failure (OSError).** Read-only mount, permissions, etc.
       A stale ``AGENTS.md`` is better than a failed caller.
 

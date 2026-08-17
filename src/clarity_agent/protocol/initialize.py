@@ -219,6 +219,9 @@ def init_protocol(
 def main() -> None:
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="Initialize a .clarity-protocol/ directory for a project",
     )

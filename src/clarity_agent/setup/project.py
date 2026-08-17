@@ -1,24 +1,47 @@
 """Embed Clarity into an existing git project.
 
 This is the lightweight counterpart to the desktop installer. It does not
-create a venv or copy the agent code — it assumes Clarity is already
+create a venv or pip-install anything — it assumes Clarity is already
 installed on the machine. It only adds the project-side artifacts:
 
   - ``.clarity-protocol/``  directory (for protocol outputs)
+  - ``.clarity-agent``      link (or copy) of the machine-wide install
   - ``CLAUDE.md`` / ``AGENTS.md``  updated with the Clarity snippet
   - A thin ``clarity`` wrapper that delegates to the system install
 
-The link to the system Clarity install is PATH-based, so it is never stored
-in the git repo.  If Clarity isn't on PATH the wrapper gives a helpful error.
+The ``.clarity-agent`` entry is what makes the result a *clean* EMBEDDED
+layout as far as :func:`~clarity_agent.setup.layout.detect_layout` is
+concerned — a protocol dir without it reads as a half-finished install
+and the app refuses to open the project — and it's what makes the
+repo-relative ``.clarity-agent/processes`` path the AGENTS.md block
+advertises resolve.  Two ways to provide it, selected by
+:class:`AgentDirStyle`:
 
-Entry point: ``clarity embed <project-dir>``
+  - :data:`AgentDirStyle.LINK` (default, "light") — a symlink to the
+    machine-wide install (a directory junction on Windows when symlinks
+    aren't permitted).  Nothing is duplicated; re-running ``embed``
+    repoints a stale link.
+  - :data:`AgentDirStyle.COPY` ("heavy") — a snapshot of the install's
+    protocol content (``processes/``, ``thinkers/``).  Self-contained
+    and symlink-free, at the cost of going stale until the next
+    ``embed``.
+
+A link is machine-specific and gets gitignored; a copy is portable, so
+it isn't — the team can commit the guidance their coding agents read.
+Running ``clarity`` stays PATH-based either way; if Clarity isn't on
+PATH the wrapper gives a helpful error.
+
+Entry point: ``clarity embed [--copy] <project-dir>``
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from enum import Enum
 from pathlib import Path
 
 from clarity_agent.setup.installer import (
@@ -28,6 +51,7 @@ from clarity_agent.setup.installer import (
     update_gitignore,
 )
 from clarity_agent.setup.layout import (
+    EMBEDDED_AGENT_SUBDIR,
     PROTOCOL_DIR_DOT,
     PROTOCOL_DIR_VISIBLE,
     Mode,
@@ -170,10 +194,10 @@ def setup_userspace_project(
     Returns the :class:`ProjectLayout` so callers can register it
     or pass it to follow-up steps.
 
-    This is the lightweight counterpart to :func:`run_project_embed`,
-    which does the heavy embedded install (clone + venv + pip).
-    Both are explicit setup entry points; ``ensure_for_project`` at
-    runtime never invokes either.
+    This is the USERSPACE counterpart to :func:`run_project_embed`,
+    which sets up a git repo as EMBEDDED.  Both are explicit setup
+    entry points; ``ensure_for_project`` at runtime never invokes
+    either.
     """
     project_dir.mkdir(parents=True, exist_ok=True)
     # Create ``Clarity Protocol/`` *before* delegating to
@@ -221,6 +245,205 @@ def create_protocol_dir(layout: ProjectLayout) -> StepResult:
         return StepResult(Outcome.OK, f"Created {dir_name}/")
     except Exception as exc:
         return StepResult(Outcome.FAIL, f"{dir_name}/: {exc}")
+
+
+class AgentDirStyle(Enum):
+    """How ``embed`` provides ``.clarity-agent/`` inside the project."""
+
+    LINK = "link"
+    """Symlink to the machine-wide install (junction on Windows when
+    symlink creation isn't permitted).  The default: nothing is
+    duplicated, and the project tracks whatever the install becomes."""
+
+    COPY = "copy"
+    """Snapshot copy of the install's protocol content.  Self-contained
+    and symlink-free — for environments where symlinks are awkward
+    (some Windows setups, network shares, containers that bind-mount
+    only the project), or where the team wants to commit the guidance
+    their coding agents read."""
+
+
+# What a project-side ``.clarity-agent/`` is actually read for: the
+# process and thinker guides.  An allowlist, not a denylist — the
+# install root also holds a venv, a git checkout, npm/cargo caches and
+# build output, none of which a project needs and any of which can be
+# gigabytes.  Execution always goes through the PATH-based wrapper, so
+# the copy never has to be a *runnable* install.
+_COPY_INCLUDE: tuple[str, ...] = ("processes", "thinkers")
+
+# Junk to skip inside the copied trees.
+_COPY_IGNORE = shutil.ignore_patterns(
+    "__pycache__", "*.pyc", ".DS_Store",
+)
+
+
+def _link_target(path: Path) -> Path | None:
+    """Resolved target of *path* if it's a symlink or a Windows
+    directory junction, else ``None`` (a real directory, or missing).
+
+    Junctions are deliberately included: ``Path.is_symlink()`` reports
+    ``False`` for them, so a junction laid down by a previous ``embed``
+    on Windows would otherwise look like a real directory and never get
+    repointed.
+    """
+    if not path.is_symlink():
+        try:
+            os.readlink(path)  # succeeds for junctions, raises for real dirs
+        except OSError:
+            return None
+    try:
+        return path.resolve()
+    except OSError:
+        return None
+
+
+def _remove_link(path: Path) -> None:
+    """Remove a symlink or junction without touching its target."""
+    try:
+        path.unlink()
+    except OSError:
+        # Windows junctions can't be unlinked, but rmdir removes the
+        # reparse point itself and leaves the target alone.
+        os.rmdir(path)
+
+
+def _create_link(dest: Path, target: Path) -> StepResult:
+    """Symlink *dest* → *target*, falling back to a Windows junction."""
+    try:
+        os.symlink(target, dest, target_is_directory=True)
+        return StepResult(
+            Outcome.OK, f"Linked {EMBEDDED_AGENT_SUBDIR} -> {target}",
+        )
+    except OSError as exc:
+        if not _IS_WINDOWS:
+            return StepResult(
+                Outcome.FAIL, f"{EMBEDDED_AGENT_SUBDIR}: {exc}",
+            )
+        symlink_error = exc
+
+    # Windows without Developer Mode / SeCreateSymbolicLinkPrivilege:
+    # a directory junction needs no privileges and is transparent to
+    # every path consumer we care about.
+    try:
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(dest), str(target)],
+            capture_output=True, text=True, timeout=30, encoding="utf8",
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return StepResult(
+            Outcome.FAIL,
+            f"{EMBEDDED_AGENT_SUBDIR}: symlink failed ({symlink_error}); "
+            f"junction fallback failed ({exc})",
+        )
+    if result.returncode == 0:
+        return StepResult(
+            Outcome.OK,
+            f"Linked {EMBEDDED_AGENT_SUBDIR} -> {target} (junction)",
+        )
+    detail = (result.stderr or result.stdout or "").strip()
+    return StepResult(
+        Outcome.FAIL,
+        f"{EMBEDDED_AGENT_SUBDIR}: symlink failed ({symlink_error}) and "
+        f"junction fallback failed ({detail}). Enable Developer Mode, or "
+        f"re-run with --copy.",
+    )
+
+
+def _copy_agent_dir(dest: Path, target: Path) -> StepResult:
+    """Snapshot the install's protocol content from *target* into *dest*.
+
+    Copies only :data:`_COPY_INCLUDE`, and replaces rather than merges
+    each of those trees so a refresh drops guides that no longer exist
+    upstream instead of leaving them to rot in the project.
+    """
+    present = [name for name in _COPY_INCLUDE if (target / name).is_dir()]
+    if not present:
+        return StepResult(
+            Outcome.FAIL,
+            f"{EMBEDDED_AGENT_SUBDIR}: no protocol content found in {target} "
+            f"(expected {'/, '.join(_COPY_INCLUDE)}/)",
+        )
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        for name in present:
+            sub = dest / name
+            if sub.exists():
+                shutil.rmtree(sub)
+            shutil.copytree(target / name, sub, ignore=_COPY_IGNORE)
+    except OSError as exc:
+        return StepResult(Outcome.FAIL, f"{EMBEDDED_AGENT_SUBDIR}: {exc}")
+    copied = ", ".join(f"{name}/" for name in present)
+    return StepResult(
+        Outcome.OK, f"Copied {copied} from {target} into {EMBEDDED_AGENT_SUBDIR}/",
+    )
+
+
+def provide_agent_dir(
+    layout: ProjectLayout,
+    style: AgentDirStyle = AgentDirStyle.LINK,
+) -> StepResult:
+    """Provide ``.clarity-agent/`` in the project, by link or by copy.
+
+    Without it the project is only half an EMBEDDED layout:
+    :func:`~clarity_agent.setup.layout.detect_layout` reports
+    ``PARTIAL_EMBEDDED_INSTALL`` and the app refuses to open it.
+
+    Idempotent, and never destructive of content it didn't create:
+
+    - Correct link already present → no-op.
+    - Stale link (install moved, or switching to ``COPY``) → replaced;
+      the link's target is untouched.
+    - Real directory already present (a full clone, or a previous
+      ``--copy``) → refreshed under ``COPY``, left alone under ``LINK``
+      with a WARN, since removing it could destroy a real checkout.
+    - Non-directory in the way → FAIL.
+    """
+    dest = layout.project_dir / EMBEDDED_AGENT_SUBDIR
+    target = layout.clarity_agent_dir.resolve()
+    project = layout.project_dir.resolve()
+
+    # Self-reference guard: the clarity-agent source repo dogfooding
+    # itself has ``project_dir == clarity_agent_dir``, and linking a
+    # directory into itself is at best a no-op loop.  No marker is
+    # needed there — ``detect_layout`` recognizes that repo
+    # structurally as CLARITY_AGENT_SOURCE before it looks for
+    # ``.clarity-agent/`` at all.
+    if target == project or project in target.parents:
+        return StepResult(
+            Outcome.SKIP,
+            f"{EMBEDDED_AGENT_SUBDIR}: install lives inside the project; "
+            f"no link needed",
+        )
+
+    linked = _link_target(dest)
+    if linked is not None:
+        if style is AgentDirStyle.LINK and linked == target:
+            return StepResult(
+                Outcome.OK, f"{EMBEDDED_AGENT_SUBDIR} already links to {target}",
+            )
+        try:
+            _remove_link(dest)
+        except OSError as exc:
+            return StepResult(
+                Outcome.FAIL,
+                f"{EMBEDDED_AGENT_SUBDIR}: could not replace existing link: {exc}",
+            )
+    elif dest.exists():
+        if not dest.is_dir():
+            return StepResult(
+                Outcome.FAIL,
+                f"{EMBEDDED_AGENT_SUBDIR} exists and is not a directory",
+            )
+        if style is AgentDirStyle.LINK:
+            return StepResult(
+                Outcome.WARN,
+                f"{EMBEDDED_AGENT_SUBDIR}/ is a real directory (full install?) "
+                f"— leaving it as-is; remove it first to switch to a link",
+            )
+
+    if style is AgentDirStyle.COPY:
+        return _copy_agent_dir(dest, target)
+    return _create_link(dest, target)
 
 
 def create_project_wrapper(layout: ProjectLayout) -> StepResult:
@@ -321,6 +544,7 @@ def run_project_embed(
     project_dir: Path,
     agent_dir: Path,
     *,
+    style: AgentDirStyle = AgentDirStyle.LINK,
     on_step: Callable[[StepResult], None] | None = None,
 ) -> list[StepResult]:
     """Embed Clarity into an existing git project.
@@ -333,6 +557,8 @@ def run_project_embed(
     Args:
         project_dir: Root of the git project to embed into.
         agent_dir:   The clarity-agent installation (for the snippet template).
+        style:       Whether ``.clarity-agent/`` is a link to *agent_dir*
+                     (default, light) or a copy of it (heavy).
         on_step:     Optional callback for real-time progress output.
     """
     results: list[StepResult] = []
@@ -364,10 +590,20 @@ def run_project_embed(
     if results[-1].outcome == Outcome.FAIL:
         return results
 
+    # Must succeed for the project to read as a clean EMBEDDED layout;
+    # without it the app will refuse to open what we just set up.
+    _record(provide_agent_dir(layout, style))
+    if results[-1].outcome == Outcome.FAIL:
+        return results
+
     _record(insert_agent_snippet(layout))
     _record(create_project_wrapper(layout))
     _record(create_mcp_json(layout))
-    for r in update_gitignore(layout):
+    # A copied install is a real, portable directory the repo may want
+    # to commit; a symlink never is.
+    for r in update_gitignore(
+        layout, ignore_agent_dir=style is AgentDirStyle.LINK,
+    ):
         _record(r)
 
     return results
@@ -380,6 +616,9 @@ def run_project_embed(
 def _cli_main(argv: Sequence[str] | None = None, agent_dir: Path | None = None) -> None:
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(
         description="Embed Clarity into a git project",
     )
@@ -388,6 +627,28 @@ def _cli_main(argv: Sequence[str] | None = None, agent_dir: Path | None = None) 
         type=Path,
         help="Path to the git repository to embed Clarity into",
     )
+    how = parser.add_mutually_exclusive_group()
+    how.add_argument(
+        "--link",
+        dest="style",
+        action="store_const",
+        const=AgentDirStyle.LINK,
+        help=(
+            "Light install (default): .clarity-agent is a symlink to this "
+            "Clarity installation"
+        ),
+    )
+    how.add_argument(
+        "--copy",
+        dest="style",
+        action="store_const",
+        const=AgentDirStyle.COPY,
+        help=(
+            "Heavy install: copy this installation's process and thinker "
+            "guides into .clarity-agent/ instead of linking it"
+        ),
+    )
+    parser.set_defaults(style=AgentDirStyle.LINK)
     args = parser.parse_args(argv)
 
     project_dir = args.project_dir.resolve()
@@ -410,8 +671,11 @@ def _cli_main(argv: Sequence[str] | None = None, agent_dir: Path | None = None) 
         color_fmt, plain_fmt = _FMT[result.outcome]
         print((color_fmt if use_color else plain_fmt).format(result.message))
 
-    info(f"Embedding Clarity into {project_dir}")
-    results = run_project_embed(project_dir, agent_dir, on_step=emit)
+    style: AgentDirStyle = args.style
+    info(f"Embedding Clarity into {project_dir} ({style.value} install)")
+    results = run_project_embed(
+        project_dir, agent_dir, style=style, on_step=emit,
+    )
 
     if any(r.outcome == Outcome.FAIL for r in results):
         print()

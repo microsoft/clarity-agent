@@ -693,6 +693,9 @@ def _cli_main(argv: Sequence[str] | None = None, source_dir: Path | None = None)
     """Parse args and build the desktop app."""
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(
         description="Build Clarity as a desktop application",
     )

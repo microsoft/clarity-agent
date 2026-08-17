@@ -217,11 +217,18 @@ class ClaritySession:
         return block.strip() if block else ""
 
     def load_process(self, process_name: str) -> str:
-        """Load a process guide from the clarity agent directory."""
+        """Load a process guide from the clarity agent directory.
+
+        Shell commands in the guide are rewritten for the running environment
+        (see :func:`clarity_agent.protocol.invocation.render_guide`) so the
+        agent is handed a command that actually works here.
+        """
+        from clarity_agent.protocol.invocation import render_guide
+
         process_path: Path = self.clarity_agent_dir / "processes" / f"{process_name}.md"
         if not process_path.exists():
             raise FileNotFoundError(f"Process guide not found: {process_path}")
-        return process_path.read_text()
+        return render_guide(process_path.read_text())
 
     def load_thinker(self, thinker_name: str) -> str:
         """Load a thinker guide from the clarity agent directory."""

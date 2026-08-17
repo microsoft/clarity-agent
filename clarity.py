@@ -10,6 +10,7 @@ Usage::
     clarity cli [project_dir]         # interactive command-line session
     clarity process NAME [project_dir]# run a single process by name
     clarity packet [project_dir]      # generate a review packet
+    clarity status [project_dir]      # report/record protocol document state
     clarity install [--mode MODE]     # install clarity as a desktop app
     clarity embed <project-dir>       # embed clarity into a git repo
     clarity update                    # update clarity-agent to latest version
@@ -35,6 +36,7 @@ if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from clarity_agent.app_paths import clarity_env_path, get_bundle_dir
+from clarity_agent.console import configure_stdio
 from clarity_agent.env_path import ensure_tool_paths
 
 # Ensure Homebrew, ~/.local/bin, etc. are visible — macOS GUI apps
@@ -143,7 +145,9 @@ def _cmd_install(args: argparse.Namespace) -> None:
 def _cmd_embed(args: argparse.Namespace) -> None:
     from clarity_agent.setup.project import _cli_main as project_embed
 
-    project_embed([str(args.project_dir)], agent_dir=_SCRIPT_DIR.resolve())
+    argv = [str(args.project_dir)]
+    argv.append("--copy" if args.copy else "--link")
+    project_embed(argv, agent_dir=_SCRIPT_DIR.resolve())
 
 
 def _cmd_update(args: argparse.Namespace) -> None:
@@ -439,8 +443,27 @@ def _write_crash_log(exc: BaseException) -> Path | None:
 # Subcommand registry
 # ---------------------------------------------------------------------------
 
-_SUBCOMMANDS = ("app", "web", "cli", "process", "packet", "install", "embed", "update", "doctor", "help")
+_SUBCOMMANDS = (
+    "app", "web", "cli", "process", "packet", "status",
+    "install", "embed", "update", "doctor", "help",
+)
 _DEFAULT_COMMAND = "web"
+
+
+def _cmd_status() -> None:
+    """Dispatch ``clarity status`` to the packet-status CLI, verbatim.
+
+    This exists so the frozen desktop binary can run packet status without an
+    external Python interpreter — see
+    :mod:`clarity_agent.protocol.invocation`.  Arguments are forwarded
+    untouched rather than mirrored into our own parser, so the two entry
+    points can never drift; ``packet_status.main()`` also raises
+    ``SystemExit(1)`` when documents are stale, which callers rely on.
+    """
+    from clarity_agent.protocol import packet_status
+
+    sys.argv = ["clarity status", *sys.argv[2:]]
+    packet_status.main()
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +471,16 @@ _DEFAULT_COMMAND = "web"
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # Before anything prints: a redirected stdout defaults to the locale
+    # encoding, which can't carry our status glyphs on Windows.
+    configure_stdio()
+
+    # Handled before the parser is built: `status` is a pass-through to the
+    # packet-status CLI, which owns its own (larger) flag surface.
+    if len(sys.argv) >= 2 and sys.argv[1] == "status":
+        _cmd_status()
+        return
+
     parser = argparse.ArgumentParser(
         prog="clarity",
         description=(
@@ -588,6 +621,15 @@ def main() -> None:
     )
     _add_llm_args(packet_parser)
 
+    # ---- clarity status ---------------------------------------------------
+    # Registered for `clarity --help` only; the real dispatch happens at the
+    # top of main() so that packet_status's own flags pass through untouched.
+    subparsers.add_parser(
+        "status",
+        help="Report or record protocol document state (packet status)",
+        add_help=False,
+    )
+
     # ---- clarity install --------------------------------------------------
     install_parser = subparsers.add_parser(
         "install",
@@ -644,12 +686,41 @@ def main() -> None:
     embed_parser = subparsers.add_parser(
         "embed",
         help="Embed Clarity into an existing git repository",
+        description=(
+            "Add Clarity's project-side artifacts to a git repository: "
+            "the .clarity-protocol/ directory, a .clarity-agent entry "
+            "pointing at this installation, the AGENTS.md block, a "
+            "`clarity` wrapper, and .vscode/mcp.json.  All of it is "
+            "gitignored except the protocol directory and AGENTS.md."
+        ),
     )
     embed_parser.add_argument(
         "project_dir",
         type=Path,
         help="Path to the git repository to embed Clarity into",
     )
+    embed_how = embed_parser.add_mutually_exclusive_group()
+    embed_how.add_argument(
+        "--link",
+        dest="copy",
+        action="store_false",
+        help=(
+            "Light install (default): .clarity-agent is a symlink to this "
+            "Clarity installation, so the project tracks it automatically."
+        ),
+    )
+    embed_how.add_argument(
+        "--copy",
+        dest="copy",
+        action="store_true",
+        help=(
+            "Heavy install: copy this installation's process and thinker "
+            "guides into .clarity-agent/ instead of linking it.  "
+            "Self-contained, symlink-free, and committable; re-run "
+            "'clarity embed --copy' to refresh it."
+        ),
+    )
+    embed_parser.set_defaults(copy=False)
 
     # ---- clarity update ---------------------------------------------------
     update_parser = subparsers.add_parser(
