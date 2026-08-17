@@ -24,9 +24,9 @@ from clarity_agent.llm.types import (
 )
 
 _ANTHROPIC_TIER_DEFAULTS: dict[str, str] = {
-    "default": "claude-sonnet-4-6",
-    "deep": "claude-opus-4-7",
-    "fast": "claude-haiku-4-5",
+    "default": "claude-opus-5",
+    "deep": "claude-opus-5",
+    "fast": "claude-sonnet-5",
 }
 
 # Context-window size (in tokens) per model.  Co-located with the
@@ -42,6 +42,9 @@ _ANTHROPIC_TIER_DEFAULTS: dict[str, str] = {
 # compaction naturally keeps our trigger cold — we only fire as the
 # safety net when the provider isn't handling things itself.
 _ANTHROPIC_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    "claude-sonnet-5": 1_000_000,
+    "claude-opus-5": 1_000_000,
+    "claude-fable-5": 1_000_000,
     "claude-opus-4-7": 200_000,
     "claude-sonnet-4-6": 200_000,
     "claude-haiku-4-5": 200_000,
@@ -113,11 +116,13 @@ class AnthropicClient(LLMClient):
             if block.type == "text":
                 content.append(TextBlock(text=block.text))
             elif block.type == "tool_use":
-                content.append(ToolUseBlock(
-                    id=block.id,
-                    name=block.name,
-                    input=block.input,
-                ))
+                content.append(
+                    ToolUseBlock(
+                        id=block.id,
+                        name=block.name,
+                        input=block.input,
+                    )
+                )
 
         usage = None
         if hasattr(response, "usage") and response.usage:
@@ -155,10 +160,10 @@ class AnthropicClient(LLMClient):
         if self.on_tool_use:
             self.on_tool_use(block.name, detail)
         if self.on_tool_call:
-            self.on_tool_call(ToolUseBlock(
-                id=block.id,
-                name=block.name,
-                input=block.input,
-            ))
-
-
+            self.on_tool_call(
+                ToolUseBlock(
+                    id=block.id,
+                    name=block.name,
+                    input=block.input,
+                )
+            )

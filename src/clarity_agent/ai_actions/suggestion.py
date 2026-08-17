@@ -187,6 +187,9 @@ def _cli_main() -> None:
     """
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(
         prog="python -m clarity_agent.ai_actions.suggestion",
         description="Record a document suggestion. Reads JSON from stdin.",

@@ -184,6 +184,9 @@ def generate_file(
 
 
 def main() -> None:
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser = argparse.ArgumentParser(description="Generate Mermaid threat model diagram")
     parser.add_argument("--input", help="JSON file with components and flows")
     parser.add_argument("--threats", help="JSON file with threat annotations")

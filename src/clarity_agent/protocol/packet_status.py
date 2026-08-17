@@ -1182,6 +1182,9 @@ def format_decisions_for_agent(dreport: DecisionReport) -> str:
 def main() -> None:
     import argparse
 
+    from clarity_agent.console import configure_stdio
+    configure_stdio()
+
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="Check packet status of clarity protocol documents",
     )

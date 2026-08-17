@@ -5,11 +5,14 @@ Three modes exist (see :class:`Mode`); each is a clean 1:1 mapping
 from install style to filesystem layout, with no hybrids:
 
   * **EMBEDDED** — a git repository the user explicitly installed
-    Clarity into (``clarity install --embedded``).  Clarity's code
-    lives at ``.clarity-agent/`` inside the repo; the protocol dir
-    is ``.clarity-protocol/`` (hidden, doesn't clutter the working
-    tree); the AGENTS.md snippet uses repo-relative paths so the
-    file commits identically across machines.
+    Clarity into (``clarity embed``).  Clarity's code is reachable
+    at ``.clarity-agent/`` inside the repo — a symlink to the
+    machine-wide install (``embed --link``, the default), a copy of
+    it (``embed --copy``), or a full clone from an older install;
+    the protocol dir is ``.clarity-protocol/`` (hidden, doesn't
+    clutter the working tree); the AGENTS.md snippet uses
+    repo-relative paths so the file commits identically across
+    machines.
 
   * **USERSPACE** — a regular project directory opened from the
     desktop / web app.  Clarity's code lives in the app bundle (the

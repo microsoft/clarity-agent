@@ -37,6 +37,8 @@ from mcp import types
 from mcp.server.fastmcp import FastMCP
 from pydantic import AnyUrl
 
+from clarity_agent.protocol.invocation import render_guide
+
 DEFAULT_SSE_PORT = 8421
 MCP_PACKET_FORMATS = frozenset({"markdown", "docx"})
 PACKET_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -131,7 +133,7 @@ def run_clarity(project_dir: str | None = None) -> str:
     if not proto_dir.exists():
         agent_dir = _resolve_agent_dir()
         guide_path = agent_dir / "processes" / "clarity-agent.md"
-        guide = guide_path.read_text(encoding="utf-8") if guide_path.exists() else ""
+        guide = render_guide(guide_path.read_text(encoding="utf-8")) if guide_path.exists() else ""
         return (
             "# New Project\n\n"
             "No clarity protocol found. This is a new project.\n\n"
@@ -185,7 +187,7 @@ def run_clarity(project_dir: str | None = None) -> str:
             agent_dir = _resolve_agent_dir()
             guide_path = agent_dir / "processes" / f"{action['process']}.md"
             if guide_path.exists():
-                guide_content = guide_path.read_text(encoding="utf-8")
+                guide_content = render_guide(guide_path.read_text(encoding="utf-8"))
                 status_text += (
                     f"\n\n---\n\n"
                     f"## Process Guide: {action['process']}\n\n"
@@ -639,7 +641,7 @@ def read_process_guide(process_name: str) -> str:
                 f"Error: process guide not found: {process_name}\n"
                 f"Available: {', '.join(sorted(available))}"
             )
-    return guide_path.read_text(encoding="utf-8")
+    return render_guide(guide_path.read_text(encoding="utf-8"))
 
 
 def list_thinkers() -> str:
@@ -690,7 +692,7 @@ def read_behaviors(project_dir: str | None = None) -> str:
     if not agents_md.exists():
         return (
             "AGENTS.md not found in this project. Open the project in "
-            "Clarity (or run `clarity install --embedded` for a git "
+            "Clarity (or run `clarity embed <dir>` for a git "
             "repo) to create it."
         )
     block = _extract_block(agents_md.read_text(encoding="utf-8"))
@@ -903,7 +905,7 @@ def process_guide_resource(name: str) -> str:
     guide_path = agent_dir / "processes" / f"{name}.md"
     if not guide_path.exists():
         return f"Process guide not found: {name}"
-    return guide_path.read_text(encoding="utf-8")
+    return render_guide(guide_path.read_text(encoding="utf-8"))
 
 
 @mcp.resource("clarity://thinkers/{name}")

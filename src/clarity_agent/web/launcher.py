@@ -377,11 +377,16 @@ def create_launcher(
             cmd.extend(["--session-id", project.llm_session_id])
         # Build a clean environment for the project server:
         # - Strip CLAUDECODE to avoid nested-session errors from the CLI.
-        # - Ensure PYTHONPATH includes the clarity-agent src/ directory so
-        #   that Bash commands like `python -m clarity_agent.protocol...`
-        #   work inside the Claude CLI subprocess.
+        # - Ensure PYTHONPATH points at the directory `clarity_agent` actually
+        #   lives in, so that any bare `python -m clarity_agent.protocol...`
+        #   still resolves inside the Claude CLI subprocess.  That directory
+        #   is *not* `<root>/src` in a frozen build — see
+        #   `invocation.python_path_entry`.  (Process guides no longer rely on
+        #   this; it stays as a backstop for anything else that shells out.)
+        from clarity_agent.protocol.invocation import python_path_entry
+
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-        src_dir = str(clarity_agent_dir / "src")
+        src_dir = python_path_entry(clarity_agent_dir)
         existing_pp = env.get("PYTHONPATH", "")
         if src_dir not in existing_pp.split(os.pathsep):
             env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{existing_pp}" if existing_pp else src_dir
@@ -552,7 +557,7 @@ def create_launcher(
           USERSPACE setup, registers.  Returns 200.
         - ``intent="open_existing"`` + ``mode="embedded"``: returns
           200 ``{status: "embedded_install_required", command}`` with
-          the ``clarity install --embedded <path>`` command.  Does
+          the ``clarity embed <path>`` command.  Does
           NOT register — the install hasn't happened yet; the user
           will reopen once it has.
         """
@@ -642,7 +647,7 @@ def create_launcher(
                     # — the project isn't a valid Clarity setup yet.
                     return {
                         "status": "embedded_install_required",
-                        "command": f"clarity install --embedded {project_path}",
+                        "command": f"clarity embed {project_path}",
                         "path": str(project_path),
                     }
 
