@@ -17,6 +17,12 @@ Factory functions:
 - :func:`create_client` — build an :class:`LLMClient` for a provider.
 - :func:`create_chat_backend` — build a :class:`ChatBackend` for a provider.
 
+Model discovery:
+
+- :func:`fetch_model_catalog` — list a provider's models, live where the
+  provider supports it, cached, falling back to built-in tables.
+- :func:`get_provider_model_catalog` — the built-in list alone, no network.
+
 CLI integration:
 
 - :class:`LLMConfig` — add standard LLM flags to a parser via
@@ -29,10 +35,17 @@ from __future__ import annotations
 from clarity_agent.llm.chat import ChatBackend, ClientChatBackend
 from clarity_agent.llm.client import LLMClient
 from clarity_agent.llm.config import LLMConfig
-from clarity_agent.llm.factory import create_chat_backend, create_client
+from clarity_agent.llm.factory import (
+    create_chat_backend,
+    create_client,
+    fetch_model_catalog,
+    get_provider_model_catalog,
+)
 from clarity_agent.llm.types import (
     LLMAuthExpiredError,
     LLMResponse,
+    ModelCatalog,
+    ModelInfo,
     TextBlock,
     TokenUsage,
     ToolCallback,
@@ -47,6 +60,8 @@ __all__ = [
     "LLMClient",
     "LLMConfig",
     "LLMResponse",
+    "ModelCatalog",
+    "ModelInfo",
     "TextBlock",
     "TokenUsage",
     "ToolCallback",
@@ -54,4 +69,6 @@ __all__ = [
     "ToolUseBlock",
     "create_chat_backend",
     "create_client",
+    "fetch_model_catalog",
+    "get_provider_model_catalog",
 ]

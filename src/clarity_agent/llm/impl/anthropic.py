@@ -16,8 +16,10 @@ from typing import Any
 import anthropic as _anthropic_mod
 
 from clarity_agent.llm.client import LLMClient, extract_tool_detail, truncate
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     TextBlock,
     TokenUsage,
     ToolUseBlock,
@@ -51,6 +53,7 @@ _ANTHROPIC_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 
+
 class AnthropicClient(LLMClient):
     """Low-level async LLM client wrapping :class:`anthropic.AsyncAnthropic`.
 
@@ -63,6 +66,37 @@ class AnthropicClient(LLMClient):
 
     def __init__(self, *, api_key: str) -> None:
         self._client = _anthropic_mod.AsyncAnthropic(api_key=api_key)
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models this key can reach, via ``GET /v1/models``.
+
+        The listing reports ``id`` and ``display_name`` but no context
+        window, so windows come from
+        :data:`_ANTHROPIC_MODEL_CONTEXT_WINDOWS` where we know them and
+        are left ``None`` otherwise.  Anthropic returns models
+        newest-first; that order is preserved.
+
+        Note this path is unreachable under the ``claude_sdk`` auth
+        mode: that mode borrows Claude Code's credentials, which the
+        Anthropic SDK won't hand us, so no ``AnthropicClient`` is ever
+        built for it and the caller falls back to
+        :meth:`builtin_catalog`.
+        """
+        model_ids: list[str] = []
+        display_names: dict[str, str] = {}
+        # ``list()`` returns an auto-paginating async iterator.
+        async for model in self._client.models.list(limit=100):
+            model_ids.append(model.id)
+            if model.display_name:
+                display_names[model.id] = model.display_name
+
+        return build_catalog(
+            recommended=self.TIER_DEFAULTS,
+            context_windows=self.MODEL_CONTEXT_WINDOWS,
+            model_ids=model_ids,
+            display_names=display_names,
+            source="provider",
+        )
 
     async def _create_message(
         self,

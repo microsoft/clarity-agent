@@ -37,10 +37,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 if TYPE_CHECKING:
     from clarity_agent.transcript import Event, Transcript
 
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     CompactionCallback,
     CostCallback,
     LLMResponse,
+    ModelCatalog,
     StatusCallback,
     StructuredToolCallback,
     TextDeltaCallback,
@@ -131,6 +133,25 @@ class ChatBackend(ABC):
     ``input_tokens`` count well under this, so we only fire as
     the safety net when no compaction is happening anywhere.
     """
+
+    @classmethod
+    def builtin_catalog(cls) -> ModelCatalog:
+        """Models this backend knows about, without any network call.
+
+        The :class:`~clarity_agent.llm.client.LLMClient` counterpart of
+        the same name, for providers that have no low-level client —
+        the Claude Agent SDK and GitHub Copilot backends, whose runtimes
+        we drive rather than whose API we call.
+
+        Note for subclasses: this reads :attr:`TIER_DEFAULTS` off the
+        *class*, so a subclass that shadows it with an instance
+        property must override this too (see
+        :meth:`ClientChatBackend.builtin_catalog`).
+        """
+        return build_catalog(
+            recommended=cls.TIER_DEFAULTS,
+            context_windows=cls.MODEL_CONTEXT_WINDOWS,
+        )
 
     def __init__(self, *, transcript: Transcript | None = None) -> None:
         """Initialize the shared backend state.
@@ -375,6 +396,29 @@ class ClientChatBackend(ChatBackend):
         :meth:`resolve_model` is called with ``None``.
         """
         return {**self._client.TIER_DEFAULTS, **self._tier_overrides}
+
+    @classmethod
+    def builtin_catalog(cls) -> ModelCatalog:
+        """Not available on the wrapper — ask the wrapped client instead.
+
+        :attr:`TIER_DEFAULTS` is an instance property here (it merges
+        the user's overrides in), so the inherited class-level
+        implementation would read the property object rather than a
+        model table.  Every catalog caller goes through
+        :func:`~clarity_agent.llm.factory.get_provider_model_catalog`,
+        which dispatches to the concrete client class and never lands
+        here; this override exists so a future caller fails loudly
+        rather than getting nonsense.
+        """
+        raise NotImplementedError(
+            "ClientChatBackend wraps an arbitrary client and has no catalog "
+            "of its own — use the wrapped client's builtin_catalog(), or "
+            "llm.factory.get_provider_model_catalog(provider).",
+        )
+
+    async def fetch_models(self) -> ModelCatalog:
+        """Forward to the wrapped client's listing."""
+        return await self._client.fetch_models()
 
     @property  # type: ignore[override]
     def MODEL_CONTEXT_WINDOWS(self) -> dict[str, int]:  # type: ignore[override]

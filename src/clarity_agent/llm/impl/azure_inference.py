@@ -17,9 +17,11 @@ from azure.identity import DefaultAzureCredential as _DefaultAzureCredential
 
 from clarity_agent.llm.client import LLMClient
 from clarity_agent.llm.impl._openai_compat import uses_legacy_max_tokens
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMAuthExpiredError,
     LLMResponse,
+    ModelCatalog,
     TextBlock,
     TokenUsage,
     ToolUseBlock,
@@ -133,6 +135,29 @@ class AzureInferenceClient(LLMClient):
 
     TIER_DEFAULTS = _AZURE_TIER_DEFAULTS
     MODEL_CONTEXT_WINDOWS = _AZURE_MODEL_CONTEXT_WINDOWS
+
+    @classmethod
+    def builtin_catalog(cls) -> ModelCatalog:
+        """Suggested deployment names — Azure can't be enumerated.
+
+        On Azure the "model" is a *deployment* name the user chose when
+        provisioning, so there is no list to fetch: Inference
+        credentials can't enumerate deployments (that needs ARM
+        management-plane access), and the names are arbitrary anyway.
+        ``free_form`` tells the picker to take typed input instead of
+        offering a list, and tells
+        :func:`~clarity_agent.llm.factory.fetch_model_catalog` not to
+        bother building a client to ask.
+
+        The entries are the conventional names for the models this
+        codebase knows about, offered as a starting point rather than a
+        closed list.
+        """
+        return build_catalog(
+            recommended=cls.TIER_DEFAULTS,
+            context_windows=cls.MODEL_CONTEXT_WINDOWS,
+            free_form=True,
+        )
 
     def __init__(
         self,

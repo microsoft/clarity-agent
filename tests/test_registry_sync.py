@@ -375,6 +375,53 @@ class TestProviderSync:
             f"Add a branch in llm/factory.py."
         )
 
+    def test_providers_have_model_catalogs(self) -> None:
+        """Every provider must resolve to a class that owns its model tables.
+
+        ``_catalog_source_class`` is a hand-maintained dispatch, so a
+        newly added provider silently falls through to an empty catalog
+        and its model picker comes up blank.  Checking the built
+        catalog rather than the dispatch source also catches a provider
+        wired to a class with no ``TIER_DEFAULTS``.
+        """
+        from clarity_agent.llm.factory import get_provider_model_catalog
+
+        empty = [
+            name for name in _PROVIDERS
+            if not get_provider_model_catalog(name).models
+        ]
+        assert not empty, (
+            f"Providers with an empty model catalog: {empty}\n"
+            f"Add a branch in _catalog_source_class() in llm/factory.py "
+            f"pointing at the class that declares the provider's "
+            f"TIER_DEFAULTS / MODEL_CONTEXT_WINDOWS."
+        )
+
+    def test_provider_catalogs_default_to_their_deep_model(self) -> None:
+        """A provider's default model must stay its ``deep`` tier.
+
+        Every process in ``process_registry`` maps to the ``"deep"``
+        tier, so the deep model is what Clarity actually runs on.  This
+        is the invariant the tier collapse depends on: defaulting to
+        the ``default`` tier instead would silently downgrade any
+        provider whose two entries differ.
+        """
+        from clarity_agent.llm.factory import (
+            get_provider_model_catalog,
+            get_provider_tier_defaults,
+        )
+
+        wrong = {
+            name: (get_provider_model_catalog(name).default_model, tiers["deep"])
+            for name in _PROVIDERS
+            if (tiers := get_provider_tier_defaults(name)).get("deep")
+            and get_provider_model_catalog(name).default_model != tiers["deep"]
+        }
+        assert not wrong, (
+            f"Providers whose catalog default isn't their deep model "
+            f"(got, expected): {wrong}"
+        )
+
     def test_providers_have_chat_backend(self) -> None:
         """Every provider should be reachable via create_chat_backend().
 

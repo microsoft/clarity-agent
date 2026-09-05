@@ -12,8 +12,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, ClassVar
 
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     StructuredToolCallback,
     TextDeltaCallback,
     ToolCallback,
@@ -167,6 +169,37 @@ class LLMClient(ABC):
         - Anything else → returned as-is (treated as a literal model string)
         """
         return self.TIER_DEFAULTS.get(model_or_tier, model_or_tier)
+
+    @classmethod
+    def builtin_catalog(cls) -> ModelCatalog:
+        """Models this class knows about, without any network call.
+
+        Derived from :attr:`TIER_DEFAULTS` and
+        :attr:`MODEL_CONTEXT_WINDOWS` — the model names this codebase
+        has already vetted — so it can't drift from them the way a
+        separately maintained list would.
+
+        A classmethod because a catalog describes the *provider*, not
+        a particular client: callers need it before credentials are
+        resolved, and it's the fallback whenever a live listing fails.
+        Subclasses override only to change the framing (Azure marks
+        itself ``free_form``), not the contents.
+        """
+        return build_catalog(
+            recommended=cls.TIER_DEFAULTS,
+            context_windows=cls.MODEL_CONTEXT_WINDOWS,
+        )
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models these credentials can reach.
+
+        The default is :meth:`builtin_catalog` — correct for providers
+        with no listing endpoint.  Subclasses that can enumerate
+        override this and are free to raise on failure:
+        :func:`~clarity_agent.llm.factory.fetch_model_catalog` catches,
+        falls back to the built-in catalog, and attaches the error.
+        """
+        return self.builtin_catalog()
 
     async def create_message(
         self,

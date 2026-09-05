@@ -14,8 +14,10 @@ import openai as _openai_mod
 
 from clarity_agent.llm.client import LLMClient
 from clarity_agent.llm.impl._openai_compat import uses_legacy_max_tokens
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     TextBlock,
     TokenUsage,
     ToolUseBlock,
@@ -104,6 +106,35 @@ def _translate_messages(
     return result
 
 
+
+# ---------------------------------------------------------------------------
+# Model catalog
+# ---------------------------------------------------------------------------
+
+# ``GET /v1/models`` returns every model on the account — embeddings,
+# speech, image, moderation — with nothing in the payload saying which
+# ones do chat completions.  So we filter by name: a model must match a
+# known chat prefix and contain none of the non-chat markers.  It's a
+# heuristic, and it errs toward hiding an unfamiliar model rather than
+# offering one that will 404 on the first turn; anything wrongly hidden
+# is still reachable by typing its id.
+_CHAT_MODEL_PREFIXES: tuple[str, ...] = ("gpt-", "chatgpt-", "o1", "o3", "o4")
+
+_NON_CHAT_MARKERS: tuple[str, ...] = (
+    "embedding", "tts", "whisper", "dall-e", "moderation", "audio",
+    "realtime", "image", "transcribe", "search", "similarity", "edit",
+    "instruct", "davinci", "babbage", "curie", "ada", "codex",
+)
+
+
+def _is_chat_model(model_id: str) -> bool:
+    """True if *model_id* looks like a chat-completions model."""
+    lowered = model_id.lower()
+    if not lowered.startswith(_CHAT_MODEL_PREFIXES):
+        return False
+    return not any(marker in lowered for marker in _NON_CHAT_MARKERS)
+
+
 class OpenAIClient(LLMClient):
     """Low-level async LLM client wrapping OpenAI's chat completions API.
 
@@ -116,6 +147,24 @@ class OpenAIClient(LLMClient):
 
     def __init__(self, *, api_key: str) -> None:
         self._client = _openai_mod.AsyncOpenAI(api_key=api_key)
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List chat-capable models on this key, via ``GET /v1/models``.
+
+        OpenAI supplies no display names, so those are derived from the
+        id, and the listing has no useful order, so results are sorted
+        newest-first by ``created``.
+        """
+        listed = [m async for m in await self._client.models.list()]
+        chat_models = [m for m in listed if _is_chat_model(m.id)]
+        chat_models.sort(key=lambda m: m.created or 0, reverse=True)
+
+        return build_catalog(
+            recommended=self.TIER_DEFAULTS,
+            context_windows=self.MODEL_CONTEXT_WINDOWS,
+            model_ids=[m.id for m in chat_models],
+            source="provider",
+        )
 
     async def _create_message(
         self,
