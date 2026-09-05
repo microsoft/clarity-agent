@@ -397,14 +397,13 @@ class TestProviderSync:
             f"TIER_DEFAULTS / MODEL_CONTEXT_WINDOWS."
         )
 
-    def test_provider_catalogs_default_to_their_deep_model(self) -> None:
-        """A provider's default model must stay its ``deep`` tier.
+    def test_provider_catalogs_default_to_their_default_model(self) -> None:
+        """A provider's catalog default must be its ``default`` tier.
 
-        Every process in ``process_registry`` maps to the ``"deep"``
-        tier, so the deep model is what Clarity actually runs on.  This
-        is the invariant the tier collapse depends on: defaulting to
-        the ``default`` tier instead would silently downgrade any
-        provider whose two entries differ.
+        The role named "default" is the model a fresh install runs on;
+        ``deep`` is the heavier option offered beside it in the picker.
+        A provider that declares a ``default`` must not have the
+        catalog quietly pick something else.
         """
         from clarity_agent.llm.factory import (
             get_provider_model_catalog,
@@ -412,13 +411,13 @@ class TestProviderSync:
         )
 
         wrong = {
-            name: (get_provider_model_catalog(name).default_model, tiers["deep"])
+            name: (get_provider_model_catalog(name).default_model, tiers["default"])
             for name in _PROVIDERS
-            if (tiers := get_provider_tier_defaults(name)).get("deep")
-            and get_provider_model_catalog(name).default_model != tiers["deep"]
+            if (tiers := get_provider_tier_defaults(name)).get("default")
+            and get_provider_model_catalog(name).default_model != tiers["default"]
         }
         assert not wrong, (
-            f"Providers whose catalog default isn't their deep model "
+            f"Providers whose catalog default isn't their default model "
             f"(got, expected): {wrong}"
         )
 

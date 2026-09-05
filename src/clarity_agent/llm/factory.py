@@ -106,6 +106,45 @@ def get_provider_model_catalog(
     return source.builtin_catalog()
 
 
+def _listing_client(config: LLMConfig) -> LLMClient | None:
+    """Return a client able to enumerate models, or ``None``.
+
+    Listing models is a weaker requirement than holding a conversation:
+    it's one credentialed GET, with no runtime, session, or tool
+    plumbing behind it.  So this is deliberately more permissive than
+    :func:`create_client`.
+
+    The case that matters is Anthropic's ``claude_sdk`` auth mode.
+    ``create_client`` refuses it because *chat* has to go through the
+    agent runtime, but that says nothing about ``/v1/models``.  Two
+    credentials can serve that listing, in order of preference:
+
+    1. An ``ANTHROPIC_API_KEY``, which :meth:`LLMConfig.create` picks
+       up from the environment whatever auth mode is selected.
+    2. Failing that, the OAuth token ``claude login`` stored — see
+       :mod:`clarity_agent.llm.claude_code_auth` for why that's a
+       best-effort last resort.
+
+    With neither, there's nothing to enumerate with and the caller
+    falls back to the built-in catalog.
+    """
+    if config.provider == "anthropic" and config.auth_mode == "claude_sdk":
+        from clarity_agent.llm.impl.anthropic import AnthropicClient
+
+        if config.api_key:
+            return AnthropicClient(api_key=config.api_key)
+
+        from clarity_agent.llm.claude_code_auth import find_oauth_token
+
+        token = find_oauth_token()
+        return AnthropicClient(auth_token=token) if token else None
+
+    try:
+        return create_client(config)
+    except Exception:  # noqa: BLE001 — chat-only provider or partial credentials
+        return None
+
+
 async def fetch_model_catalog(
     config: LLMConfig,
     *,
@@ -146,14 +185,12 @@ async def fetch_model_catalog(
     if builtin.free_form:
         return builtin
 
-    try:
-        client = create_client(config)
-    except Exception:  # noqa: BLE001 — see below
-        # No client for this config: either the provider is chat-only
-        # (``claude_sdk``, Copilot) or the credentials are incomplete.
-        # Neither is an error worth surfacing here — the built-in
-        # catalog is the right answer, and a genuinely broken
-        # credential will announce itself on the first chat turn.
+    client = _listing_client(config)
+    if client is None:
+        # Nothing that can enumerate for this config.  Not an error
+        # worth surfacing — the built-in catalog is the right answer,
+        # and a genuinely broken credential will announce itself on
+        # the first chat turn.
         return builtin
 
     try:

@@ -75,19 +75,17 @@ class ModelInfo:
     """Human-readable name for the picker (``"Claude Opus 5"``)."""
 
     role: str | None = None
-    """Optional highlight role — one of ``"deep"``, ``"default"``, or
+    """Optional highlight role — one of ``"default"``, ``"deep"``, or
     ``"fast"``, mirroring the keys of a backend's ``TIER_DEFAULTS``.
 
     Roles exist so the picker can surface a provider's few notable
-    models above the long tail.  A model may fill several roles at
-    once (Anthropic's ``default`` and ``deep`` are the same model);
+    models above the long tail: the one we use by default, a heavier
+    option, and a lighter one.  A model may fill several roles at once
+    (a provider whose heaviest model is also its default);
     :func:`clarity_agent.llm.model_catalog.assign_roles` keeps the
-    first match in ``deep`` → ``default`` → ``fast`` order so each
-    model appears exactly once.
-
-    ``deep`` wins that tie-break because it is also what
-    :attr:`ModelCatalog.default_model` selects, so the model marked
-    "Deep" in the picker is always the one we actually default to."""
+    first match in ``default`` → ``deep`` → ``fast`` order, so each
+    model appears exactly once and the model marked "default" is the
+    one :attr:`ModelCatalog.default_model` selects."""
 
     description: str | None = None
     """Optional one-line description, when the provider supplies one."""
@@ -108,12 +106,8 @@ class ModelCatalog:
     models first, then the rest in provider order."""
 
     default_model: str = ""
-    """Model to use when the user has never picked one.
-
-    This is the provider's ``deep`` model, not its ``default`` one.
-    Every process in ``process_registry`` maps to the ``"deep"`` tier
-    today, so the deep model is what Clarity has actually been running
-    on; defaulting anywhere else would be a silent downgrade."""
+    """Model to use when the user has never picked one — the provider's
+    ``default`` role, not its ``deep`` one."""
 
     source: str = "builtin"
     """``"provider"`` when fetched live, ``"builtin"`` when it came
@@ -131,8 +125,8 @@ class ModelCatalog:
 
     @property
     def highlighted(self) -> list[ModelInfo]:
-        """Models carrying a role, in ``deep``/``default``/``fast`` order."""
-        order = {"deep": 0, "default": 1, "fast": 2}
+        """Models carrying a role, in ``default``/``deep``/``fast`` order."""
+        order = {"default": 0, "deep": 1, "fast": 2}
         return sorted(
             (m for m in self.models if m.role is not None),
             key=lambda m: order.get(m.role or "", 99),

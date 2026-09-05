@@ -293,6 +293,15 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
 }
 
 
+def get_provider_names() -> list[str]:
+    """Return every known provider name, sorted.
+
+    The public read of the provider registry, for CLI ``choices`` lists
+    and anything else that needs to offer the full set.
+    """
+    return sorted(_PROVIDERS)
+
+
 def get_auth_mode_info(provider: str, auth_mode_name: str) -> dict[str, Any] | None:
     """Look up auth mode metadata by provider and mode name."""
     info = _PROVIDERS.get(provider)
@@ -515,7 +524,7 @@ class LLMConfig:
         group.add_argument(
             "--provider",
             default=default_provider,
-            choices=sorted(_PROVIDERS),
+            choices=get_provider_names(),
             help="LLM provider (default: auto-detect from environment)",
         )
         group.add_argument(

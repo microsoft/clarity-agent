@@ -39,6 +39,8 @@ A new provider (e.g., alongside existing anthropic, openai, azure_inference, cla
 - [ ] **`src/clarity_agent/llm/impl/yourprovider.py`** (new file) — Implement `_TIER_DEFAULTS`, client class, and backend class
 - [ ] **`src/clarity_agent/llm/config.py`** — `_PROVIDERS`: add entry with package_name, env_var, auth_modes, default_auth_mode
 - [ ] **`src/clarity_agent/llm/factory.py`** — `get_provider_tier_defaults()`: add branch returning provider's tier defaults
+- [ ] **`src/clarity_agent/llm/factory.py`** — `_catalog_source_class()`: add branch returning the class that declares `TIER_DEFAULTS` / `MODEL_CONTEXT_WINDOWS` (the `LLMClient` subclass, or the `ChatBackend` subclass for chat-only providers). Without it `clarity models` and the model picker come up empty; `tests/test_registry_sync.py::TestProviderSync::test_providers_have_model_catalogs` catches this
+- [ ] **`src/clarity_agent/llm/impl/yourprovider.py`** — override `fetch_models()` if the provider publishes a model list; otherwise the inherited default returns the built-in catalog. Raise on failure rather than catching — `fetch_model_catalog()` handles fallback and error reporting
 - [ ] **`src/clarity_agent/llm/factory.py`** — `create_client()`: add branch instantiating your client
 - [ ] **`src/clarity_agent/llm/factory.py`** — `create_chat_backend()`: add branch instantiating your backend
 - [ ] **`CONTRIBUTING.md`** — Update LLM backends table with provider name, `--provider` value, and env var

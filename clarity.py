@@ -99,6 +99,16 @@ def _cmd_doctor(_args: argparse.Namespace) -> None:
     cli_main()
 
 
+def _add_models_arguments(parser: argparse.ArgumentParser) -> None:
+    from clarity_agent.llm.models_cli import add_arguments
+    add_arguments(parser)
+
+
+def _cmd_models(args: argparse.Namespace) -> None:
+    from clarity_agent.llm.models_cli import cli_main
+    cli_main(args)
+
+
 def _cmd_install(args: argparse.Namespace) -> None:
     """Run the CLI install, the desktop build, or both.
 
@@ -445,7 +455,7 @@ def _write_crash_log(exc: BaseException) -> Path | None:
 
 _SUBCOMMANDS = (
     "app", "web", "cli", "process", "packet", "status",
-    "install", "embed", "update", "doctor", "help",
+    "install", "embed", "update", "doctor", "models", "help",
 )
 _DEFAULT_COMMAND = "web"
 
@@ -500,6 +510,19 @@ def main() -> None:
         "doctor",
         help="Diagnose the installation and fix common problems",
     )
+
+    # ---- clarity models -------------------------------------------------
+    models_parser = subparsers.add_parser(
+        "models",
+        help="List the models available from an LLM provider",
+        description=(
+            "Show which models a provider offers, using the same "
+            "credentials the app uses.  Providers that publish a model "
+            "list are queried directly; the rest fall back to the "
+            "models built into this release."
+        ),
+    )
+    _add_models_arguments(models_parser)
 
     # ---- clarity app (desktop webview) ---------------------------------
     app_parser = subparsers.add_parser(
@@ -761,6 +784,7 @@ def main() -> None:
         "install": _cmd_install,
         "embed": _cmd_embed,
         "update": _cmd_update,
+        "models": _cmd_models,
     }
     try:
         dispatch[args.command](args)

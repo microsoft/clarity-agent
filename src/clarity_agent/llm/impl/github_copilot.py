@@ -53,7 +53,7 @@ from clarity_agent.llm.chat import ChatBackend
 from clarity_agent.llm.types import CompactionInfo, ToolHandler, ToolUseBlock
 
 _GITHUB_TIER_DEFAULTS: dict[str, str] = {
-    "default": "claude-sonnet-4.6",
+    "default": "claude-opus-4.6",
     "deep": "claude-opus-4.6",
     "fast": "claude-sonnet-4.6",
 }

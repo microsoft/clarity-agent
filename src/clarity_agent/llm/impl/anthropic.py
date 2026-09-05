@@ -27,7 +27,7 @@ from clarity_agent.llm.types import (
 
 _ANTHROPIC_TIER_DEFAULTS: dict[str, str] = {
     "default": "claude-opus-5",
-    "deep": "claude-opus-5",
+    "deep": "claude-fable-5-1",
     "fast": "claude-sonnet-5",
 }
 
@@ -64,8 +64,39 @@ class AnthropicClient(LLMClient):
     TIER_DEFAULTS = _ANTHROPIC_TIER_DEFAULTS
     MODEL_CONTEXT_WINDOWS = _ANTHROPIC_MODEL_CONTEXT_WINDOWS
 
-    def __init__(self, *, api_key: str) -> None:
-        self._client = _anthropic_mod.AsyncAnthropic(api_key=api_key)
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        auth_token: str | None = None,
+    ) -> None:
+        """Build a client from an API key or a bearer token.
+
+        ``api_key`` is the ordinary path (``x-api-key``).  ``auth_token``
+        authenticates as a bearer instead, which is how a Claude Code
+        OAuth token is presented; that path also needs the OAuth beta
+        header.  Exactly one must be given.
+
+        The token path exists to enumerate models for the
+        ``claude_sdk`` auth mode (see
+        :mod:`clarity_agent.llm.claude_code_auth`).  Chat under that
+        mode still belongs to the SDK backend — this client is not a
+        way around that.
+        """
+        if bool(api_key) == bool(auth_token):
+            raise ValueError(
+                "AnthropicClient needs exactly one of api_key or auth_token",
+            )
+
+        if auth_token:
+            from clarity_agent.llm.claude_code_auth import OAUTH_BETA_HEADER
+
+            self._client = _anthropic_mod.AsyncAnthropic(
+                auth_token=auth_token,
+                default_headers={"anthropic-beta": OAUTH_BETA_HEADER},
+            )
+        else:
+            self._client = _anthropic_mod.AsyncAnthropic(api_key=api_key)
 
     async def fetch_models(self) -> ModelCatalog:
         """List the models this key can reach, via ``GET /v1/models``.
@@ -76,11 +107,11 @@ class AnthropicClient(LLMClient):
         are left ``None`` otherwise.  Anthropic returns models
         newest-first; that order is preserved.
 
-        Note this path is unreachable under the ``claude_sdk`` auth
-        mode: that mode borrows Claude Code's credentials, which the
-        Anthropic SDK won't hand us, so no ``AnthropicClient`` is ever
-        built for it and the caller falls back to
-        :meth:`builtin_catalog`.
+        Reached under either auth mode: a ``claude_sdk`` session that
+        also has an ``ANTHROPIC_API_KEY`` available lists through here
+        too, since the listing only needs the key, not the agent
+        runtime that mode uses for chat.  See
+        :func:`~clarity_agent.llm.factory._listing_client`.
         """
         model_ids: list[str] = []
         display_names: dict[str, str] = {}

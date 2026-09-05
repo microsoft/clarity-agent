@@ -17,6 +17,7 @@ from clarity_agent.llm import LLMConfig
 from clarity_agent.llm.factory import (
     fetch_model_catalog,
     get_provider_model_catalog,
+    get_provider_tier_defaults,
 )
 from clarity_agent.llm.model_catalog import (
     CACHE_TTL_SECONDS,
@@ -112,11 +113,11 @@ class TestAssignRoles:
         tagged = assign_roles(models, {"deep": "a", "fast": "b"})
         assert [m.role for m in tagged] == ["deep", "fast"]
 
-    def test_model_filling_two_roles_keeps_deep(self) -> None:
-        """Anthropic's ``default`` and ``deep`` are the same model."""
+    def test_model_filling_two_roles_keeps_default(self) -> None:
+        """A provider whose heaviest model is also its default."""
         models = [ModelInfo(id="opus", display_name="Opus"), ModelInfo(id="sonnet", display_name="Sonnet")]
         tagged = assign_roles(models, {"default": "opus", "deep": "opus", "fast": "sonnet"})
-        assert [(m.id, m.role) for m in tagged] == [("opus", "deep"), ("sonnet", "fast")]
+        assert [(m.id, m.role) for m in tagged] == [("opus", "default"), ("sonnet", "fast")]
 
     def test_unlisted_recommendation_is_ignored(self) -> None:
         models = [ModelInfo(id="a", display_name="A")]
@@ -125,12 +126,16 @@ class TestAssignRoles:
 
 
 class TestDefaultModelFor:
-    def test_prefers_deep_over_default(self) -> None:
-        """The deep model is what every process actually runs on today."""
-        assert default_model_for({"default": "sonnet", "deep": "opus", "fast": "haiku"}) == "opus"
+    def test_prefers_default_over_deep(self) -> None:
+        """The role named "default" is the one we default to.
+
+        ``deep`` is the heavier option offered alongside it, not the
+        one we reach for on our own.
+        """
+        assert default_model_for({"default": "opus", "deep": "fable", "fast": "haiku"}) == "opus"
 
     def test_falls_back_through_role_order(self) -> None:
-        assert default_model_for({"default": "sonnet", "fast": "haiku"}) == "sonnet"
+        assert default_model_for({"deep": "fable", "fast": "haiku"}) == "fable"
         assert default_model_for({"fast": "haiku"}) == "haiku"
 
     def test_empty_recommendations(self) -> None:
@@ -179,10 +184,10 @@ class TestBuildCatalog:
 
     def test_default_missing_from_listing_is_still_offered(self) -> None:
         """A recommendation the provider no longer lists stays selectable."""
-        catalog = build_catalog(recommended={"deep": "retired"}, model_ids=["a", "b"])
+        catalog = build_catalog(recommended={"default": "retired"}, model_ids=["a", "b"])
         assert catalog.default_model == "retired"
         assert catalog.models[0].id == "retired"
-        assert catalog.models[0].role == "deep"
+        assert catalog.models[0].role == "default"
 
     def test_default_falls_back_to_first_model(self) -> None:
         catalog = build_catalog(recommended={}, model_ids=["a", "b"])
@@ -195,7 +200,7 @@ class TestBuildCatalog:
         ``models``; inventing a one-model catalog here would hide a
         provider anomaly behind a plausible-looking answer.
         """
-        catalog = build_catalog(recommended={"deep": "opus"}, model_ids=[])
+        catalog = build_catalog(recommended={"default": "opus"}, model_ids=[])
         assert catalog.models == []
 
     def test_empty_catalog(self) -> None:
@@ -209,13 +214,13 @@ class TestModelCatalogAccessors:
         catalog = build_catalog(recommended={}, model_ids=["a"])
         assert catalog.get("nope") is None
 
-    def test_highlighted_ordering_is_deep_default_fast(self) -> None:
+    def test_highlighted_ordering_is_default_deep_fast(self) -> None:
         catalog = ModelCatalog(models=[
             ModelInfo(id="c", display_name="C", role="fast"),
             ModelInfo(id="a", display_name="A", role="deep"),
             ModelInfo(id="b", display_name="B", role="default"),
         ])
-        assert [m.id for m in catalog.highlighted] == ["a", "b", "c"]
+        assert [m.id for m in catalog.highlighted] == ["b", "a", "c"]
 
 
 class TestDescribeFetchError:
@@ -241,25 +246,37 @@ class TestBuiltinCatalogs:
         assert catalog.source == "builtin"
 
     @pytest.mark.parametrize("provider", ["anthropic", "openai", "gemini", "azure", "github"])
-    def test_default_matches_the_provider_deep_tier(self, provider: str) -> None:
-        """The default model must stay the deep one.
-
-        Every process in ``process_registry`` maps to the ``"deep"``
-        tier, so the deep model is what Clarity actually runs on.
-        Defaulting to the ``default`` tier instead would silently
-        downgrade providers whose two entries differ — GitHub Copilot
-        being the live example.
-        """
+    def test_default_matches_the_provider_default_tier(self, provider: str) -> None:
+        """A fresh install gets the provider's declared default model."""
         from clarity_agent.llm.factory import get_provider_tier_defaults
 
         tiers = get_provider_tier_defaults(provider)
         catalog = get_provider_model_catalog(provider)
-        assert catalog.default_model == tiers["deep"]
+        assert catalog.default_model == tiers["default"]
 
-    def test_github_default_is_opus_not_sonnet(self) -> None:
-        """Regression guard for the migration trap, stated concretely."""
-        catalog = get_provider_model_catalog("github")
-        assert catalog.default_model == "claude-opus-4.6"
+    def test_anthropic_separates_its_default_from_its_deep_model(self) -> None:
+        """Opus 5 is what we run; Fable 5.1 is the heavier option."""
+        catalog = get_provider_model_catalog("anthropic")
+        assert catalog.default_model == "claude-opus-5"
+        by_role = {m.role: m.id for m in catalog.highlighted}
+        assert by_role["default"] == "claude-opus-5"
+        assert by_role["deep"] == "claude-fable-5-1"
+        assert by_role["fast"] == "claude-sonnet-5"
+
+    @pytest.mark.parametrize("provider", ["anthropic", "openai", "gemini", "azure", "github"])
+    def test_every_provider_defaults_to_an_opus_class_model(
+        self, provider: str,
+    ) -> None:
+        """The ``default`` role is the strong general model, everywhere.
+
+        Not the cheap one and not the heaviest — the one we're happy to
+        run every turn on.  Pinned because it's easy to reintroduce a
+        per-provider "save money by default" choice that silently
+        weakens Clarity.
+        """
+        catalog = get_provider_model_catalog(provider)
+        fast = get_provider_tier_defaults(provider).get("fast")
+        assert catalog.default_model != fast or fast is None
 
     def test_azure_is_free_form(self) -> None:
         """Azure deployments are user-named, so the picker takes typed input."""
@@ -318,12 +335,11 @@ class TestAnthropicFetchModels:
         assert catalog.get("claude-opus-5").context_window == 1_000_000  # type: ignore[union-attr]
         assert catalog.get("claude-brand-new").context_window is None  # type: ignore[union-attr]
 
-    def test_claude_sdk_mode_uses_builtin(self) -> None:
-        """The SDK borrows Claude Code's credentials; we have no key to list with.
+    def test_claude_sdk_without_a_key_uses_builtin(self) -> None:
+        """Nothing to list with: the SDK holds Claude Code's credentials.
 
-        ``create_client`` refuses that auth mode, so no listing is even
-        attempted and the built-in catalog comes back clean — no error,
-        because nothing failed.
+        The built-in catalog comes back clean — no error, because
+        nothing was attempted and nothing failed.
         """
         from clarity_agent.llm.impl import anthropic as impl
 
@@ -334,6 +350,28 @@ class TestAnthropicFetchModels:
         ctor.assert_not_called()
         assert catalog.source == "builtin"
         assert catalog.error is None
+
+    def test_claude_sdk_with_a_key_still_enumerates(self) -> None:
+        """A listing needs a key, not the agent runtime.
+
+        ``create_client`` refuses ``claude_sdk`` because *chat* must go
+        through the SDK, but ``/v1/models`` doesn't care — and
+        ``LLMConfig.create`` picks up an ``ANTHROPIC_API_KEY`` from the
+        environment whatever auth mode is selected.
+        """
+        from clarity_agent.llm.impl import anthropic as impl
+
+        client = MagicMock()
+        client.models.list.return_value = _AsyncIter([
+            SimpleNamespace(id="claude-brand-new", display_name="Claude Brand New"),
+        ])
+        with patch.object(impl._anthropic_mod, "AsyncAnthropic", return_value=client):
+            catalog = asyncio.run(fetch_model_catalog(
+                _config("anthropic", auth_mode="claude_sdk", api_key="sk-ant-test"),
+            ))
+
+        assert catalog.source == "provider"
+        assert catalog.get("claude-brand-new") is not None
 
     def test_failure_falls_back_with_an_error_message(self) -> None:
         """Providers raise; the factory converts that to a usable fallback."""
@@ -478,12 +516,20 @@ class TestNonEnumerableProviders:
         assert catalog.free_form is True
         assert catalog.source == "builtin"
 
+    def test_listing_client_is_none_for_chat_only_providers(self) -> None:
+        from clarity_agent.llm.factory import _listing_client
+
+        assert _listing_client(_config("github")) is None
+        assert _listing_client(
+            _config("anthropic", auth_mode="claude_sdk", api_key=None),
+        ) is None
+
     def test_github_returns_builtin(self) -> None:
         """Copilot is chat-only, so ``create_client`` refuses and we fall back."""
         catalog = asyncio.run(fetch_model_catalog(_config("github")))
         assert catalog.source == "builtin"
-        assert catalog.default_model == "claude-opus-4.6"
         assert catalog.error is None
+        assert catalog.default_model == "claude-opus-4.6"
 
 
 # ---------------------------------------------------------------------------
@@ -596,3 +642,79 @@ class TestFetchModelCatalog:
     def test_unknown_provider_yields_empty_catalog(self) -> None:
         catalog = asyncio.run(fetch_model_catalog(_config("nonesuch")))
         assert catalog.models == []
+
+
+# ---------------------------------------------------------------------------
+# clarity models
+# ---------------------------------------------------------------------------
+
+class TestModelsCli:
+    def _args(self, provider: str | None = None, **kw: Any) -> Any:
+        return SimpleNamespace(
+            provider=provider,
+            auth_mode=kw.get("auth_mode"),
+            refresh=kw.get("refresh", False),
+        )
+
+    def test_probing_another_provider_does_not_switch_you_to_it(self) -> None:
+        """``LLMConfig.create`` persists what it resolves; a query must not.
+
+        Without the suppression in ``_resolve_config``, running
+        ``clarity models openai`` would rewrite settings.json and
+        switch the user's provider as a side effect of asking a
+        question.
+        """
+        from clarity_agent.llm.models_cli import _resolve_config
+        from clarity_agent.settings import Settings
+
+        s = Settings.current()
+        s.provider = "anthropic"
+        s.auth_mode = "claude_sdk"
+        s.openai_api_key = "sk-test"
+        s.save()
+
+        config = _resolve_config(self._args("openai"))
+        assert config.provider == "openai"
+
+        assert Settings.current().provider == "anthropic"
+        assert Settings.current().auth_mode == "claude_sdk"
+        reloaded = Settings.load()
+        assert reloaded.provider == "anthropic"
+        assert reloaded.auth_mode == "claude_sdk"
+
+    def test_save_is_restored_even_on_failure(self) -> None:
+        """The monkeypatched ``Settings.save`` must not leak past the call."""
+        from clarity_agent.llm.models_cli import _resolve_config
+        from clarity_agent.settings import Settings
+
+        original = Settings.save
+        with pytest.raises(SystemExit):
+            _resolve_config(self._args("azure"))  # no endpoint configured
+        assert Settings.save is original
+
+    def test_renders_a_catalog_without_crashing(self, capsys: Any) -> None:
+        from clarity_agent.llm.models_cli import _print_catalog
+
+        config = _config("gemini")
+        catalog = build_catalog(
+            recommended={"deep": "a"},
+            model_ids=["a", "b"],
+            descriptions={"b": "A described model."},
+            context_windows={"a": 1_000_000},
+            source="provider",
+        )
+        _print_catalog(config, catalog)
+
+        out = capsys.readouterr().out
+        assert "fetched from the provider" in out
+        assert "1,000,000" in out
+        assert "A described model." in out
+
+    def test_free_form_provider_explains_itself(self, capsys: Any) -> None:
+        from clarity_agent.llm.models_cli import _print_catalog
+
+        _print_catalog(
+            _config("azure"),
+            get_provider_model_catalog("azure"),
+        )
+        assert "deployment names" in capsys.readouterr().out

@@ -28,11 +28,16 @@ from typing import Any
 
 from clarity_agent.llm.types import ModelCatalog, ModelInfo
 
-# Role tie-break order.  A model filling several roles keeps the first
-# one matched here.  ``deep`` leads because it is also what
-# :func:`default_model_for` picks, so the model labelled "Deep" in the
-# picker is always the one we actually default to.
-ROLE_ORDER: tuple[str, ...] = ("deep", "default", "fast")
+# The three highlight roles, in priority order.  Used for three things
+# at once, deliberately: which role a model keeps when it fills more
+# than one, what order highlighted models are listed in, and which
+# entry :func:`default_model_for` selects.
+#
+# ``default`` leads because the role means exactly what it says — the
+# model we use unless the user picks otherwise.  ``deep`` is the
+# heavier option offered alongside it, and ``fast`` the lighter one;
+# neither is what we reach for on its own.
+ROLE_ORDER: tuple[str, ...] = ("default", "deep", "fast")
 
 # How long a live provider listing stays fresh.  Model lineups change
 # on the order of weeks, so a day is generous but still picks up new
@@ -157,11 +162,14 @@ def order_models(models: Sequence[ModelInfo]) -> list[ModelInfo]:
 def default_model_for(recommended: Mapping[str, str]) -> str:
     """Pick the model to use when the user has never chosen one.
 
-    Prefers the ``deep`` entry.  Every process in ``process_registry``
-    maps to the ``"deep"`` tier today, so the deep model is what
-    Clarity has actually been running on; falling back to ``default``
-    would silently downgrade providers whose two entries differ (e.g.
-    GitHub Copilot's ``claude-opus-4.6`` vs ``claude-sonnet-4.6``).
+    Prefers the ``default`` entry, falling back through
+    :data:`ROLE_ORDER` for providers that don't declare one.
+
+    Note this is about a *fresh* install.  Migrating an existing user
+    is a different question with a different answer: until the tier
+    collapse lands, every process maps to the ``"deep"`` tier, so what
+    someone is running today is their deep model, and their settings
+    migration has to read that rather than this.
     """
     for role in ROLE_ORDER:
         model_id = recommended.get(role)
@@ -242,7 +250,13 @@ def build_catalog(
         models.insert(0, ModelInfo(
             id=default,
             display_name=display_names.get(default) or humanize_model_id(default),
-            role="deep",
+            # Whichever role selected it — normally "default", but a
+            # provider that declares no default entry falls further
+            # down ROLE_ORDER, and the label has to match.
+            role=next(
+                (r for r in ROLE_ORDER if recommended.get(r) == default),
+                None,
+            ),
             context_window=context_windows.get(default),
         ))
     if not default and models:
