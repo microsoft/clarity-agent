@@ -5,10 +5,9 @@
 # main app (env vars → keyring → settings.json).
 #
 # You can define as many roles as you want. Three roles have reserved names:
-#   _target — the system under test (a ClaritySession).  Runs the normal
-#             Clarity tier routing, so the model choice per process is
-#             governed by the target provider's tier defaults — the
-#             ``model`` field is NOT used for this role.
+#   _target — the system under test (a ClaritySession).  ``model`` pins
+#             the model under test; leave it unset to follow the
+#             provider's recommendation.
 #   _user   — the simulated user, a single-call LLM.  ``model`` picks
 #             the exact model.
 #   _judge  — the evaluator, a single-call LLM.  ``model`` picks the

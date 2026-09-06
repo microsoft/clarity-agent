@@ -29,7 +29,7 @@ _OPENAI_RECOMMENDED: dict[str, str] = {
     "fast": "gpt-5.4-mini",
 }
 
-# Context-window size in tokens.  Co-located with the tier defaults
+# Context-window size in tokens.  Co-located with the recommendations
 # so this file declares everything about its known models in one
 # place.  Unknown models fall back to ``ChatBackend.DEFAULT_CONTEXT_WINDOW``
 # (or a user override in ``Settings.context_window_overrides``).

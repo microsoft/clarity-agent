@@ -839,3 +839,49 @@ class TestCliMain:
              pytest.raises(SystemExit) as exc_info:
             cli_main()
         assert exc_info.value.code == 1
+
+
+class TestConnectionTestModel:
+    """The connection test must exercise the model the user will use.
+
+    Testing the provider's recommendation when the user has pinned
+    something else — an Azure deployment name, most importantly — would
+    report a working setup for a model they never call.
+    """
+
+    def test_uses_clarity_model_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CLARITY_MODEL", "my-deployment")
+        captured: dict[str, object] = {}
+
+        def _capture(self: object) -> str:
+            captured["model"] = self.model  # type: ignore[attr-defined]
+            raise RuntimeError("stop before the network call")
+
+        from clarity_agent.llm.config import LLMConfig
+        from clarity_agent.setup.doctor import _probe_api
+
+        monkeypatch.setattr(LLMConfig, "create_client", _capture)
+        with pytest.raises(RuntimeError, match="stop before"):
+            _probe_api(Path("/nonexistent"), "anthropic")
+
+        assert captured["model"] == "my-deployment"
+
+    def test_falls_back_to_the_provider_recommendation(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("CLARITY_MODEL", raising=False)
+        captured: dict[str, object] = {}
+
+        def _capture(self: object) -> str:
+            captured["model"] = self.model  # type: ignore[attr-defined]
+            raise RuntimeError("stop before the network call")
+
+        from clarity_agent.llm.config import LLMConfig
+        from clarity_agent.llm.factory import get_provider_recommended_models
+        from clarity_agent.setup.doctor import _probe_api
+
+        monkeypatch.setattr(LLMConfig, "create_client", _capture)
+        with pytest.raises(RuntimeError, match="stop before"):
+            _probe_api(Path("/nonexistent"), "anthropic")
+
+        assert captured["model"] == get_provider_recommended_models("anthropic")["default"]

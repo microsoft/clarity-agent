@@ -30,6 +30,10 @@ uv run python clarity.py cli /tmp/test-project
 # Run the desktop app
 uv run python clarity.py app
 
+# List the models the configured provider offers
+uv run python clarity.py models
+uv run python clarity.py models --debug   # explain how credentials resolved
+
 # Rebuild the React frontend (only when changing web/ source)
 cd web && npm install && npm run build
 
@@ -74,7 +78,9 @@ All LLM interaction goes through two abstractions in `src/clarity_agent/llm/`:
 - `LLMClient` (`client.py`) — low-level completions
 - `ChatBackend` (`chat.py`) — multi-turn conversations with tool use
 
-`llm/config.py` (`LLMConfig`) resolves provider/model/key from CLI flags and env vars. `llm/factory.py` instantiates the correct backend. Four providers: `anthropic`, `openai`, `azure` (Azure AI Inference), `claude-sdk` (default, uses `claude login`). Implementations are in `llm/impl/`.
+`llm/config.py` (`LLMConfig`) resolves provider/model/key from CLI flags, settings, and env vars. `llm/factory.py` instantiates the correct backend. Five providers: `anthropic`, `openai`, `azure` (Azure AI Inference), `gemini`, and `github` (Copilot). Implementations are in `llm/impl/`. Anthropic's `claude_sdk` auth mode reuses `claude login` credentials — it's an auth mode, not a provider.
+
+Clarity runs **one model for everything** (issue #172); there are no model tiers. Each provider declares three recommended models (`*_RECOMMENDED` in `llm/impl/`) that the picker highlights — `default` is what runs when the user hasn't chosen. `llm/model_catalog.py` builds and caches a `ModelCatalog`; providers that publish a model list (Anthropic, OpenAI, Gemini, Copilot) are queried live via `fetch_models()`, and those that report context windows override the built-in tables. `clarity models` prints the result.
 
 ### Web UI
 

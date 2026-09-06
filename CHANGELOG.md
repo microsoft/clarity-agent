@@ -5,6 +5,42 @@ All notable changes to Clarity are documented here. This project uses
 
 ## [Unreleased]
 
+### Added
+- Model picker in the sidebar and in Preferences → Models, listing the models
+  your provider actually offers, with the recommended ones highlighted. Your
+  choice is remembered across sessions (#172).
+- `clarity models` lists the models available from a provider, using the same
+  credentials the app uses. `--refresh` re-fetches; `--debug` explains how
+  credentials resolved (#172).
+- Model lists are fetched from the provider where one is published — Anthropic,
+  OpenAI, Gemini, and GitHub Copilot. Providers that also report context window
+  sizes (Anthropic, Gemini, Copilot) now drive compaction with their own
+  numbers instead of values compiled into the release (#172).
+
+### Changed
+- Clarity now uses **one model for everything**, replacing the deep/default/fast
+  tier system. An existing `model_deep`/`model_default`/`model_fast` preference
+  migrates automatically to the single `model` setting, preferring `model_deep` —
+  every process previously resolved through the deep tier, so that is the model
+  you were actually running (#172).
+- Set the model with `--model`, the `CLARITY_MODEL` environment variable, or the
+  picker.
+
+### Removed
+- Model tiers. The `--model-deep` and `--model-fast` flags and the
+  `CLARITY_MODEL_DEEP`, `CLARITY_MODEL_FAST`, and `CLARITY_MODEL_DEFAULT`
+  environment variables are gone; use `--model` / `CLARITY_MODEL` (#172).
+- Per-process model overrides (`CLARITY_PROCESS_MODEL_*`), which never proved
+  useful in practice (#172).
+
+### Fixed
+- GitHub Copilot ignored a model change mid-conversation: the model is bound
+  when the session is created, so switching models silently kept using the old
+  one. Switching now takes effect from the next message, keeping history (#172).
+- Anthropic model ids carrying a release date (e.g.
+  `claude-sonnet-4-5-20250929`) failed to match the built-in context-window
+  table, so compaction fired far too early on 200K models (#172).
+
 ## [0.1.5] - 2026-07-30
 
 ### Changed

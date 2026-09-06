@@ -149,7 +149,7 @@ main app (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
 ```yaml
 roles:
   target:
-    provider: anthropic       # model ignored — target uses tier routing
+    model: claude-opus-5      # the model under test
 
   user:
     provider: anthropic

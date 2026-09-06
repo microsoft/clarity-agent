@@ -852,9 +852,11 @@ def _probe_api(agent_dir: Path, provider: str) -> CheckResult:
     recommended = get_provider_recommended_models(provider)
     default_model = recommended.get("default", "unknown")
 
-    # Honour CLARITY_MODEL_* env overrides — the user may have a deployment
-    # name that differs from the hardcoded provider defaults.
-    default_model = os.environ.get("CLARITY_MODEL_DEFAULT", default_model)
+    # Honour CLARITY_MODEL — the user may be on a model, or an Azure
+    # deployment name, that differs from the provider's recommendation,
+    # and the connection test has to exercise the one they'll actually
+    # use.
+    default_model = os.environ.get("CLARITY_MODEL") or default_model
 
     config = LLMConfig(
         provider=provider,

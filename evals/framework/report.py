@@ -690,9 +690,8 @@ def _profile_line(
     → "judge" role) so readers can see which profile is the default
     for which role.  Alternative profiles render without a label.
 
-    The target-role profile uses tier routing — its ``model`` field
-    is ignored by the framework — so we surface that explicitly to
-    keep readers from wondering why the target's model isn't pinned.
+    A profile with no ``model`` renders as "auto", meaning it follows
+    the provider's recommendation rather than pinning a model.
     """
     parts: list[str] = [f"provider=`{profile.provider}`"]
     model_name = profile.model or "auto"
