@@ -2,13 +2,29 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   getSettings,
   updateSettings,
+  getModels,
+  setModel as setModelPreference,
   getSetupProviders,
   configureProvider,
   testConnection,
   activateProvider,
 } from "../api/client";
-import type { AppSettings, ProviderInfo, AuthModeInfo } from "../types";
+import type {
+  AppSettings,
+  AuthModeInfo,
+  ModelCatalogInfo,
+  ModelEntry,
+  ProviderInfo,
+} from "../types";
 import ProviderFieldList from "./ProviderFieldList";
+
+// Labels for the highlighted models a provider names.  Mirrors the
+// sidebar picker so the two surfaces read the same.
+const MODEL_ROLE_LABELS: Record<string, string> = {
+  default: "Recommended",
+  deep: "Deeper thinking",
+  fast: "Faster",
+};
 
 type Tab = "provider" | "models" | "appearance" | "accessibility";
 
@@ -459,44 +475,137 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
 // ---------------------------------------------------------------------------
 
 function ModelsTab({ settings, onSaved }: { settings: AppSettings; onSaved: () => void }) {
+  // "" means "follow the provider's recommendation" — a real state,
+  // distinct from pinning today's recommendation by name.
   const [model, setModel] = useState(settings.model ?? "");
+  const [catalog, setCatalog] = useState<ModelCatalogInfo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true);
+    try {
+      setCatalog(await getModels(refresh));
+    } catch {
+      setCatalog(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    await updateSettings({ model: model || null });
+    // Goes through PUT /api/model rather than the settings endpoint so
+    // the running session switches too — otherwise changing the model
+    // here would appear to do nothing until the next restart.
+    await setModelPreference(model || null);
     setSaving(false);
     setSaved(true);
     onSaved();
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const highlighted = (catalog?.models ?? []).filter((m) => m.role);
+  const rest = (catalog?.models ?? []).filter((m) => !m.role);
+  const defaultLabel = catalog?.default_model
+    ? `Provider default (${catalog.default_model})`
+    : "Provider default";
+
+  const optionLabel = (m: ModelEntry) => {
+    const role = m.role ? ` — ${MODEL_ROLE_LABELS[m.role] ?? m.role}` : "";
+    return `${m.display_name}${role}`;
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-body-muted">
-        The model Clarity uses for everything. Leave blank to follow the
-        provider's recommended model, so you track the default as it
-        changes rather than being pinned to today's.
+        The model Clarity uses for everything. Leave it on the provider
+        default to track the recommended model as it changes, rather
+        than being pinned to today's.
       </p>
 
-      <div>
-        <label className="block text-xs text-body-label mb-1">
-          Model
-          <span className="text-body-faint ml-1.5 font-normal">
-            Run <code>clarity models</code> to see what this provider offers
-          </span>
-        </label>
-        <input
-          type="text"
-          placeholder="Provider default"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
-                     text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40"
-        />
-      </div>
+      {/* Azure deployments are named at provisioning time, so there's
+          nothing to enumerate — fall back to a text field. */}
+      {catalog?.free_form ? (
+        <div>
+          <label className="block text-xs text-body-label mb-1">
+            Deployment name
+          </label>
+          <input
+            type="text"
+            placeholder="Provider default"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
+                       text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40"
+          />
+          <p className="text-xs text-body-faint mt-1.5">
+            Azure deployments are named when you provision them, so there's
+            no list to fetch. Any name your resource serves will work.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-xs text-body-label mb-1" htmlFor="model-select">
+            Model
+          </label>
+          <select
+            id="model-select"
+            value={model}
+            disabled={loading}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
+                       text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40
+                       disabled:opacity-50"
+          >
+            <option value="">{loading ? "Loading models…" : defaultLabel}</option>
+            {highlighted.length > 0 && (
+              <optgroup label="Recommended">
+                {highlighted.map((m) => (
+                  <option key={m.id} value={m.id}>{optionLabel(m)}</option>
+                ))}
+              </optgroup>
+            )}
+            {rest.length > 0 && (
+              <optgroup label="All models">
+                {rest.map((m) => (
+                  <option key={m.id} value={m.id}>{optionLabel(m)}</option>
+                ))}
+              </optgroup>
+            )}
+            {/* A model saved earlier that the provider no longer lists
+                would otherwise vanish from the menu, silently resetting
+                the user's choice to the provider default. */}
+            {model && !catalog?.models.some((m) => m.id === model) && (
+              <option value={model}>{model} (not currently offered)</option>
+            )}
+          </select>
+
+          <div className="flex items-center gap-2 mt-1.5">
+            <button
+              type="button"
+              onClick={() => load(true)}
+              disabled={loading}
+              className="text-xs text-body-faint hover:text-body-muted
+                         transition-colors disabled:opacity-50"
+            >
+              {loading ? "Refreshing…" : "Refresh list"}
+            </button>
+            {catalog?.error && (
+              <span className="text-xs text-body-faint">
+                · Couldn't reach the provider; showing the models built
+                into this release.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <button
         onClick={handleSave}

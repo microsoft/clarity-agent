@@ -147,7 +147,9 @@ export const restartServer = () =>
 export const getModels = (refresh = false) =>
   fetchJson<ModelCatalogInfo>(`/api/models${refresh ? "?refresh=true" : ""}`);
 
-export const setModel = (model: string) =>
+// ``null`` clears the choice, so the provider's recommendation applies
+// — and keeps applying as it changes across releases.
+export const setModel = (model: string | null) =>
   fetchJson<{ current: string }>("/api/model", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

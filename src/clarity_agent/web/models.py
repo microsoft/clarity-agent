@@ -19,9 +19,14 @@ class SetModelRequest(BaseModel):
     ``model`` is a provider model identifier, as listed by
     ``GET /api/models``.  Free-form providers (Azure) accept any
     deployment name.
+
+    ``None`` (or empty) clears the choice, so Clarity follows whatever
+    the provider recommends.  That's a meaningfully different state
+    from pinning today's recommendation by name: it tracks the default
+    as it changes across releases.
     """
 
-    model: str
+    model: str | None = None
 
 
 class FeedbackRequest(BaseModel):

@@ -161,14 +161,6 @@ class TestModelsEndpointShape:
 
 
 class TestSetModelRequest:
-    def test_rejects_a_missing_model(self) -> None:
-        import pydantic
-
-        from clarity_agent.web.models import SetModelRequest
-
-        with pytest.raises(pydantic.ValidationError):
-            SetModelRequest()  # type: ignore[call-arg]
-
     def test_accepts_any_identifier(self) -> None:
         """Free-form providers take deployment names we can't validate."""
         from clarity_agent.web.models import SetModelRequest
@@ -191,3 +183,59 @@ class TestCatalogFetchIsNeverFatal:
 
         assert catalog.models, "must still offer the built-in list"
         assert catalog.error
+
+
+class TestClearingTheModelChoice:
+    """Empty means "follow the provider's recommendation".
+
+    That's a distinct state from pinning today's recommendation by
+    name: it keeps tracking the default as it changes across releases.
+    """
+
+    def _adapter(self, tmp_path: Path) -> WebSessionAdapter:
+        return WebSessionAdapter(tmp_path, tmp_path, _config(model="claude-opus-4-7"))
+
+    def test_clears_the_session_config(self, tmp_path: Path) -> None:
+        adapter = self._adapter(tmp_path)
+        adapter.set_model(None)
+        assert adapter.llm_config.model is None
+
+    def test_clears_the_live_backend(self, tmp_path: Path) -> None:
+        adapter = self._adapter(tmp_path)
+        backend = MagicMock()
+        backend.resolve_model.side_effect = lambda m: m or "provider-default"
+        adapter._backend = backend
+
+        assert adapter.set_model(None) == "provider-default"
+        assert backend._model is None
+
+    def test_clears_the_saved_preference(self, tmp_path: Path) -> None:
+        adapter = self._adapter(tmp_path)
+        Settings.current().model = "claude-opus-4-7"
+        Settings.current().save()
+
+        adapter.set_model(None)
+
+        assert Settings.current().model is None
+        assert Settings.load().model is None
+
+    def test_config_then_resolves_to_the_provider_default(self, tmp_path: Path) -> None:
+        """The point of clearing: fall through to the catalog default."""
+        from clarity_agent.llm.factory import get_provider_model_catalog
+
+        adapter = self._adapter(tmp_path)
+        adapter.set_model(None)
+        expected = get_provider_model_catalog("anthropic", "api_key").default_model
+        assert adapter.llm_config.resolve_model() == expected
+
+
+class TestSetModelRequestClearing:
+    def test_model_may_be_omitted_entirely(self) -> None:
+        from clarity_agent.web.models import SetModelRequest
+
+        assert SetModelRequest().model is None
+
+    def test_model_may_be_null(self) -> None:
+        from clarity_agent.web.models import SetModelRequest
+
+        assert SetModelRequest(model=None).model is None

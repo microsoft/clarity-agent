@@ -687,25 +687,28 @@ def create_app(
         """Switch to a model and remember the choice.
 
         Persists to settings as well as applying to the live session —
-        the picker is a preference, not a per-session toggle.
+        the picker is a preference, not a per-session toggle, and both
+        the sidebar and the preferences panel come through here so they
+        can't disagree.
+
+        An empty or absent ``model`` clears the choice, falling back to
+        the provider's recommendation.
         """
         s: WebSessionAdapter | None = state["session"]
-        model = request.model.strip()
-        if not model:
-            raise HTTPException(status_code=400, detail="No model given")
-
         cfg: LLMConfig = state["llm_config"]
-        if s is None:
-            # No live session yet (setup, or between projects).  Record
-            # the preference so the next session starts on it.
-            from clarity_agent.settings import Settings
-            cfg.model = model
-            settings = Settings.current()
-            settings.model = model
-            settings.save()
-            return {"current": model}
+        model = (request.model or "").strip() or None
 
-        return {"current": s.set_model(model)}
+        if s is not None:
+            return {"current": s.set_model(model)}
+
+        # No live session yet (setup, or between projects).  Record the
+        # preference so the next session starts on it.
+        from clarity_agent.settings import Settings
+        cfg.model = model
+        settings = Settings.current()
+        settings.model = model
+        settings.save()
+        return {"current": cfg.resolve_model()}
 
     # ------------------------------------------------------------------
     # REST: Conversation thread

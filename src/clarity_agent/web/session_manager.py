@@ -666,8 +666,11 @@ class WebSessionAdapter:
         else:
             self.active_model = model_override or self.llm_config.resolve_model()
 
-    def set_model(self, model: str) -> str:
+    def set_model(self, model: str | None) -> str:
         """Switch the session to *model* and remember the choice.
+
+        ``None`` clears the choice so the provider's own recommendation
+        applies, and keeps applying as it changes.
 
         Applies in three places, all of which matter:
 
