@@ -21,9 +21,9 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from clarity_agent.app_paths import protocol_dir as _protocol_dir
-from clarity_agent.llm import LLMConfig
+from clarity_agent.llm import LLMConfig, fetch_model_catalog
 from clarity_agent.web.log_broadcast import WebLogBroadcaster, install_stdio_broadcaster
-from clarity_agent.web.models import FeedbackRequest, ModelOverrideRequest, PacketRequest
+from clarity_agent.web.models import FeedbackRequest, PacketRequest, SetModelRequest
 from clarity_agent.web.session_manager import WebSessionAdapter
 
 # Canonical directory ordering for the protocol tree sidebar.
@@ -423,19 +423,16 @@ def create_app(
                             except (WebSocketDisconnect, RuntimeError):
                                 return
 
-                    elif msg_type == "set_model_override":
-                        tier: str = data.get("tier", "auto")
-                        if tier == "auto" or tier == "default":
-                            session.model_override = None
-                        else:
-                            session.model_override = tier
-                        # Re-resolve active model from current state.
-                        resolved = session._resolve_model(session.current_process)
-                        session._update_active_model(resolved, session.current_process)
+                    elif msg_type == "set_model":
+                        model: str = (data.get("model") or "").strip()
+                        if not model:
+                            await out_ws.send_json({
+                                "type": "error", "message": "No model given",
+                            })
+                            continue
                         await out_ws.send_json({
                             "type": "model_changed",
-                            "model": session.active_model,
-                            "auto": session.model_override is None,
+                            "model": session.set_model(model),
                         })
 
                     else:
@@ -649,56 +646,66 @@ def create_app(
         )
 
     # ------------------------------------------------------------------
-    # REST: Model profile
+    # REST: Models
     # ------------------------------------------------------------------
 
-    @app.get("/api/model-profile")
-    async def model_profile() -> dict[str, Any]:
-        """Return available tiers and current model state."""
+    @app.get("/api/models")
+    async def list_models(refresh: bool = False) -> dict[str, Any]:
+        """Return the models this provider offers, and the current one.
+
+        Cached per provider for a day; ``?refresh=true`` re-fetches.
+        Never fails: a provider that can't be reached comes back with
+        its built-in list and an ``error`` string, so the picker shows
+        something usable rather than an empty menu.
+        """
         cfg: LLMConfig = state["llm_config"]
         s: WebSessionAdapter | None = state["session"]
 
-        # Build tiers: start with backend defaults, overlay user overrides.
-        backend = s._backend if s else None
-        tiers: dict[str, str] = {}
-        if backend:
-            tiers.update(backend.RECOMMENDED_MODELS)
-        tiers.update({"default": cfg.resolve_model()})
+        catalog = await fetch_model_catalog(cfg, refresh=refresh)
+        current = s.active_model if s else cfg.resolve_model()
 
         return {
-            "tiers": tiers,
-            "override": s.model_override if s else None,
-            "auto": s.model_override is None if s else True,
-            "active_model": s.active_model if s else cfg.resolve_model(),
+            "models": [
+                {
+                    "id": m.id,
+                    "display_name": m.display_name,
+                    "role": m.role,
+                    "description": m.description,
+                    "context_window": m.context_window,
+                }
+                for m in catalog.models
+            ],
+            "current": current,
+            "default_model": catalog.default_model,
+            "source": catalog.source,
+            "free_form": catalog.free_form,
+            "error": catalog.error,
         }
 
-    @app.put("/api/model-profile/override")
-    async def set_model_override(request: ModelOverrideRequest) -> dict[str, Any]:
-        """Set or clear a manual model tier override."""
+    @app.put("/api/model")
+    async def set_model(request: SetModelRequest) -> dict[str, Any]:
+        """Switch to a model and remember the choice.
+
+        Persists to settings as well as applying to the live session —
+        the picker is a preference, not a per-session toggle.
+        """
         s: WebSessionAdapter | None = state["session"]
+        model = request.model.strip()
+        if not model:
+            raise HTTPException(status_code=400, detail="No model given")
+
+        cfg: LLMConfig = state["llm_config"]
         if s is None:
-            raise HTTPException(status_code=400, detail="No active session")
+            # No live session yet (setup, or between projects).  Record
+            # the preference so the next session starts on it.
+            from clarity_agent.settings import Settings
+            cfg.model = model
+            settings = Settings.current()
+            settings.model = model
+            settings.save()
+            return {"current": model}
 
-        tier = request.tier
-
-        if tier == "auto":
-            s.model_override = None
-            s._update_active_model(
-                s._resolve_model(s.current_process), s.current_process,
-            )
-        elif tier == "default":
-            s.model_override = None
-            s._update_active_model(None, None)
-        else:
-            # Store tier name or model string; backend resolves at chat time.
-            s.model_override = tier
-            s._update_active_model(tier, s.current_process)
-
-        return {
-            "override": s.model_override,
-            "auto": s.model_override is None,
-            "active_model": s.active_model,
-        }
+        return {"current": s.set_model(model)}
 
     # ------------------------------------------------------------------
     # REST: Conversation thread

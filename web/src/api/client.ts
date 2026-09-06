@@ -5,7 +5,7 @@ import type {
   ConfigureResult,
   FeedbackPayload,
   FeedbackResult,
-  ModelProfileInfo,
+  ModelCatalogInfo,
   PacketOptions,
   ProcessMeta,
   ProjectEntry,
@@ -143,14 +143,15 @@ export const runUpdate = () =>
 export const restartServer = () =>
   fetchJson<{ restarting: boolean }>("/api/update/restart", { method: "POST" });
 
-// Model profile
-export const getModelProfile = () => fetchJson<ModelProfileInfo>("/api/model-profile");
+// Models
+export const getModels = (refresh = false) =>
+  fetchJson<ModelCatalogInfo>(`/api/models${refresh ? "?refresh=true" : ""}`);
 
-export const setModelOverride = (tier: string) =>
-  fetchJson<ModelProfileInfo>("/api/model-profile/override", {
+export const setModel = (model: string) =>
+  fetchJson<{ current: string }>("/api/model", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify({ model }),
   });
 
 // Setup wizard

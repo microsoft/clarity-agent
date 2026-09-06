@@ -45,8 +45,6 @@ export interface ChatState {
   streaming: boolean;
   currentProcess: string | null;
   activeModel: string | null;
-  activeTier: string | null;
-  autoModel: boolean;
   error: ErrorInfo | null;
   /** Ephemeral status phase from the backend (e.g. "reasoning",
    *  "tool:read_file").  Displayed transiently, not in chat history.
@@ -73,7 +71,7 @@ export type ChatAction =
   | { type: "receive_response"; content: string }
   | { type: "start_process"; name: string }
   | { type: "process_starting"; name: string; displayName: string; oneLiner: string }
-  | { type: "model_changed"; tier: string; model: string; auto: boolean }
+  | { type: "model_changed"; model: string }
   | { type: "error_event"; error: ErrorInfo }
   | { type: "warning_event"; message: string }
   | { type: "status_event"; phase: string }
@@ -297,13 +295,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const next = {
         ...state,
         activeModel: action.model,
-        activeTier: action.tier,
-        autoModel: action.auto,
       };
       if (!state.streaming) return next;
       return appendTurnLog(next, {
         tool: "model",
-        detail: `${action.tier}: ${action.model}${action.auto ? " (auto)" : ""}`,
+        detail: action.model,
       });
     }
 
@@ -365,8 +361,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         streaming: false,
         currentProcess: null,
         activeModel: state.activeModel,
-        activeTier: state.activeTier,
-        autoModel: state.autoModel,
         error: null,
         statusPhase: null,
         // ``clear`` is used by both "Start new chapter" (where we
@@ -435,8 +429,6 @@ export const initialState: ChatState = {
   streaming: false,
   currentProcess: null,
   activeModel: null,
-  activeTier: null,
-  autoModel: true,
   error: null,
   statusPhase: null,
   historyLoaded: false,
@@ -462,8 +454,6 @@ export interface UseChatReturn {
   currentProcess: string | null;
   connected: boolean;
   activeModel: string | null;
-  activeTier: string | null;
-  autoModel: boolean;
   error: ErrorInfo | null;
   /** Ephemeral backend status phase (e.g. "reasoning", "tool:read_file"). */
   statusPhase: string | null;
@@ -475,7 +465,7 @@ export interface UseChatReturn {
   sendMessage: (text: string) => void;
   startProcess: (name: string) => void;
   stopGeneration: () => void;
-  setModelOverride: (tier: string) => void;
+  setModel: (model: string) => void;
   /** Roll the conversation thread over to a new chapter.
    *  Archives the current chapter, clears the visible message list,
    *  and resets the backend SDK session so the next message starts
@@ -547,7 +537,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "receive_response", content: msg.content });
         break;
       case "model_changed":
-        dispatch({ type: "model_changed", tier: msg.tier, model: msg.model, auto: msg.auto });
+        dispatch({ type: "model_changed", model: msg.model });
         break;
       case "warning":
         dispatch({ type: "warning_event", message: msg.message });
@@ -620,9 +610,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [send],
   );
 
-  const setModelOverride = useCallback(
-    (tier: string) => {
-      send({ type: "set_model_override", tier } as WsClientMessage);
+  const setModel = useCallback(
+    (model: string) => {
+      send({ type: "set_model", model } as WsClientMessage);
     },
     [send],
   );
@@ -658,15 +648,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     currentProcess: state.currentProcess,
     connected,
     activeModel: state.activeModel,
-    activeTier: state.activeTier,
-    autoModel: state.autoModel,
     error: state.error,
     statusPhase: state.statusPhase,
     historyLoaded: state.historyLoaded,
     sendMessage,
     startProcess,
     stopGeneration,
-    setModelOverride,
+    setModel,
     startNewChapter,
     dismissError,
   };

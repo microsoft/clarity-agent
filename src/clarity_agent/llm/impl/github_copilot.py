@@ -344,6 +344,10 @@ class CopilotChatBackend(ChatBackend):
         )
         self._client: CopilotClient | None = None
         self._session: CopilotSession | None = None
+        # Model the live session was created with (or last switched
+        # to).  Compared against each turn's resolved model so a change
+        # actually reaches the service.
+        self._session_model: str | None = None
         self._current_system_prompt: str | None = None
         # User messages in send-order for the current session, so we
         # can replay them verbatim if we have to rebuild the session
@@ -419,6 +423,7 @@ class CopilotChatBackend(ChatBackend):
         except Exception:
             pass
         self._session = None
+        self._session_model = None
 
     async def _cleanup_async(self) -> None:
         """Tear down session + client on the backend's own loop."""
@@ -505,6 +510,7 @@ class CopilotChatBackend(ChatBackend):
             streaming=True,
             working_directory=str(self.project_dir),
         )
+        self._session_model = model
 
     async def _send_and_wait(self, message: str) -> str:
         """Send one message to the live session and collect the response.
@@ -775,6 +781,14 @@ class CopilotChatBackend(ChatBackend):
         resolved_model = self.resolve_model(model)
         if self._session is None:
             await self._create_session(resolved_model)
+        elif resolved_model != self._session_model:
+            # The model changed under a live session.  Copilot binds
+            # the model at session creation, so without this the switch
+            # is silently ignored and the turn runs on the old model.
+            # ``set_model`` keeps the conversation history and takes
+            # effect from the next message.
+            await self._session.set_model(resolved_model)
+            self._session_model = resolved_model
 
         # Record the message BEFORE sending so a wedge + retry knows
         # to replay through this turn.

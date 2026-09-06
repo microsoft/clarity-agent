@@ -2,7 +2,7 @@
 export type WsClientMessage =
   | { type: "chat"; message: string }
   | { type: "start_process"; process: string }
-  | { type: "set_model_override"; tier: string }
+  | { type: "set_model"; model: string }
   | { type: "stop" };
 
 // WebSocket messages: server → client
@@ -123,12 +123,30 @@ export interface SessionInfo {
   launcher_mode?: boolean;
 }
 
-// Model profile
-export interface ModelProfileInfo {
-  tiers: Record<string, string>;
-  override: string | null;
-  auto: boolean;
-  active_model: string;
+// One model a provider will accept.
+export interface ModelEntry {
+  id: string;
+  display_name: string;
+  // "default" | "deep" | "fast" for highlighted models, else null.
+  role: string | null;
+  description: string | null;
+  context_window: number | null;
+}
+
+// GET /api/models
+export interface ModelCatalogInfo {
+  models: ModelEntry[];
+  current: string;
+  default_model: string;
+  // "provider" when fetched live, "builtin" when it came from the
+  // models compiled into this release.
+  source: string;
+  // True when the provider can't be enumerated and the user types an
+  // identifier instead (Azure deployments).
+  free_form: boolean;
+  // Set when a live fetch was attempted and failed; `models` still
+  // holds the built-in fallback.
+  error: string | null;
 }
 
 // Update run.  The *check* shape lives in ``VersionPayload`` —

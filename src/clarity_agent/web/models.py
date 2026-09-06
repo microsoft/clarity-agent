@@ -13,15 +13,15 @@ class PacketRequest(BaseModel):
     view: str | None = None
 
 
-class ModelOverrideRequest(BaseModel):
-    """Request body for PUT /api/model-profile/override.
+class SetModelRequest(BaseModel):
+    """Request body for PUT /api/model.
 
-    ``tier`` is a tier name (``"default"``, ``"deep"``, ``"fast"``),
-    ``"auto"`` to clear the override and return to profile-driven
-    selection, or a direct model string.
+    ``model`` is a provider model identifier, as listed by
+    ``GET /api/models``.  Free-form providers (Azure) accept any
+    deployment name.
     """
 
-    tier: str
+    model: str
 
 
 class FeedbackRequest(BaseModel):

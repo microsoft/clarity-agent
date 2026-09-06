@@ -64,7 +64,6 @@ class WebSessionAdapter:
         self.llm_config = llm_config
         self._initial_llm_session_id = llm_session_id
         self.current_process: str | None = None
-        self.model_override: str | None = None
         self.active_model: str = llm_config.resolve_model()
 
         self._executor = ThreadPoolExecutor(max_workers=1)
@@ -648,17 +647,17 @@ class WebSessionAdapter:
         self._pending_warnings.append(message)
 
     def _resolve_model(self, process_name: str | None = None) -> str | None:
-        """Return the model for the next chat call.
+        """Return the model override for the next chat call.
 
-        The session's manual override if one is set, else ``None`` to
-        let the backend use its configured model.  *process_name* is
-        accepted and ignored: processes no longer choose their own
+        Always ``None``: the session runs on the backend's configured
+        model, which :meth:`set_model` keeps up to date.  *process_name*
+        is accepted and ignored — processes no longer choose their own
         model.
         """
-        return self.model_override
+        return None
 
     def _update_active_model(
-        self, model_override: str | None, process_name: str | None = None,
+        self, model_override: str | None = None, process_name: str | None = None,
     ) -> None:
         """Refresh :attr:`active_model` for display."""
         backend = self._backend
@@ -666,6 +665,34 @@ class WebSessionAdapter:
             self.active_model = backend.resolve_model(model_override)
         else:
             self.active_model = model_override or self.llm_config.resolve_model()
+
+    def set_model(self, model: str) -> str:
+        """Switch the session to *model* and remember the choice.
+
+        Applies in three places, all of which matter:
+
+        * the live backend, so the next turn uses it (SDK backends bind
+          the model per session, and handle the change themselves);
+        * this adapter's :class:`LLMConfig`, so a backend rebuilt later
+          in the session — a new chapter, a reconnect — starts on it;
+        * :class:`Settings`, so it survives into the next session.  The
+          issue asks for the choice to be remembered, not to reset
+          every time the app restarts.
+
+        Returns the resolved model, for echoing back to the client.
+        """
+        self.llm_config.model = model
+        backend = self._backend
+        if backend is not None:
+            backend._model = model
+
+        from clarity_agent.settings import Settings
+        settings = Settings.current()
+        settings.model = model
+        settings.save()
+
+        self._update_active_model()
+        return self.active_model
 
     def cancel(self) -> None:
         """Signal that the current turn should be stopped.
@@ -798,7 +825,6 @@ class WebSessionAdapter:
             await self._event_queue.put({
                 "type": "model_changed",
                 "model": self.active_model,
-                "auto": self.model_override is None,
             })
 
         # Reset to baseline feedback tools; process-specific tools are
