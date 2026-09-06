@@ -834,7 +834,7 @@ def check_backend_health(agent_dir: Path) -> CheckResult:
 def _probe_api(agent_dir: Path, provider: str) -> CheckResult:
     """Probe an API-based provider with a trivial create_message call."""
     from clarity_agent.llm.config import _PROVIDERS, LLMConfig
-    from clarity_agent.llm.factory import get_provider_tier_defaults
+    from clarity_agent.llm.factory import get_provider_recommended_models
 
     info = _PROVIDERS[provider]
     # Collect API key from any auth mode's env_var.
@@ -849,8 +849,8 @@ def _probe_api(agent_dir: Path, provider: str) -> CheckResult:
         os.environ.get(info["endpoint_env_var"])
         if info.get("endpoint_env_var") else None
     )
-    tier_defaults = get_provider_tier_defaults(provider)
-    default_model = tier_defaults.get("default", "unknown")
+    recommended = get_provider_recommended_models(provider)
+    default_model = recommended.get("default", "unknown")
 
     # Honour CLARITY_MODEL_* env overrides — the user may have a deployment
     # name that differs from the hardcoded provider defaults.
@@ -860,13 +860,13 @@ def _probe_api(agent_dir: Path, provider: str) -> CheckResult:
         provider=provider,
         api_key=api_key,
         endpoint=endpoint,
-        tiers={"default": default_model},
+        model=default_model,
     )
 
     client = config.create_client()
     asyncio.run(client.create_message(
         messages=[{"role": "user", "content": "Say ok"}],
-        model=config.tiers.get("default", "unknown"),
+        model=config.resolve_model(),
         max_tokens=64,
         system="Respond with exactly: ok",
     ))

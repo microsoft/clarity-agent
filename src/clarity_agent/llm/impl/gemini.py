@@ -22,7 +22,7 @@ from clarity_agent.llm.types import (
     ToolUseBlock,
 )
 
-_GEMINI_TIER_DEFAULTS: dict[str, str] = {
+_GEMINI_RECOMMENDED: dict[str, str] = {
     "default": "gemini-3.1-pro-preview",
     "deep": "gemini-3.1-pro-preview",
     "fast": "gemini-3.1-flash-lite-preview",
@@ -166,7 +166,7 @@ class GeminiClient(LLMClient):
     :class:`~clarity_agent.llm.types.LLMResponse` objects.
     """
 
-    TIER_DEFAULTS = _GEMINI_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _GEMINI_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _GEMINI_MODEL_CONTEXT_WINDOWS
 
     def __init__(self, *, api_key: str) -> None:
@@ -203,7 +203,7 @@ class GeminiClient(LLMClient):
                 context_windows[model_id] = model.input_token_limit
 
         return build_catalog(
-            recommended=self.TIER_DEFAULTS,
+            recommended=self.RECOMMENDED_MODELS,
             context_windows={**self.MODEL_CONTEXT_WINDOWS, **context_windows},
             model_ids=model_ids,
             display_names=display_names,

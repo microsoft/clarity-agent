@@ -321,7 +321,7 @@ def _cmd_web_single(
         unconfigured = False
     except LLMConfigError as e:
         print(f"LLM configuration error: {e}")
-        llm_config = LLMConfig(provider="none", api_key=None, tiers={"default": "unknown"})
+        llm_config = LLMConfig(provider="none", api_key=None, model="unknown")
         unconfigured = True
 
     app = create_app(

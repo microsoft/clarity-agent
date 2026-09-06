@@ -17,7 +17,7 @@ from clarity_agent.llm import LLMConfig
 from clarity_agent.llm.factory import (
     fetch_model_catalog,
     get_provider_model_catalog,
-    get_provider_tier_defaults,
+    get_provider_recommended_models,
 )
 from clarity_agent.llm.model_catalog import (
     CACHE_TTL_SECONDS,
@@ -248,9 +248,9 @@ class TestBuiltinCatalogs:
     @pytest.mark.parametrize("provider", ["anthropic", "openai", "gemini", "azure", "github"])
     def test_default_matches_the_provider_default_tier(self, provider: str) -> None:
         """A fresh install gets the provider's declared default model."""
-        from clarity_agent.llm.factory import get_provider_tier_defaults
+        from clarity_agent.llm.factory import get_provider_recommended_models
 
-        tiers = get_provider_tier_defaults(provider)
+        tiers = get_provider_recommended_models(provider)
         catalog = get_provider_model_catalog(provider)
         assert catalog.default_model == tiers["default"]
 
@@ -275,7 +275,7 @@ class TestBuiltinCatalogs:
         weakens Clarity.
         """
         catalog = get_provider_model_catalog(provider)
-        fast = get_provider_tier_defaults(provider).get("fast")
+        fast = get_provider_recommended_models(provider).get("fast")
         assert catalog.default_model != fast or fast is None
 
     def test_azure_is_free_form(self) -> None:
@@ -291,7 +291,7 @@ class TestBuiltinCatalogs:
         assert catalog.models == []
 
     def test_client_chat_backend_refuses_rather_than_lying(self) -> None:
-        """The wrapper shadows ``TIER_DEFAULTS`` with an instance property.
+        """The wrapper shadows ``RECOMMENDED_MODELS`` with an instance property.
 
         Inheriting the class-level implementation would read the
         property object instead of a model table, so the override
@@ -316,8 +316,14 @@ class TestBuiltinCatalogs:
 class TestAnthropicFetchModels:
     def _listing(self) -> list[Any]:
         return [
-            SimpleNamespace(id="claude-opus-5", display_name="Claude Opus 5"),
-            SimpleNamespace(id="claude-brand-new", display_name="Claude Brand New"),
+            SimpleNamespace(
+                id="claude-opus-5", display_name="Claude Opus 5",
+                max_input_tokens=2_000_000,
+            ),
+            SimpleNamespace(
+                id="claude-brand-new", display_name="Claude Brand New",
+                max_input_tokens=500_000,
+            ),
         ]
 
     def test_uses_provider_listing(self) -> None:
@@ -328,11 +334,36 @@ class TestAnthropicFetchModels:
         assert {m.id for m in catalog.models} == {"claude-opus-5", "claude-brand-new"}
         assert catalog.get("claude-brand-new").display_name == "Claude Brand New"  # type: ignore[union-attr]
 
-    def test_context_windows_come_from_the_builtin_table(self) -> None:
-        """The listing reports no context window, so we fill it in."""
+    def test_reported_max_input_tokens_wins_over_the_builtin_table(self) -> None:
+        """The listing's ``max_input_tokens`` is the authoritative window.
+
+        It's also the right number specifically: the compaction check
+        compares a turn's reported ``input_tokens`` against it, so an
+        input limit is a better fit than a combined figure.
+        """
         catalog = asyncio.run(_anthropic_catalog(self._listing()))
 
+        # Built-in table says 1M for Opus 5; the service says 2M.
+        assert catalog.get("claude-opus-5").context_window == 2_000_000  # type: ignore[union-attr]
+        # A model we've never heard of still gets a real window.
+        assert catalog.get("claude-brand-new").context_window == 500_000  # type: ignore[union-attr]
+
+    def test_missing_or_junk_window_falls_back_to_the_table(self) -> None:
+        """The pinned SDK doesn't declare the field, so treat it as optional."""
+        catalog = asyncio.run(_anthropic_catalog([
+            SimpleNamespace(id="claude-opus-5", display_name="Claude Opus 5"),
+            SimpleNamespace(
+                id="claude-sonnet-5", display_name="Claude Sonnet 5",
+                max_input_tokens=None,
+            ),
+            SimpleNamespace(
+                id="claude-brand-new", display_name="New",
+                max_input_tokens="lots",
+            ),
+        ]))
+
         assert catalog.get("claude-opus-5").context_window == 1_000_000  # type: ignore[union-attr]
+        assert catalog.get("claude-sonnet-5").context_window == 1_000_000  # type: ignore[union-attr]
         assert catalog.get("claude-brand-new").context_window is None  # type: ignore[union-attr]
 
     def test_claude_sdk_without_a_key_uses_builtin(self) -> None:
@@ -516,19 +547,94 @@ class TestNonEnumerableProviders:
         assert catalog.free_form is True
         assert catalog.source == "builtin"
 
-    def test_listing_client_is_none_for_chat_only_providers(self) -> None:
+    def test_claude_sdk_without_credentials_has_nothing_to_list_with(self) -> None:
         from clarity_agent.llm.factory import _listing_client
 
-        assert _listing_client(_config("github")) is None
-        assert _listing_client(
-            _config("anthropic", auth_mode="claude_sdk", api_key=None),
-        ) is None
+        with patch("clarity_agent.llm.claude_code_auth.find_oauth_token",
+                   return_value=None):
+            assert _listing_client(
+                _config("anthropic", auth_mode="claude_sdk", api_key=None),
+            ) is None
 
-    def test_github_returns_builtin(self) -> None:
-        """Copilot is chat-only, so ``create_client`` refuses and we fall back."""
-        catalog = asyncio.run(fetch_model_catalog(_config("github")))
+
+class TestGithubCopilotListing:
+    """Copilot has no LLMClient, but its SDK runtime can enumerate.
+
+    It's also the only provider whose listing reports a real context
+    window, so those values must be preferred over the built-in table.
+    """
+
+    def _listing(self) -> list[Any]:
+        def model(mid: str, name: str, window: int | None) -> Any:
+            limits = SimpleNamespace(max_context_window_tokens=window)
+            return SimpleNamespace(
+                id=mid, name=name,
+                capabilities=SimpleNamespace(limits=limits),
+            )
+        return [
+            model("claude-opus-4.6", "Claude Opus 4.6", 200_000),
+            model("gpt-5.4", "GPT-5.4", 400_000),
+            model("mystery-model", "Mystery", None),
+        ]
+
+    def _patched_client(self, listed: list[Any] | BaseException) -> Any:
+        from clarity_agent.llm.impl import github_copilot as impl
+
+        client = MagicMock()
+        client.start = AsyncMock()
+        client.stop = AsyncMock()
+        if isinstance(listed, BaseException):
+            client.list_models = AsyncMock(side_effect=listed)
+        else:
+            client.list_models = AsyncMock(return_value=listed)
+        return patch.object(impl, "CopilotClient", return_value=client), client
+
+    def test_uses_the_sdk_listing(self) -> None:
+        patcher, _ = self._patched_client(self._listing())
+        with patcher:
+            catalog = asyncio.run(fetch_model_catalog(_config("github")))
+
+        assert catalog.source == "provider"
+        assert {m.id for m in catalog.models} == {
+            "claude-opus-4.6", "gpt-5.4", "mystery-model",
+        }
+
+    def test_live_context_windows_win_over_the_builtin_table(self) -> None:
+        """The built-in table says 200K for Opus; the service is authoritative."""
+        patcher, _ = self._patched_client(self._listing())
+        with patcher:
+            catalog = asyncio.run(fetch_model_catalog(_config("github")))
+
+        assert catalog.get("gpt-5.4").context_window == 400_000  # type: ignore[union-attr]
+        assert catalog.get("claude-opus-4.6").context_window == 200_000  # type: ignore[union-attr]
+
+    def test_model_without_a_reported_window_has_none(self) -> None:
+        patcher, _ = self._patched_client(self._listing())
+        with patcher:
+            catalog = asyncio.run(fetch_model_catalog(_config("github")))
+        assert catalog.get("mystery-model").context_window is None  # type: ignore[union-attr]
+
+    def test_transient_client_is_always_stopped(self) -> None:
+        """Filling a picker must not leave a CLI subprocess running."""
+        patcher, client = self._patched_client(self._listing())
+        with patcher:
+            asyncio.run(fetch_model_catalog(_config("github")))
+        client.stop.assert_awaited()
+
+    def test_client_is_stopped_even_when_the_listing_fails(self) -> None:
+        patcher, client = self._patched_client(RuntimeError("not authenticated"))
+        with patcher:
+            catalog = asyncio.run(fetch_model_catalog(_config("github")))
+        client.stop.assert_awaited()
         assert catalog.source == "builtin"
-        assert catalog.error is None
+        assert "not authenticated" in (catalog.error or "")
+
+    def test_falls_back_when_the_sdk_is_not_installed(self) -> None:
+        from clarity_agent.llm.impl import github_copilot as impl
+
+        with patch.object(impl, "CopilotClient", None):
+            catalog = asyncio.run(fetch_model_catalog(_config("github")))
+        assert catalog.source == "builtin"
         assert catalog.default_model == "claude-opus-4.6"
 
 
@@ -718,3 +824,97 @@ class TestModelsCli:
             get_provider_model_catalog("azure"),
         )
         assert "deployment names" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Context windows: provider-reported vs. built-in
+# ---------------------------------------------------------------------------
+
+class TestBaseModelId:
+    @pytest.mark.parametrize(("model_id", "expected"), [
+        ("claude-sonnet-4-5-20250929", "claude-sonnet-4-5"),
+        ("claude-haiku-4-5-20251001", "claude-haiku-4-5"),
+        ("claude-opus-5", "claude-opus-5"),
+        ("gpt-5.4-mini", "gpt-5.4-mini"),
+    ])
+    def test_strips_only_a_trailing_date(self, model_id: str, expected: str) -> None:
+        from clarity_agent.llm.model_catalog import base_model_id
+        assert base_model_id(model_id) == expected
+
+
+class TestContextWindowResolution:
+    """What ``context_window_for`` trusts, and in what order."""
+
+    def _backend(self, tmp_path: Path) -> Any:
+        from clarity_agent.llm import ClientChatBackend
+
+        client = MagicMock()
+        client.RECOMMENDED_MODELS = {"default": "claude-opus-5"}
+        client.MODEL_CONTEXT_WINDOWS = {
+            "claude-opus-5": 1_000_000,
+            "claude-sonnet-4-5": 200_000,
+        }
+        return ClientChatBackend(
+            client, project_dir=tmp_path, clarity_agent_dir=tmp_path,
+        )
+
+    def test_builtin_table_is_used_when_nothing_was_fetched(self, tmp_path: Path) -> None:
+        assert self._backend(tmp_path).context_window_for("claude-opus-5") == 1_000_000
+
+    def test_dated_model_id_finds_its_undated_entry(self, tmp_path: Path) -> None:
+        """The live Anthropic listing returns dated ids.
+
+        Without the fallback these miss the table entirely and get the
+        generic 128K default, firing compaction far too early on a
+        200K model.
+        """
+        backend = self._backend(tmp_path)
+        assert backend.context_window_for("claude-sonnet-4-5-20250929") == 200_000
+
+    def test_unknown_model_gets_the_conservative_default(self, tmp_path: Path) -> None:
+        backend = self._backend(tmp_path)
+        assert backend.context_window_for("who-knows") == backend.DEFAULT_CONTEXT_WINDOW
+
+    def test_provider_reported_window_beats_the_builtin_table(self, tmp_path: Path) -> None:
+        """Their number is authoritative; ours is hand-maintained."""
+        store_cached("prov:mode", ModelCatalog(
+            models=[ModelInfo(
+                id="claude-opus-5", display_name="Opus", context_window=2_000_000,
+            )],
+            default_model="claude-opus-5",
+            source="provider",
+        ))
+        assert self._backend(tmp_path).context_window_for("claude-opus-5") == 2_000_000
+
+    def test_user_override_beats_everything(self, tmp_path: Path) -> None:
+        from clarity_agent.settings import Settings
+
+        store_cached("prov:mode", ModelCatalog(
+            models=[ModelInfo(
+                id="claude-opus-5", display_name="Opus", context_window=2_000_000,
+            )],
+            source="provider",
+        ))
+        Settings.current().context_window_overrides["claude-opus-5"] = 123_456
+        assert self._backend(tmp_path).context_window_for("claude-opus-5") == 123_456
+
+    def test_reported_windows_survive_a_fresh_process(self, tmp_path: Path) -> None:
+        """The compaction path is synchronous — it reads the cache file."""
+        from clarity_agent.llm import model_catalog
+
+        store_cached("prov:mode", ModelCatalog(
+            models=[ModelInfo(id="m", display_name="M", context_window=999_000)],
+            source="provider",
+        ))
+        model_catalog._CONTEXT_WINDOWS.clear()
+        assert model_catalog.known_context_window("m") == 999_000
+
+    def test_builtin_catalogs_contribute_no_windows(self) -> None:
+        """Only a real listing should teach us a window."""
+        from clarity_agent.llm import model_catalog
+
+        store_cached("prov:mode", ModelCatalog(
+            models=[ModelInfo(id="m", display_name="M", context_window=1)],
+            source="builtin",
+        ))
+        assert model_catalog.known_context_window("m") is None

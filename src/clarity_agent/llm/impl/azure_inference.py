@@ -27,7 +27,7 @@ from clarity_agent.llm.types import (
     ToolUseBlock,
 )
 
-_AZURE_TIER_DEFAULTS: dict[str, str] = {
+_AZURE_RECOMMENDED: dict[str, str] = {
     "default": "gpt-5.4",
     "deep": "gpt-5.4",
     "fast": "gpt-5.4-mini",
@@ -133,7 +133,7 @@ class AzureInferenceClient(LLMClient):
     deployment-specific endpoint URL automatically.
     """
 
-    TIER_DEFAULTS = _AZURE_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _AZURE_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _AZURE_MODEL_CONTEXT_WINDOWS
 
     @classmethod
@@ -154,7 +154,7 @@ class AzureInferenceClient(LLMClient):
         closed list.
         """
         return build_catalog(
-            recommended=cls.TIER_DEFAULTS,
+            recommended=cls.RECOMMENDED_MODELS,
             context_windows=cls.MODEL_CONTEXT_WINDOWS,
             free_form=True,
         )

@@ -65,9 +65,9 @@ class ChatBackend(ABC):
     Override :meth:`connect` and :meth:`disconnect` if the backend needs
     setup or teardown.
 
-    Subclasses should declare :attr:`TIER_DEFAULTS` mapping all standard
-    tiers (``"default"``, ``"deep"``, ``"fast"``) to concrete model strings
-    for their provider.
+    Subclasses should declare :attr:`RECOMMENDED_MODELS`, mapping the
+    ``"default"``/``"deep"``/``"fast"`` highlight roles to concrete
+    model strings for their provider.
     """
 
     on_tool_use: ToolCallback | None = None
@@ -96,18 +96,28 @@ class ChatBackend(ABC):
     on_status: StatusCallback | None = None
     supports_tools: bool = False
 
-    TIER_DEFAULTS: ClassVar[dict[str, str]] = {}
-    """Provider-specific mapping from tier names to model strings.
+    _model: str | None = None
+    """The user's chosen model; ``None`` uses the provider default.
 
-    Subclasses override this to declare which concrete models correspond
-    to the ``"default"``, ``"deep"``, and ``"fast"`` tiers.
+    Declared at class level, like the callbacks above, so a subclass
+    that doesn't chain to :meth:`__init__` still resolves a model
+    rather than raising on attribute access.
+    """
+
+    RECOMMENDED_MODELS: ClassVar[dict[str, str]] = {}
+    """Provider-specific mapping from highlight role to model string.
+
+    Declares which concrete models fill the ``"default"``, ``"deep"``
+    and ``"fast"`` roles.  ``"default"`` is the model used when the
+    user hasn't chosen one; the other two are options the picker
+    surfaces alongside it.
     """
 
     MODEL_CONTEXT_WINDOWS: ClassVar[dict[str, int]] = {}
     """Provider-specific mapping from concrete model strings to their
     context-window size in tokens.
 
-    Co-located with :attr:`TIER_DEFAULTS` so each backend declares
+    Co-located with :attr:`RECOMMENDED_MODELS` so each backend declares
     everything about its known models in one place.  Used by the
     compaction trigger: when the latest turn's ``input_tokens``
     (or the on-disk transcript's estimated size) approaches the
@@ -143,18 +153,40 @@ class ChatBackend(ABC):
         the Claude Agent SDK and GitHub Copilot backends, whose runtimes
         we drive rather than whose API we call.
 
-        Note for subclasses: this reads :attr:`TIER_DEFAULTS` off the
+        Note for subclasses: this reads :attr:`RECOMMENDED_MODELS` off the
         *class*, so a subclass that shadows it with an instance
         property must override this too (see
         :meth:`ClientChatBackend.builtin_catalog`).
         """
         return build_catalog(
-            recommended=cls.TIER_DEFAULTS,
+            recommended=cls.RECOMMENDED_MODELS,
             context_windows=cls.MODEL_CONTEXT_WINDOWS,
         )
 
-    def __init__(self, *, transcript: Transcript | None = None) -> None:
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models these credentials can reach.
+
+        Mirrors :meth:`~clarity_agent.llm.client.LLMClient.fetch_models`
+        for providers driven through an agent runtime rather than a
+        messages API.  The default is :meth:`builtin_catalog`;
+        subclasses that can enumerate override it and may raise freely,
+        since :func:`~clarity_agent.llm.factory.fetch_model_catalog`
+        catches and falls back.
+        """
+        return self.builtin_catalog()
+
+    def __init__(
+        self,
+        *,
+        transcript: Transcript | None = None,
+        model: str | None = None,
+    ) -> None:
         """Initialize the shared backend state.
+
+        ``model``: the model this backend should use when a call
+        doesn't name one — the user's choice, from ``--model``,
+        settings, or ``evals/config.yaml``.  ``None`` falls back to
+        the provider's own ``default`` recommendation.
 
         ``transcript``: optional binding for compaction recording.
         Subclasses must pass through their own ``transcript=``
@@ -170,6 +202,7 @@ class ChatBackend(ABC):
         # The transcript the backend writes compaction events to.
         # ``None`` disables backend-side compaction entirely.
         self._transcript: Transcript | None = transcript
+        self._model = model
         # Latest ``input_tokens`` value reported by the provider on
         # this conversation.  Each backend updates this internally
         # when it parses usage info.  Drives the threshold check
@@ -192,17 +225,26 @@ class ChatBackend(ABC):
         Backends that don't support session IDs silently ignore this.
         """
 
-    def resolve_model(self, model_or_tier: str | None) -> str:
-        """Resolve a tier name or model string to a concrete model.
+    @property
+    def default_model(self) -> str:
+        """The model this backend uses when a call doesn't name one.
 
-        - ``None`` → ``TIER_DEFAULTS["default"]``
-        - A known tier name (e.g. ``"deep"``) → the tier's model from
-          :attr:`TIER_DEFAULTS`
-        - Anything else → returned as-is (treated as a literal model string)
+        The user's chosen model if there is one, else the provider's
+        ``default`` recommendation.  A user's choice has to win here,
+        or a configured ``--model`` would be silently ignored every
+        time :meth:`resolve_model` is called with ``None``.
         """
-        if model_or_tier is None:
-            model_or_tier = "default"
-        return self.TIER_DEFAULTS.get(model_or_tier, model_or_tier)
+        return self._model or self.RECOMMENDED_MODELS.get("default", "")
+
+    def resolve_model(self, model: str | None) -> str:
+        """Return the concrete model for a call.
+
+        ``None`` means "whatever this backend is configured to use";
+        anything else is a model identifier and is passed through
+        untouched.  There is no longer any name-to-tier indirection —
+        a model string is just a model string.
+        """
+        return model if model else self.default_model
 
     def maybe_compact_after_chat(self) -> None:
         """Hook for backends that implement their own threshold-based
@@ -224,20 +266,30 @@ class ChatBackend(ABC):
         path) and call :meth:`Transcript.compact`.
         """
 
-    def context_window_for(self, model_or_tier: str | None = None) -> int:
+    def context_window_for(self, model: str | None = None) -> int:
         """Return the context-window size (in tokens) for a model.
 
         Resolution order:
         1. User override in :attr:`Settings.context_window_overrides`,
            keyed by the concrete (post-:meth:`resolve_model`) model
            string.
-        2. The backend's :attr:`MODEL_CONTEXT_WINDOWS` map.
-        3. :attr:`DEFAULT_CONTEXT_WINDOW`.
+        2. A window reported by the provider's own model listing, if
+           one has been fetched.  Anthropic, Gemini and GitHub Copilot
+           all publish limits; when they do, their number beats ours,
+           because ours is hand-maintained and theirs is not.
+        3. The backend's :attr:`MODEL_CONTEXT_WINDOWS` map, retried
+           without any trailing release-date stamp so a dated id
+           still finds its undated entry.
+        4. :attr:`DEFAULT_CONTEXT_WINDOW`.
 
-        Resolves tier names to concrete models first, so callers can
-        pass either form.
+        ``None`` means the backend's configured model.
         """
-        model = self.resolve_model(model_or_tier)
+        from clarity_agent.llm.model_catalog import (
+            base_model_id,
+            known_context_window,
+        )
+
+        resolved = self.resolve_model(model)
         try:
             from clarity_agent.settings import Settings
             overrides = Settings.current().context_window_overrides
@@ -245,9 +297,17 @@ class ChatBackend(ABC):
             # Settings not initialized (e.g. test contexts that
             # bypass the normal load path).  Skip overrides.
             overrides = {}
-        if model in overrides:
-            return overrides[model]
-        return self.MODEL_CONTEXT_WINDOWS.get(model, self.DEFAULT_CONTEXT_WINDOW)
+        if resolved in overrides:
+            return overrides[resolved]
+
+        reported = known_context_window(resolved)
+        if reported:
+            return reported
+
+        window = self.MODEL_CONTEXT_WINDOWS.get(resolved)
+        if window is None:
+            window = self.MODEL_CONTEXT_WINDOWS.get(base_model_id(resolved))
+        return window if window is not None else self.DEFAULT_CONTEXT_WINDOW
 
     def connect(self) -> None:
         """Establish the backend connection (if needed)."""
@@ -271,9 +331,9 @@ class ChatBackend(ABC):
             user_message: The message from the user.
             system_prompt: Optional system prompt override for this turn.
             model: Optional model override for this turn.  When ``None``,
-                the backend's default model (``TIER_DEFAULTS["default"]``)
-                is used.  The conversation history is preserved regardless
-                of model changes.
+                the backend's configured model is used.  The
+                conversation history is preserved regardless of
+                model changes.
             tools: Optional list of tool schemas to provide to the model.
                 When provided, the model may respond with tool calls which
                 are dispatched to *tool_handler*.
@@ -359,19 +419,14 @@ class ClientChatBackend(ChatBackend):
         *,
         project_dir: Path,
         clarity_agent_dir: Path,
-        tiers: dict[str, str] | None = None,
+        model: str | None = None,
         transcript: Transcript | None = None,
     ) -> None:
-        super().__init__(transcript=transcript)
+        super().__init__(transcript=transcript, model=model)
         self._client = client
         self.project_dir: Path = project_dir
         self.clarity_agent_dir: Path = clarity_agent_dir
         self.conversation_history: list[dict[str, Any]] = []
-        # User-configured tier overrides (e.g. from LLMConfig.tiers, which
-        # comes from --model / settings / evals/config.yaml).  Layered
-        # over the client's provider defaults in the TIER_DEFAULTS
-        # property so resolve_model(None) honors the user's choice.
-        self._tier_overrides: dict[str, str] = dict(tiers) if tiers else {}
         # Persistent event loop for async LLM calls.  asyncio.run()
         # closes its loop after each call, which breaks clients that
         # cache connections (e.g. aiohttp in Azure AI Inference).
@@ -387,21 +442,19 @@ class ClientChatBackend(ChatBackend):
         self._loop = asyncio.new_event_loop()
 
     @property  # type: ignore[override]
-    def TIER_DEFAULTS(self) -> dict[str, str]:  # type: ignore[override]
-        """Client's provider defaults with user tier overrides layered on top.
+    def RECOMMENDED_MODELS(self) -> dict[str, str]:  # type: ignore[override]
+        """Forward the wrapped client's recommendations.
 
-        Overrides come from :class:`LLMConfig` (``--model``, settings,
-        ``evals/config.yaml``) and must win over the provider's built-in
-        defaults, otherwise a configured model is silently ignored when
-        :meth:`resolve_model` is called with ``None``.
+        Only used for picker highlighting now — the model actually in
+        use comes from :attr:`default_model`.
         """
-        return {**self._client.TIER_DEFAULTS, **self._tier_overrides}
+        return self._client.RECOMMENDED_MODELS
 
     @classmethod
     def builtin_catalog(cls) -> ModelCatalog:
         """Not available on the wrapper — ask the wrapped client instead.
 
-        :attr:`TIER_DEFAULTS` is an instance property here (it merges
+        :attr:`RECOMMENDED_MODELS` is an instance property here (it merges
         the user's overrides in), so the inherited class-level
         implementation would read the property object rather than a
         model table.  Every catalog caller goes through

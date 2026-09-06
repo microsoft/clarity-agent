@@ -50,9 +50,15 @@ except ImportError:
     SubprocessConfig = None  # type: ignore[assignment,misc]
 
 from clarity_agent.llm.chat import ChatBackend
-from clarity_agent.llm.types import CompactionInfo, ToolHandler, ToolUseBlock
+from clarity_agent.llm.model_catalog import build_catalog
+from clarity_agent.llm.types import (
+    CompactionInfo,
+    ModelCatalog,
+    ToolHandler,
+    ToolUseBlock,
+)
 
-_GITHUB_TIER_DEFAULTS: dict[str, str] = {
+_GITHUB_RECOMMENDED: dict[str, str] = {
     "default": "claude-opus-4.6",
     "deep": "claude-opus-4.6",
     "fast": "claude-sonnet-4.6",
@@ -255,8 +261,54 @@ class CopilotChatBackend(ChatBackend):
     """
 
     supports_tools: bool = True
-    TIER_DEFAULTS = _GITHUB_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _GITHUB_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _GITHUB_MODEL_CONTEXT_WINDOWS
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models this Copilot account can reach.
+
+        Copilot is the one provider whose listing reports a real
+        context window (``capabilities.limits.max_context_window_tokens``)
+        alongside the ids, so those values are used directly instead of
+        the built-in table.
+
+        Uses a transient client rather than :meth:`_ensure_client`, the
+        same way :func:`probe_sdk_native_auth` does, so filling a model
+        picker doesn't leave a CLI subprocess running for the rest of
+        the session.
+        """
+        if CopilotClient is None:
+            raise RuntimeError("The 'copilot' package is not installed")
+
+        config = SubprocessConfig(github_token=self._token) if self._token else None
+        client = CopilotClient(config)
+        try:
+            await client.start()
+            listed = await client.list_models()
+        finally:
+            try:
+                await client.stop()
+            except Exception:  # noqa: BLE001 — teardown failures aren't the caller's problem
+                pass
+
+        model_ids: list[str] = []
+        display_names: dict[str, str] = {}
+        context_windows: dict[str, int] = {}
+        for model in listed:
+            model_ids.append(model.id)
+            if model.name:
+                display_names[model.id] = model.name
+            window = getattr(model.capabilities.limits, "max_context_window_tokens", None)
+            if window:
+                context_windows[model.id] = window
+
+        return build_catalog(
+            recommended=self.RECOMMENDED_MODELS,
+            context_windows={**self.MODEL_CONTEXT_WINDOWS, **context_windows},
+            model_ids=model_ids,
+            display_names=display_names,
+            source="provider",
+        )
 
     def __init__(
         self,
@@ -264,11 +316,12 @@ class CopilotChatBackend(ChatBackend):
         project_dir: Path,
         clarity_agent_dir: Path,
         token: str | None = None,
+        model: str | None = None,
         idle_timeout_seconds: float | None = None,
         max_rpc_retries: int | None = None,
         transcript: Transcript | None = None,
     ) -> None:
-        super().__init__(transcript=transcript)
+        super().__init__(transcript=transcript, model=model)
         self.project_dir = project_dir
         self.clarity_agent_dir = clarity_agent_dir
         self._token = token

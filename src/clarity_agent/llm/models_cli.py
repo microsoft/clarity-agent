@@ -118,8 +118,6 @@ def _resolve_config(args: argparse.Namespace) -> LLMConfig:
         endpoint=None,
         auth_mode=args.auth_mode,
         model=None,
-        model_deep=None,
-        model_fast=None,
     )
 
     settings = Settings.current()

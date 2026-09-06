@@ -23,7 +23,7 @@ from clarity_agent.llm.types import (
     ToolUseBlock,
 )
 
-_OPENAI_TIER_DEFAULTS: dict[str, str] = {
+_OPENAI_RECOMMENDED: dict[str, str] = {
     "default": "gpt-5.4",
     "deep": "gpt-5.4",
     "fast": "gpt-5.4-mini",
@@ -142,7 +142,7 @@ class OpenAIClient(LLMClient):
     :class:`~clarity_agent.llm.types.LLMResponse` objects.
     """
 
-    TIER_DEFAULTS = _OPENAI_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _OPENAI_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _OPENAI_MODEL_CONTEXT_WINDOWS
 
     def __init__(self, *, api_key: str) -> None:
@@ -160,7 +160,7 @@ class OpenAIClient(LLMClient):
         chat_models.sort(key=lambda m: m.created or 0, reverse=True)
 
         return build_catalog(
-            recommended=self.TIER_DEFAULTS,
+            recommended=self.RECOMMENDED_MODELS,
             context_windows=self.MODEL_CONTEXT_WINDOWS,
             model_ids=[m.id for m in chat_models],
             source="provider",

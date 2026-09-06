@@ -3,7 +3,7 @@
 Two jobs live here:
 
 1. **Construction helpers** shared by every provider implementation —
-   turning a backend's ``TIER_DEFAULTS`` / ``MODEL_CONTEXT_WINDOWS``
+   turning a backend's ``RECOMMENDED_MODELS`` / ``MODEL_CONTEXT_WINDOWS``
    tables (or a live provider listing) into a
    :class:`~clarity_agent.llm.types.ModelCatalog`.
 2. **Caching**, so opening the model picker doesn't cost a network
@@ -47,8 +47,20 @@ CACHE_TTL_SECONDS: int = 24 * 60 * 60
 # Cache file, relative to the Clarity data directory.
 _CACHE_FILENAME = "model-catalog.json"
 
+# Key inside that file holding the flat model-id → context-window map.
+# Namespaced with a leading "#" so it can't collide with a
+# ``provider:auth_mode`` cache key.
+_CONTEXT_WINDOWS_KEY = "#context_windows"
+
 # Process-lifetime cache, so repeated picker opens don't re-read disk.
 _MEMORY_CACHE: dict[str, tuple[float, ModelCatalog]] = {}
+
+# Context windows learned from live listings, flat by model id.
+# Kept separate from the per-provider catalog cache because the
+# compaction path needs a *synchronous* lookup and doesn't know which
+# provider a model came from.  Model ids are distinctive enough across
+# providers that a flat map is safe.
+_CONTEXT_WINDOWS: dict[str, int] = {}
 
 # Trailing release-date stamp on Anthropic-style ids
 # ("claude-sonnet-4-5-20250929").  Stripped before humanizing.
@@ -65,6 +77,19 @@ _WORD_OVERRIDES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Display names
 # ---------------------------------------------------------------------------
+
+def base_model_id(model_id: str) -> str:
+    """Strip a trailing release-date stamp from a model identifier.
+
+    Providers list both dated and undated ids for the same model
+    (``claude-sonnet-4-5-20250929`` beside ``claude-sonnet-4-5``), but
+    our built-in tables only carry the undated form.  Without this,
+    a dated id misses the table and silently falls back to
+    :attr:`ChatBackend.DEFAULT_CONTEXT_WINDOW` — a 128K assumption for
+    a 200K model, which makes compaction fire far too early.
+    """
+    return _DATE_SUFFIX_RE.sub("", model_id.strip())
+
 
 def humanize_model_id(model_id: str) -> str:
     """Derive a readable display name from a model identifier.
@@ -128,7 +153,7 @@ def assign_roles(
     """Tag the models named in *recommended* with their highlight role.
 
     *recommended* is a ``{role: model_id}`` mapping — a backend's
-    ``TIER_DEFAULTS`` table.  Roles are applied in :data:`ROLE_ORDER`
+    ``RECOMMENDED_MODELS`` table.  Roles are applied in :data:`ROLE_ORDER`
     and each model takes at most one, so a provider whose ``default``
     and ``deep`` are the same model shows that model once.
 
@@ -166,10 +191,10 @@ def default_model_for(recommended: Mapping[str, str]) -> str:
     :data:`ROLE_ORDER` for providers that don't declare one.
 
     Note this is about a *fresh* install.  Migrating an existing user
-    is a different question with a different answer: until the tier
-    collapse lands, every process maps to the ``"deep"`` tier, so what
-    someone is running today is their deep model, and their settings
-    migration has to read that rather than this.
+    is a different question with a different answer — see
+    ``settings._legacy_model_preference``, which reads the old
+    ``model_deep`` first because that is what every process used to
+    resolve through.
     """
     for role in ROLE_ORDER:
         model_id = recommended.get(role)
@@ -193,7 +218,7 @@ def build_catalog(
 
     Args:
         recommended: ``{role: model_id}`` — the backend's
-            ``TIER_DEFAULTS``.  Drives highlighting and the default.
+            ``RECOMMENDED_MODELS``.  Drives highlighting and the default.
         context_windows: ``{model_id: tokens}`` — the backend's
             ``MODEL_CONTEXT_WINDOWS``.  Also supplies the model list
             when *model_ids* is omitted.
@@ -287,6 +312,35 @@ def describe_fetch_error(exc: BaseException) -> str:
 # ---------------------------------------------------------------------------
 # Caching
 # ---------------------------------------------------------------------------
+
+def known_context_window(model_id: str) -> int | None:
+    """Return a context window learned from a live listing, if any.
+
+    Synchronous by design: the compaction check runs on the chat path
+    and can't await a fetch.  It reads whatever the last successful
+    listing recorded, so a provider that publishes real limits
+    (Anthropic, Gemini, GitHub Copilot) drives compaction with its own
+    numbers instead of our hand-maintained table.  Providers that
+    publish none simply never populate this, and the caller falls
+    through.
+    """
+    if not _CONTEXT_WINDOWS:
+        _load_context_windows()
+    window = _CONTEXT_WINDOWS.get(model_id)
+    if window is None:
+        window = _CONTEXT_WINDOWS.get(base_model_id(model_id))
+    return window
+
+
+def _load_context_windows() -> None:
+    """Populate the in-memory window map from the cache file."""
+    raw = _read_cache_file().get(_CONTEXT_WINDOWS_KEY)
+    if not isinstance(raw, dict):
+        return
+    for model_id, window in raw.items():
+        if isinstance(window, int) and window > 0:
+            _CONTEXT_WINDOWS[str(model_id)] = window
+
 
 def cache_key(provider: str, auth_mode: str | None) -> str:
     """Cache key for a provider + auth mode pair.
@@ -404,6 +458,18 @@ def store_cached(key: str, catalog: ModelCatalog) -> None:
 
     data = _read_cache_file()
     data[key] = {"fetched_at": now, "catalog": _catalog_to_dict(catalog)}
+
+    # Record any real context windows the provider reported, so the
+    # compaction path can read them synchronously later.  These outlive
+    # the catalog's TTL on purpose: a stale-but-correct window beats
+    # falling back to a generic default.
+    discovered = {m.id: m.context_window for m in catalog.models if m.context_window}
+    if discovered:
+        _CONTEXT_WINDOWS.update(discovered)
+        existing = data.get(_CONTEXT_WINDOWS_KEY)
+        merged = dict(existing) if isinstance(existing, dict) else {}
+        merged.update(discovered)
+        data[_CONTEXT_WINDOWS_KEY] = merged
     try:
         path = _cache_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -415,6 +481,7 @@ def store_cached(key: str, catalog: ModelCatalog) -> None:
 def clear_cache() -> None:
     """Drop every cached catalog, in memory and on disk (for tests)."""
     _MEMORY_CACHE.clear()
+    _CONTEXT_WINDOWS.clear()
     try:
         path = _cache_path()
         if path.exists():

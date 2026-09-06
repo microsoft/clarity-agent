@@ -459,71 +459,57 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
 // ---------------------------------------------------------------------------
 
 function ModelsTab({ settings, onSaved }: { settings: AppSettings; onSaved: () => void }) {
-  const [modelDefault, setModelDefault] = useState(settings.model_default ?? "");
-  const [modelDeep, setModelDeep] = useState(settings.model_deep ?? "");
-  const [modelFast, setModelFast] = useState(settings.model_fast ?? "");
+  const [model, setModel] = useState(settings.model ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    await updateSettings({
-      model_default: modelDefault || null,
-      model_deep: modelDeep || null,
-      model_fast: modelFast || null,
-    });
+    await updateSettings({ model: model || null });
     setSaving(false);
     setSaved(true);
     onSaved();
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const tiers = [
-    { key: "model_default", label: "Default", sublabel: "Used for most processes", value: modelDefault, set: setModelDefault },
-    { key: "model_deep", label: "Deep", sublabel: "For complex reasoning (architecture, decisions)", value: modelDeep, set: setModelDeep },
-    { key: "model_fast", label: "Fast", sublabel: "For quick tasks (thinker runs, routing)", value: modelFast, set: setModelFast },
-  ];
-
   return (
     <div className="space-y-4">
       <p className="text-xs text-body-muted">
-        Override the default model for each tier. Leave blank to use the provider's default.
+        The model Clarity uses for everything. Leave blank to follow the
+        provider's recommended model, so you track the default as it
+        changes rather than being pinned to today's.
       </p>
 
-      {tiers.map((t) => (
-        <div key={t.key}>
-          <label className="block text-xs text-body-label mb-1">
-            {t.label}
-            <span className="text-body-faint ml-1.5 font-normal">{t.sublabel}</span>
-          </label>
-          <input
-            type="text"
-            placeholder="Provider default"
-            value={t.value}
-            onChange={(e) => t.set(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
-              text-sm text-body-heading placeholder:text-body-faint
-              focus:outline-none focus:border-accent-focus focus:ring-1 focus:ring-accent-focus/30
-              transition-all"
-          />
-        </div>
-      ))}
-
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-3 py-2 rounded-lg bg-accent-focus text-white text-sm
-            hover:brightness-110 disabled:opacity-50 transition-all"
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
-        {saved && <span className="text-xs text-green-400">{"\u2713"} Saved</span>}
+      <div>
+        <label className="block text-xs text-body-label mb-1">
+          Model
+          <span className="text-body-faint ml-1.5 font-normal">
+            Run <code>clarity models</code> to see what this provider offers
+          </span>
+        </label>
+        <input
+          type="text"
+          placeholder="Provider default"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
+                     text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40"
+        />
       </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-4 py-2 rounded-lg bg-accent text-white text-sm
+                   disabled:opacity-50 transition-opacity"
+      >
+        {saving ? "Saving…" : saved ? "Saved" : "Save"}
+      </button>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Tab: Appearance

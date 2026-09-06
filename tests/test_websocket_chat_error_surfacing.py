@@ -41,7 +41,7 @@ def _make_app(project_dir: Path, *, provider: str = "anthropic") -> Any:
     cfg = LLMConfig(
         provider=provider,
         api_key="fake-key",
-        tiers={"default": "fake-model"},
+        model="fake-model",
     )
     return app_module.create_app(
         project_dir=project_dir,

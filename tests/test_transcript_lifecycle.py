@@ -61,7 +61,7 @@ class _SmokeBackend(ChatBackend):
     """
 
     supports_tools = True
-    TIER_DEFAULTS = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
+    RECOMMENDED_MODELS = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
 
     def __init__(
         self,
@@ -115,7 +115,10 @@ class _SmokeLLMConfig:
     """Minimal :class:`LLMConfig`-shaped stub."""
 
     provider = "stub"
-    tiers = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
+    model = "stub-model"
+
+    def resolve_model(self) -> str:
+        return self.model
 
     def __init__(self, backend_factory=None) -> None:
         # Allow tests to substitute their own backend (e.g., one with
@@ -138,12 +141,6 @@ class _SmokeLLMConfig:
         # dedicated attribute for inspection).
         self.last_backend._transcript = transcript
         return self.last_backend
-
-    def resolve(self, process_name: str) -> str:
-        return "stub-model"
-
-    def resolve_tier(self, process_name: str) -> str:
-        return "default"
 
 
 @pytest.fixture

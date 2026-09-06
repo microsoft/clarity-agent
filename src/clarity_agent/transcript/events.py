@@ -224,12 +224,12 @@ class ProcessStarted(_BaseEvent):
 
     type: Literal["process_started"] = "process_started"
     process_name: str
-    # ``tier`` is the resolved tier ("default"/"deep"/"fast"/...) the
-    # process was started with; ``model`` is the concrete model id
-    # the tier resolved to.  Both may be ``None`` if the process
-    # accepted whatever the session default was.
-    tier: str | None = None
+    # ``model`` is the concrete model the process ran on, or ``None``
+    # when it accepted the session default.
     model: str | None = None
+    # Retained only so transcripts written before the model tiers were
+    # removed (issue #172) still parse.  Never written any more.
+    tier: str | None = None
 
 
 class ModelOverride(_BaseEvent):
@@ -240,8 +240,9 @@ class ModelOverride(_BaseEvent):
     """
 
     type: Literal["model_override"] = "model_override"
-    tier: str
     model: str
+    # As on ``ProcessStarted``: kept for reading old transcripts only.
+    tier: str | None = None
 
 
 # Discriminated union of all known event types.  Adding a new event:

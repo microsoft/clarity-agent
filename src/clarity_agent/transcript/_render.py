@@ -165,10 +165,10 @@ def _render_process_started(event: ProcessStarted) -> str:
     # were explicitly set — matches the legacy "**Model override:**"
     # line's conditional rendering.
     out = f"## Process: {event.process_name}\n\n"
-    if event.tier and event.tier != "default" and event.model:
-        out += f"**Model override:** {event.model} (tier: {event.tier})\n\n"
+    if event.model:
+        out += f"**Model:** {event.model}\n\n"
     return out
 
 
 def _render_model_override(event: ModelOverride) -> str:
-    return f"**Model override:** {event.model} (tier: {event.tier})\n\n"
+    return f"**Model override:** {event.model}\n\n"

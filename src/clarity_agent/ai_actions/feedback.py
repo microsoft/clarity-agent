@@ -94,7 +94,6 @@ def create_feedback_handler(
     provider: str | None = None,
     model: str | None = None,
     active_model: str | None = None,
-    active_tier: str | None = None,
     on_tool_use: ToolCallback | None = None,
 ) -> Callable[[ToolUseBlock], str]:
     """Create a tool handler for feedback tool calls.
@@ -113,7 +112,7 @@ def create_feedback_handler(
         llm_info: dict[str, str] = {}
         if inp.get("include_llm_info", True):
             llm_info = gather_llm_info(
-                provider, model, active_model, active_tier,
+                provider, model, active_model,
             )
 
         transcript: str | None = None

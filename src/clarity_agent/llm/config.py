@@ -18,7 +18,7 @@ import argparse
 import copy
 import importlib
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -48,7 +48,7 @@ class LLMConfigError(Exception):
 # ---------------------------------------------------------------------------
 
 # Maps provider name to metadata used during resolution.
-# Model defaults live on the implementation classes (TIER_DEFAULTS);
+# Model defaults live on the implementation classes (RECOMMENDED_MODELS);
 # this registry has connectivity, package metadata, and per-provider
 # auth mode definitions (ordered by preference — first = recommended).
 _PROVIDERS: dict[str, dict[str, Any]] = {
@@ -138,7 +138,7 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
              "secret": False,
              "placeholder": "https://your-resource.openai.azure.com",
              "help": "From your Azure AI resource's Keys and Endpoint page."},
-            {"key": "CLARITY_MODEL_DEFAULT", "label": "Deployment Name",
+            {"key": "CLARITY_MODEL", "label": "Deployment Name",
              "secret": False,
              "placeholder": "gpt-4o",
              "help": "The name of your model deployment in Azure. Found under Deployments in the Azure AI portal."},
@@ -327,17 +327,6 @@ def get_default_auth_mode(provider: str) -> str | None:
     return names[0] if names else None
 
 
-# ---------------------------------------------------------------------------
-# Default process-to-tier mapping (derived from process_registry)
-# ---------------------------------------------------------------------------
-
-from clarity_agent.process_registry import (  # noqa: E402 — late import avoids circular dependency
-    get_default_process_tiers,
-)
-
-_DEFAULT_PROCESS_TIERS: dict[str, str] = get_default_process_tiers()
-
-
 
 def _check_package(package: str, provider: str) -> None:
     """Verify that a provider's required package is importable."""
@@ -446,15 +435,12 @@ class LLMConfig:
     - :meth:`create_client` — low-level :class:`~clarity_agent.llm.LLMClient`
     - :meth:`create_chat_backend` — high-level :class:`~clarity_agent.llm.ChatBackend`
 
-    Model tier support:
+    Model selection:
 
-    - :attr:`tiers` — tier-to-model mapping.  ``tiers["default"]`` is
-      always set and determines the model used when no tier override is
-      active.  ``--model`` sets ``tiers["default"]``, just as
-      ``--model-deep`` sets ``tiers["deep"]``.
-    - :attr:`process_overrides` — per-process tier/model overrides.
-    - :meth:`resolve` — resolve a process name to a tier name or model string.
-    - :meth:`resolve_tier` — resolve a process name to its tier name.
+    - :attr:`model` — the one model this configuration runs on, from
+      ``--model`` or the user's saved preference.  ``None`` means "use
+      whatever the provider recommends"; :meth:`resolve_model` turns
+      either case into a concrete identifier.
     """
 
     provider: str
@@ -462,41 +448,24 @@ class LLMConfig:
     endpoint: str | None = None
     auth_mode: str | None = None
     tenant_id: str | None = None
-    tiers: dict[str, str] = field(default_factory=dict)
-    process_overrides: dict[str, str] = field(default_factory=dict)
+    model: str | None = None
 
     # -------------------------------------------------------------------
-    # Process-to-tier resolution
+    # Model resolution
     # -------------------------------------------------------------------
 
-    def resolve(self, process_name: str) -> str:
-        """Return a tier name or model string for *process_name*.
+    def resolve_model(self) -> str:
+        """Return the concrete model this configuration runs on.
 
-        Resolution order:
-
-        1. ``process_overrides[process_name]`` (tier name or model string)
-        2. Built-in ``_DEFAULT_PROCESS_TIERS[process_name]``
-        3. ``"default"``
-
-        If the resolved value is a tier name that has a user override in
-        :attr:`tiers`, the override is returned.  Otherwise the raw tier
-        name (or model string) is returned for the backend to resolve.
+        The user's :attr:`model` when set, otherwise the provider's
+        ``default`` recommendation.  Every process uses this same
+        model — there is no per-process selection.
         """
-        raw = self.process_overrides.get(process_name)
-        if raw is None:
-            raw = _DEFAULT_PROCESS_TIERS.get(process_name, "default")
-        return self.tiers.get(raw, raw)
-
-    def resolve_tier(self, process_name: str) -> str:
-        """Return the tier name (not model) for *process_name*.
-
-        Returns ``"default"``, ``"deep"``, ``"fast"``, or a custom
-        tier/model string if a per-process override is set.
-        """
-        raw = self.process_overrides.get(process_name)
-        if raw is None:
-            raw = _DEFAULT_PROCESS_TIERS.get(process_name, "default")
-        return raw
+        if self.model:
+            return self.model
+        from clarity_agent.llm.factory import get_provider_model_catalog
+        catalog = get_provider_model_catalog(self.provider, self.auth_mode)
+        return catalog.default_model
 
     # -------------------------------------------------------------------
     # Class methods — CLI registration and resolution
@@ -534,7 +503,10 @@ class LLMConfig:
         group.add_argument(
             "--model",
             default=None,
-            help="Model to use (default: provider-specific)",
+            help=(
+                "Model to use for everything (default: the provider's "
+                "recommended model; see 'clarity models')"
+            ),
         )
         group.add_argument(
             "--endpoint",
@@ -544,16 +516,6 @@ class LLMConfig:
             "--auth-mode",
             default=None,
             help="Authentication mode (e.g. api_key, default, interactive, device_code)",
-        )
-        group.add_argument(
-            "--model-deep",
-            default=None,
-            help="Model for deep-thinking processes (problem clarification, architecture, decisions)",
-        )
-        group.add_argument(
-            "--model-fast",
-            default=None,
-            help="Model for fast/cheap tasks (thinker runs, routing)",
         )
 
     @classmethod
@@ -674,28 +636,12 @@ class LLMConfig:
                     f"Set {endpoint_env_var} or use --endpoint."
                 )
 
-        # Resolve tier overrides: CLI flag > settings > provider default.
-        from clarity_agent.llm.factory import get_provider_tier_defaults
-        provider_defaults = get_provider_tier_defaults(provider, auth_mode)
-
-        tiers: dict[str, str] = {}
-        model: str | None = getattr(args, "model", None)
-        model_deep: str | None = getattr(args, "model_deep", None)
-        model_fast: str | None = getattr(args, "model_fast", None)
-
-        settings_tiers = s.tier_overrides
-        for tier_name, cli_value in [("default", model), ("deep", model_deep), ("fast", model_fast)]:
-            if cli_value:
-                tiers[tier_name] = cli_value
-            elif tier_name in settings_tiers:
-                tiers[tier_name] = settings_tiers[tier_name]
-
-        # Ensure "default" is always populated.
-        if "default" not in tiers:
-            tiers["default"] = provider_defaults.get("default", "unknown")
-
-        # Per-process overrides from settings.
-        process_overrides: dict[str, str] = dict(s.process_model_overrides)
+        # Resolve the model: CLI flag > saved preference > provider
+        # default.  Left as ``None`` when neither is set so the backend
+        # picks up the provider's recommendation at call time — that
+        # way a released default that changes under us is followed
+        # rather than frozen into the config.
+        model: str | None = getattr(args, "model", None) or s.model
 
         # Persist the resolved provider + auth mode back to settings so
         # the UI and future loads see the same values without re-detecting.
@@ -709,8 +655,7 @@ class LLMConfig:
         return cls(
             provider=provider, api_key=api_key,
             endpoint=endpoint, auth_mode=auth_mode,
-            tenant_id=tenant_id, tiers=tiers,
-            process_overrides=process_overrides,
+            tenant_id=tenant_id, model=model,
         )
 
     # -------------------------------------------------------------------
@@ -725,7 +670,7 @@ class LLMConfig:
         provider and credentials.
         """
         clone = copy.copy(self)
-        clone.tiers = {**self.tiers, "default": model}
+        clone.model = model
         return clone
 
     def create_client(self) -> LLMClient:

@@ -65,8 +65,7 @@ class WebSessionAdapter:
         self._initial_llm_session_id = llm_session_id
         self.current_process: str | None = None
         self.model_override: str | None = None
-        self.active_model: str = llm_config.tiers["default"]
-        self.active_tier: str = "default"
+        self.active_model: str = llm_config.resolve_model()
 
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -102,9 +101,8 @@ class WebSessionAdapter:
         self._feedback_handler = create_feedback_handler(
             self.project_dir,
             provider=self.llm_config.provider,
-            model=self.llm_config.tiers.get("default"),
+            model=self.llm_config.resolve_model(),
             active_model=self.active_model,
-            active_tier=self.active_tier,
             on_tool_use=self._backend.on_tool_use if self._backend else None,
         )
         # Install as baseline tools.
@@ -412,7 +410,6 @@ class WebSessionAdapter:
         return format_request_started(RequestLogContext(
             provider=provider,
             model=model,
-            tier=self.active_tier,
             process=process,
             auth_mode=auth_mode,
             credential=self._credential_summary(),
@@ -650,46 +647,25 @@ class WebSessionAdapter:
         """
         self._pending_warnings.append(message)
 
-    def _resolve_model(self, process_name: str | None = None) -> str:
-        """Resolve the model to use for the next chat call.
+    def _resolve_model(self, process_name: str | None = None) -> str | None:
+        """Return the model for the next chat call.
 
-        If a manual override is set, use that.  Otherwise resolve from the
-        config for the given process.  The returned value may be a tier name
-        or model string; the backend's ``resolve_model()`` handles both.
+        The session's manual override if one is set, else ``None`` to
+        let the backend use its configured model.  *process_name* is
+        accepted and ignored: processes no longer choose their own
+        model.
         """
-        if self.model_override:
-            return self.model_override
-        if process_name:
-            return self.llm_config.resolve(process_name)
-        return self.llm_config.tiers["default"]
+        return self.model_override
 
     def _update_active_model(
         self, model_override: str | None, process_name: str | None = None,
     ) -> None:
-        """Update active_model and active_tier tracking fields."""
+        """Refresh :attr:`active_model` for display."""
         backend = self._backend
-        if model_override:
-            # Resolve tier names to concrete models for display
-            if backend:
-                self.active_model = backend.resolve_model(model_override)
-            else:
-                self.active_model = model_override
-            # Determine the tier name
-            tiers = self.llm_config.tiers
-            self.active_tier = next(
-                (k for k, v in tiers.items() if v == model_override),
-                model_override if model_override in ("deep", "fast", "default") else "custom",
-            )
-        elif process_name:
-            self.active_tier = self.llm_config.resolve_tier(process_name)
-            resolved = self.llm_config.resolve(process_name)
-            if backend:
-                self.active_model = backend.resolve_model(resolved)
-            else:
-                self.active_model = resolved
+        if backend is not None:
+            self.active_model = backend.resolve_model(model_override)
         else:
-            self.active_tier = "default"
-            self.active_model = self.llm_config.tiers["default"]
+            self.active_model = model_override or self.llm_config.resolve_model()
 
     def cancel(self) -> None:
         """Signal that the current turn should be stopped.
@@ -731,13 +707,13 @@ class WebSessionAdapter:
         self._update_active_model(model, self.current_process)
         self._log_generation(
             self._generation_start_detail(
-                model=model,
+                model=self.active_model,
                 message=message,
                 system_prompt=system_prompt,
             )
         )
         for detail in self._context_manifest_details(
-            model=model,
+            model=self.active_model,
             message=message,
             turn_system_prompt=turn_system_prompt,
             transcript_context_chars=transcript_context_chars,
@@ -821,7 +797,6 @@ class WebSessionAdapter:
         if self.active_model != old_model or prev_process is None:
             await self._event_queue.put({
                 "type": "model_changed",
-                "tier": self.active_tier,
                 "model": self.active_model,
                 "auto": self.model_override is None,
             })

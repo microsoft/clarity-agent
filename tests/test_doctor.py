@@ -578,7 +578,7 @@ class TestCheckBackendHealth:
         mock_client = MagicMock()
 
         with patch("clarity_agent.setup.doctor._detect_provider", return_value=("anthropic", "api_key")), \
-             patch("clarity_agent.llm.factory.get_provider_tier_defaults", return_value={"default": "test-model"}), \
+             patch("clarity_agent.llm.factory.get_provider_recommended_models", return_value={"default": "test-model"}), \
              patch("clarity_agent.llm.config.LLMConfig.create_client", return_value=mock_client), \
              patch("clarity_agent.setup.doctor.asyncio.run", return_value=mock_response):
             result = check_backend_health(tmp_path)
@@ -588,7 +588,7 @@ class TestCheckBackendHealth:
         monkeypatch.setenv("OPENAI_API_KEY", "bad-key")
 
         with patch("clarity_agent.setup.doctor._detect_provider", return_value=("openai", "api_key")), \
-             patch("clarity_agent.llm.factory.get_provider_tier_defaults", return_value={"default": "test-model"}), \
+             patch("clarity_agent.llm.factory.get_provider_recommended_models", return_value={"default": "test-model"}), \
              patch("clarity_agent.llm.config.LLMConfig.create_client", side_effect=Exception("401 Unauthorized: invalid API key")):
             result = check_backend_health(tmp_path)
         assert result.status == Status.FAIL

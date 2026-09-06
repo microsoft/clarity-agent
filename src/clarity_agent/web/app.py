@@ -434,7 +434,6 @@ def create_app(
                         session._update_active_model(resolved, session.current_process)
                         await out_ws.send_json({
                             "type": "model_changed",
-                            "tier": session.active_tier,
                             "model": session.active_model,
                             "auto": session.model_override is None,
                         })
@@ -492,7 +491,6 @@ def create_app(
                     "name": m.name,
                     "display_name": m.display_name,
                     "one_liner": m.one_liner,
-                    "tier": m.tier,
                     "category": m.category,
                 }
                 for m in PROCESS_METADATA.values()
@@ -664,15 +662,14 @@ def create_app(
         backend = s._backend if s else None
         tiers: dict[str, str] = {}
         if backend:
-            tiers.update(backend.TIER_DEFAULTS)
-        tiers.update(cfg.tiers)
+            tiers.update(backend.RECOMMENDED_MODELS)
+        tiers.update({"default": cfg.resolve_model()})
 
         return {
             "tiers": tiers,
             "override": s.model_override if s else None,
             "auto": s.model_override is None if s else True,
-            "active_model": s.active_model if s else cfg.tiers["default"],
-            "active_tier": s.active_tier if s else "default",
+            "active_model": s.active_model if s else cfg.resolve_model(),
         }
 
     @app.put("/api/model-profile/override")
@@ -701,7 +698,6 @@ def create_app(
             "override": s.model_override,
             "auto": s.model_override is None,
             "active_model": s.active_model,
-            "active_tier": s.active_tier,
         }
 
     # ------------------------------------------------------------------
@@ -764,9 +760,8 @@ def create_app(
             "process": s.current_process if s else None,
             "project_dir": str(project_dir),
             "backend": cfg.provider,
-            "model": cfg.tiers["default"],
-            "active_model": s.active_model if s else cfg.tiers["default"],
-            "active_tier": s.active_tier if s else "default",
+            "model": cfg.resolve_model(),
+            "active_model": s.active_model if s else cfg.resolve_model(),
             "theme": theme,
         }
 
@@ -796,9 +791,8 @@ def create_app(
             cfg: LLMConfig = state["llm_config"]
             llm_info = gather_llm_info(
                 provider=cfg.provider,
-                model=cfg.tiers.get("default"),
+                model=cfg.resolve_model(),
                 active_model=s.active_model if s else None,
-                active_tier=s.active_tier if s else None,
             )
 
         transcript: str | None = None

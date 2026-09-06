@@ -8,7 +8,7 @@ Access the current settings via ``Settings.current()``.
 Storage layout:
 - **Secrets** (API keys): platform keychain via ``keyring``, with a
   ``.env``-based fallback on systems without a keychain service.
-- **Preferences** (provider, model tiers, theme): ``settings.json``
+- **Preferences** (provider, model, theme): ``settings.json``
   in the data directory.
 - Environment variables override both.
 """
@@ -29,9 +29,7 @@ _PREF_KEYS: dict[str, str] = {
     "provider": "CLARITY_LLM_PROVIDER",
     "auth_mode": "CLARITY_AUTH_MODE",
     "tenant_id": "CLARITY_TENANT_ID",
-    "model_default": "CLARITY_MODEL_DEFAULT",
-    "model_deep": "CLARITY_MODEL_DEEP",
-    "model_fast": "CLARITY_MODEL_FAST",
+    "model": "CLARITY_MODEL",
     "theme": "CLARITY_THEME",
     "font_scale": "CLARITY_FONT_SCALE",
     "reduce_motion": "CLARITY_REDUCE_MOTION",
@@ -53,6 +51,36 @@ _ATTR_FOR_ENV = {v: k for k, v in _ALL_KEYS.items()}
 
 # Module-level singleton.
 _current: Settings | None = None
+
+# Superseded by the single ``model`` preference in issue #172, in the
+# order they should be consulted when migrating an older settings.json.
+_LEGACY_MODEL_KEYS: tuple[str, ...] = ("model_deep", "model_default", "model_fast")
+
+
+def _legacy_model_preference(settings_path: Path | None) -> str | None:
+    """Return the model an older settings.json was effectively using.
+
+    Reads the file directly rather than the loaded :class:`Settings`,
+    because these keys no longer have fields to land in.
+
+    ``model_deep`` is consulted first on purpose.  Under the old tier
+    system every process mapped to the ``"deep"`` tier, so whatever
+    sat there is what the user was really running, even if they had
+    also set ``model_default``.
+    """
+    if settings_path is None or not settings_path.exists():
+        return None
+    try:
+        data = json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    for key in _LEGACY_MODEL_KEYS:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 @dataclass
@@ -80,15 +108,18 @@ class Settings:
     provider_auth_modes: dict[str, str] = field(default_factory=dict)
 
     # -- Model configuration --
-    model_default: str | None = None
-    model_deep: str | None = None
-    model_fast: str | None = None
-    process_model_overrides: dict[str, str] = field(default_factory=dict)
+    model: str | None = None
+    """The single model used for everything.
+
+    ``None`` means "follow the provider's recommendation", so a user
+    who never picked a model tracks the shipped default rather than
+    being pinned to whatever it was at install time.
+    """
 
     # Per-model context-window override (in tokens).  Used when a
     # model isn't in any backend's built-in ``MODEL_CONTEXT_WINDOWS``
     # table — e.g., a custom Azure deployment or a model released
-    # after this codebase's tier defaults were last updated.  The
+    # after this codebase's model tables were last updated.  The
     # compaction trigger looks here first.  Empty by default.
     context_window_overrides: dict[str, int] = field(default_factory=dict)
 
@@ -132,8 +163,6 @@ class Settings:
                 for attr in _PREF_KEYS:
                     if attr in data and data[attr] is not None:
                         setattr(settings, attr, data[attr])
-                if "process_model_overrides" in data:
-                    settings.process_model_overrides.update(data["process_model_overrides"])
                 if "context_window_overrides" in data:
                     # Coerce to int — JSON numeric type is fine, but
                     # hand-edited entries might come through as
@@ -169,12 +198,6 @@ class Settings:
             if value:
                 setattr(settings, attr, value)
 
-        prefix = "CLARITY_PROCESS_MODEL_"
-        for key, value in os.environ.items():
-            if key.startswith(prefix):
-                process_name = key[len(prefix):].lower().replace("_", "-")
-                settings.process_model_overrides[process_name] = value
-
         # Migrate legacy "claude-sdk" provider → anthropic + claude_sdk auth.
         _migrated = False
         if settings.provider == "claude-sdk":
@@ -182,8 +205,19 @@ class Settings:
             settings.auth_mode = "claude_sdk"
             settings.provider_auth_modes["anthropic"] = "claude_sdk"
             _migrated = True
+
+        # Migrate the model-tier preferences (issue #172) into the
+        # single ``model``.  ``model_deep`` wins: every process used to
+        # resolve through the "deep" tier, so the deep model is the one
+        # the user was actually running on, whatever else they set.
+        if settings.model is None:
+            legacy = _legacy_model_preference(settings_path)
+            if legacy:
+                settings.model = legacy
+                _migrated = True
+
         if _migrated:
-            settings.save()
+            settings.save()  # also drops the legacy keys, which save() no longer writes
 
         _current = settings
         return settings
@@ -204,18 +238,6 @@ class Settings:
         """Clear the singleton (for testing only)."""
         global _current
         _current = None
-
-    @property
-    def tier_overrides(self) -> dict[str, str]:
-        """Model tier overrides as a ``{tier_name: model}`` dict."""
-        tiers: dict[str, str] = {}
-        if self.model_default:
-            tiers["default"] = self.model_default
-        if self.model_deep:
-            tiers["deep"] = self.model_deep
-        if self.model_fast:
-            tiers["fast"] = self.model_fast
-        return tiers
 
     def get(self, env_key: str) -> str | None:
         """Read a setting by its environment variable name."""
@@ -247,8 +269,6 @@ class Settings:
                 value = getattr(self, attr)
                 if value is not None:
                     data[attr] = value
-            if self.process_model_overrides:
-                data["process_model_overrides"] = dict(self.process_model_overrides)
             if self.context_window_overrides:
                 data["context_window_overrides"] = dict(self.context_window_overrides)
             if self.provider_auth_modes:

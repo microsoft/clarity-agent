@@ -200,8 +200,6 @@ class EvalConfig:
             api_key=None,
             endpoint=None,
             model=model,
-            model_deep=None,
-            model_fast=None,
             auth_mode=role_cfg.auth_mode,
         )
         llm_config = LLMConfig.create(ns)

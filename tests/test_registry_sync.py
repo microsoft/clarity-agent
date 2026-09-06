@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from clarity_agent.llm.config import _DEFAULT_PROCESS_TIERS, _PROVIDERS
+from clarity_agent.llm.config import _PROVIDERS
 from clarity_agent.packet import (
     _CANONICAL_PARTS,
     _SOURCES,
@@ -266,7 +266,7 @@ class TestThinkerSync:
 # ---------------------------------------------------------------------------
 
 class TestProcessSync:
-    """Every process .md file must be registered in _DEFAULT_PROCESS_TIERS
+    """Every process .md file must be registered in PROCESS_METADATA
     and documented in processes/README.md."""
 
     # Files in processes/ that are not invocable processes.
@@ -298,25 +298,6 @@ class TestProcessSync:
             f"Registry entries without process files: {missing}\n"
             f"Either create the process file or remove the entry from "
             f"PROCESS_METADATA."
-        )
-
-    def test_process_files_in_default_tiers(self) -> None:
-        """Every process file should have a tier in _DEFAULT_PROCESS_TIERS."""
-        process_files = self._process_files()
-        missing = process_files - set(_DEFAULT_PROCESS_TIERS.keys())
-        assert not missing, (
-            f"Process files without tier in _DEFAULT_PROCESS_TIERS: {missing}\n"
-            f"Add them to PROCESS_METADATA in process_registry.py."
-        )
-
-    def test_tiers_have_process_files(self) -> None:
-        """Every name in _DEFAULT_PROCESS_TIERS should have a process file."""
-        process_files = self._process_files()
-        missing = set(_DEFAULT_PROCESS_TIERS.keys()) - process_files
-        assert not missing, (
-            f"Tier entries without process files: {missing}\n"
-            f"Either create the process file or remove the entry from "
-            f"_DEFAULT_PROCESS_TIERS."
         )
 
     def test_document_process_values_are_real_processes(self) -> None:
@@ -361,17 +342,17 @@ class TestProviderSync:
     CHAT_ONLY_PROVIDERS: set[str] = set()
 
     def test_providers_have_tier_defaults(self) -> None:
-        """Every provider should have a branch in get_provider_tier_defaults()."""
+        """Every provider should have a branch in get_provider_recommended_models()."""
         import inspect
 
-        from clarity_agent.llm.factory import get_provider_tier_defaults
-        source = inspect.getsource(get_provider_tier_defaults)
+        from clarity_agent.llm.factory import get_provider_recommended_models
+        source = inspect.getsource(get_provider_recommended_models)
         missing = [
             name for name in _PROVIDERS
             if f'"{name}"' not in source
         ]
         assert not missing, (
-            f"Providers without branch in get_provider_tier_defaults(): {missing}\n"
+            f"Providers without branch in get_provider_recommended_models(): {missing}\n"
             f"Add a branch in llm/factory.py."
         )
 
@@ -382,7 +363,7 @@ class TestProviderSync:
         newly added provider silently falls through to an empty catalog
         and its model picker comes up blank.  Checking the built
         catalog rather than the dispatch source also catches a provider
-        wired to a class with no ``TIER_DEFAULTS``.
+        wired to a class with no ``RECOMMENDED_MODELS``.
         """
         from clarity_agent.llm.factory import get_provider_model_catalog
 
@@ -394,7 +375,7 @@ class TestProviderSync:
             f"Providers with an empty model catalog: {empty}\n"
             f"Add a branch in _catalog_source_class() in llm/factory.py "
             f"pointing at the class that declares the provider's "
-            f"TIER_DEFAULTS / MODEL_CONTEXT_WINDOWS."
+            f"RECOMMENDED_MODELS / MODEL_CONTEXT_WINDOWS."
         )
 
     def test_provider_catalogs_default_to_their_default_model(self) -> None:
@@ -407,13 +388,13 @@ class TestProviderSync:
         """
         from clarity_agent.llm.factory import (
             get_provider_model_catalog,
-            get_provider_tier_defaults,
+            get_provider_recommended_models,
         )
 
         wrong = {
             name: (get_provider_model_catalog(name).default_model, tiers["default"])
             for name in _PROVIDERS
-            if (tiers := get_provider_tier_defaults(name)).get("default")
+            if (tiers := get_provider_recommended_models(name)).get("default")
             and get_provider_model_catalog(name).default_model != tiers["default"]
         }
         assert not wrong, (

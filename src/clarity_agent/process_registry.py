@@ -1,9 +1,8 @@
 """Structured metadata for all clarity-agent processes.
 
-This is the single source of truth for process display names, descriptions,
-tiers, and categories. Used by:
+This is the single source of truth for process display names,
+descriptions, and categories. Used by:
 
-- ``llm/config.py`` for default process-to-tier mapping
 - ``GET /api/processes`` for the web UI
 - Process explainers (system messages before each process)
 - Guided first session (entry points)
@@ -22,20 +21,6 @@ class ProcessMeta:
     display_name: str
     one_liner: str
     category: str  # explore, design, validate, communicate
-
-    tier: str = "default"
-    """Which model tier the process runs on.
-
-    Every process uses ``"default"`` — Clarity wants the same strong
-    model throughout, and having each process pick its own has never
-    earned its keep.  The field is on its way out with the model-tier
-    system (issue #172); until then it stays so the resolution path
-    keeps working.
-
-    Note this means ``"default"``, not ``"deep"``: ``deep`` names the
-    heavier-than-usual option a provider offers in the model picker,
-    which is not what we reach for on every turn.
-    """
 
 
 PROCESS_METADATA: dict[str, ProcessMeta] = {
@@ -106,12 +91,3 @@ PROCESS_METADATA: dict[str, ProcessMeta] = {
         category="communicate",
     ),
 }
-
-
-def get_default_process_tiers() -> dict[str, str]:
-    """Return a process-name → tier mapping derived from the registry.
-
-    This replaces the old ``_DEFAULT_PROCESS_TIERS`` dict in config.py,
-    keeping the registry as the single source of truth.
-    """
-    return {name: meta.tier for name, meta in PROCESS_METADATA.items()}

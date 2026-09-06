@@ -18,34 +18,34 @@ if TYPE_CHECKING:
     from clarity_agent.transcript import Transcript
 
 
-def get_provider_tier_defaults(
+def get_provider_recommended_models(
     provider: str,
     auth_mode: str | None = None,
 ) -> dict[str, str]:
-    """Return TIER_DEFAULTS for a provider without instantiating a backend.
+    """Return RECOMMENDED_MODELS for a provider without instantiating a backend.
 
     Uses lazy imports so implementation modules (and their optional
     dependencies) are only loaded on demand.
 
     For providers with auth modes that use a different backend (e.g.
     Anthropic's ``claude_sdk`` mode uses :class:`SdkChatBackend` which
-    has its own tier defaults), pass *auth_mode* to get the right set.
+    has its own model table), pass *auth_mode* to get the right set.
     """
     if provider == "anthropic":
-        from clarity_agent.llm.impl.anthropic import _ANTHROPIC_TIER_DEFAULTS
-        return _ANTHROPIC_TIER_DEFAULTS
+        from clarity_agent.llm.impl.anthropic import _ANTHROPIC_RECOMMENDED
+        return _ANTHROPIC_RECOMMENDED
     if provider == "azure":
-        from clarity_agent.llm.impl.azure_inference import _AZURE_TIER_DEFAULTS
-        return _AZURE_TIER_DEFAULTS
+        from clarity_agent.llm.impl.azure_inference import _AZURE_RECOMMENDED
+        return _AZURE_RECOMMENDED
     if provider == "openai":
-        from clarity_agent.llm.impl.openai import _OPENAI_TIER_DEFAULTS
-        return _OPENAI_TIER_DEFAULTS
+        from clarity_agent.llm.impl.openai import _OPENAI_RECOMMENDED
+        return _OPENAI_RECOMMENDED
     if provider == "github":
-        from clarity_agent.llm.impl.github_copilot import _GITHUB_TIER_DEFAULTS
-        return _GITHUB_TIER_DEFAULTS
+        from clarity_agent.llm.impl.github_copilot import _GITHUB_RECOMMENDED
+        return _GITHUB_RECOMMENDED
     if provider == "gemini":
-        from clarity_agent.llm.impl.gemini import _GEMINI_TIER_DEFAULTS
-        return _GEMINI_TIER_DEFAULTS
+        from clarity_agent.llm.impl.gemini import _GEMINI_RECOMMENDED
+        return _GEMINI_RECOMMENDED
     return {}
 
 
@@ -69,7 +69,7 @@ def _catalog_source_class(
 
     Lazy imports keep optional provider SDKs off the import path until
     the provider is actually used, matching
-    :func:`get_provider_tier_defaults`.
+    :func:`get_provider_recommended_models`.
     """
     if provider == "anthropic":
         from clarity_agent.llm.impl.anthropic import AnthropicClient
@@ -106,8 +106,8 @@ def get_provider_model_catalog(
     return source.builtin_catalog()
 
 
-def _listing_client(config: LLMConfig) -> LLMClient | None:
-    """Return a client able to enumerate models, or ``None``.
+def _listing_client(config: LLMConfig) -> LLMClient | ChatBackend | None:
+    """Return something able to enumerate models, or ``None``.
 
     Listing models is a weaker requirement than holding a conversation:
     it's one credentialed GET, with no runtime, session, or tool
@@ -127,7 +127,29 @@ def _listing_client(config: LLMConfig) -> LLMClient | None:
 
     With neither, there's nothing to enumerate with and the caller
     falls back to the built-in catalog.
+
+    GitHub Copilot is handled first, for the opposite reason: it has
+    no low-level client at all, but its SDK runtime *can* enumerate.
     """
+    if config.provider == "github":
+        # Copilot has no LLMClient — its SDK runtime owns the listing.
+        # Constructing the backend is I/O-free (the CLI subprocess only
+        # spawns on connect), and ``fetch_models`` uses a transient
+        # client of its own, so the directories below are never touched
+        # on this path.
+        from clarity_agent.llm.impl.github_copilot import (
+            CopilotChatBackend,
+            get_gh_cli_token,
+        )
+        token = config.api_key
+        if not token and config.auth_mode == "gh_cli":
+            token = get_gh_cli_token()
+        return CopilotChatBackend(
+            project_dir=Path.cwd(),
+            clarity_agent_dir=Path.cwd(),
+            token=token,
+        )
+
     if config.provider == "anthropic" and config.auth_mode == "claude_sdk":
         from clarity_agent.llm.impl.anthropic import AnthropicClient
 
@@ -307,6 +329,7 @@ def create_chat_backend(
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
             api_key=config.api_key,
+            model=config.model,
             transcript=transcript,
         )
 
@@ -329,6 +352,7 @@ def create_chat_backend(
             project_dir=project_dir,
             clarity_agent_dir=clarity_agent_dir,
             token=token,
+            model=config.model,
             transcript=transcript,
         )
 
@@ -339,6 +363,6 @@ def create_chat_backend(
         client,
         project_dir=project_dir,
         clarity_agent_dir=clarity_agent_dir,
-        tiers=config.tiers,
+        model=config.model,
         transcript=transcript,
     )

@@ -119,7 +119,6 @@ export interface SessionInfo {
   backend: string;
   model: string;
   active_model: string;
-  active_tier: string;
   theme: string;
   launcher_mode?: boolean;
 }
@@ -130,7 +129,6 @@ export interface ModelProfileInfo {
   override: string | null;
   auto: boolean;
   active_model: string;
-  active_tier: string;
 }
 
 // Update run.  The *check* shape lives in ``VersionPayload`` —
@@ -146,10 +144,7 @@ export interface UpdateRunResult {
 export interface AppSettings {
   provider: string | null;
   auth_mode: string | null;
-  model_default: string | null;
-  model_deep: string | null;
-  model_fast: string | null;
-  process_model_overrides: Record<string, string>;
+  model: string | null;
   provider_auth_modes: Record<string, string>;
   theme: string;
   font_scale: number;

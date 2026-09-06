@@ -58,19 +58,22 @@ export default function ModelSelector() {
 
   const handleSelectTier = useCallback(
     (tier: string) => {
-      setModelOverride(tier);
+      // Send the concrete model id, not the role name.  Role names
+      // used to be resolved server-side; now a model string is just a
+      // model string, so sending "deep" would ask the provider for a
+      // model called "deep".  ("auto" still means "no override".)
+      const model = tier === "auto" ? "auto" : (profile?.tiers[tier] ?? tier);
+      setModelOverride(model);
       setOpen(false);
       if (profile) {
         if (tier === "auto") {
           setProfile({ ...profile, override: null, auto: true });
         } else {
-          const model = profile.tiers[tier] ?? tier;
           setProfile({
             ...profile,
             override: model,
             auto: false,
             active_model: model,
-            active_tier: tier,
           });
         }
       }
@@ -95,7 +98,7 @@ export default function ModelSelector() {
   );
 
   const currentProvider = session?.backend ?? "";
-  const displayTier = activeTier ?? profile?.active_tier ?? "default";
+  const displayTier = activeTier ?? "default";
   const isAuto = autoModel;
 
   const tierOptions = ["auto", ...Object.keys(profile?.tiers ?? {})];

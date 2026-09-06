@@ -311,39 +311,21 @@ class ClaritySession:
         """Run the clarity-agent process to assess state and determine next steps."""
         self.run_custom_process("clarity-agent")
 
-    def _resolve_model(self, process_name: str) -> str:
-        """Return the model (or tier name) for *process_name*.
-
-        The returned value may be a tier name (like ``"deep"``) or a
-        concrete model string; the backend's ``resolve_model()``
-        handles both.
-        """
-        return self.llm_config.resolve(process_name)
-
     def run_custom_process(self, process_name: str) -> None:
         """Run a custom process by name."""
         print(f"\n{'=' * 80}")
         print(f"RUNNING {process_name.upper()} PROCESS")
         print(f"{'=' * 80}\n")
 
-        # Resolve the model for this process.  May be a tier name ("deep")
-        # or a concrete model string; the backend's resolve_model() handles both.
-        model_for_process: str = self._resolve_model(process_name)
-        tier: str = self.llm_config.resolve_tier(process_name)
-        resolved_model: str = self.backend.resolve_model(model_for_process)
-        if tier != "default":
-            print(f"  Model: {resolved_model} (tier: {tier})")
+        # Every process runs on the session's one model.
+        resolved_model: str = self.backend.resolve_model(None)
 
         # Record the process boundary as a single ``ProcessStarted``
-        # event.  The renderer emits both the ``## Process: name``
-        # heading and the ``**Model override:**`` line (the latter
-        # only for non-default tiers), so this one event captures
-        # everything the legacy two-write code did.
+        # event; the renderer emits the heading and the model line.
         if self._transcript is not None:
             self._transcript.write(ProcessStarted(
                 timestamp=_now(),
                 process_name=process_name,
-                tier=tier,
                 model=resolved_model,
             ))
 
@@ -358,7 +340,7 @@ class ClaritySession:
         feedback_handler = create_feedback_handler(
             self.project_dir,
             provider=self.llm_config.provider,
-            model=self.llm_config.tiers.get("default"),
+            model=self.llm_config.resolve_model(),
             on_tool_use=self.backend.on_tool_use,
         )
 
@@ -449,7 +431,6 @@ class ClaritySession:
         response: str = self.chat(
             initial_message,
             system_prompt=system_prompt,
-            model=model_for_process,
             tools=tools,
             tool_handler=tool_handler,
         )
@@ -494,7 +475,7 @@ class ClaritySession:
                     continue
 
             response = self.chat(
-                user_input, model=model_for_process,
+                user_input,
                 tools=tools, tool_handler=tool_handler,
             )
             print(f"\nAssistant: {response}\n")
@@ -570,7 +551,7 @@ class ClaritySession:
         tool_handler: ToolHandler = create_feedback_handler(
             self.project_dir,
             provider=self.llm_config.provider,
-            model=self.llm_config.tiers.get("default"),
+            model=self.llm_config.resolve_model(),
             on_tool_use=self.backend.on_tool_use,
         )
 

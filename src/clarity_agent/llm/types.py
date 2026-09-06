@@ -76,7 +76,7 @@ class ModelInfo:
 
     role: str | None = None
     """Optional highlight role — one of ``"default"``, ``"deep"``, or
-    ``"fast"``, mirroring the keys of a backend's ``TIER_DEFAULTS``.
+    ``"fast"``, mirroring the keys of a backend's ``RECOMMENDED_MODELS``.
 
     Roles exist so the picker can surface a provider's few notable
     models above the long tail: the one we use by default, a heavier

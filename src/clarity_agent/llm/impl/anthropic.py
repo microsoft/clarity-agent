@@ -25,14 +25,14 @@ from clarity_agent.llm.types import (
     ToolUseBlock,
 )
 
-_ANTHROPIC_TIER_DEFAULTS: dict[str, str] = {
+_ANTHROPIC_RECOMMENDED: dict[str, str] = {
     "default": "claude-opus-5",
     "deep": "claude-fable-5-1",
     "fast": "claude-sonnet-5",
 }
 
 # Context-window size (in tokens) per model.  Co-located with the
-# tier defaults so a single backend file declares everything about
+# recommendations so a single backend file declares everything about
 # its known models.  The compaction trigger compares the last turn's
 # ``input_tokens`` (from the provider's response) against this;
 # users on a model not listed here can add an override via
@@ -53,7 +53,6 @@ _ANTHROPIC_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 
-
 class AnthropicClient(LLMClient):
     """Low-level async LLM client wrapping :class:`anthropic.AsyncAnthropic`.
 
@@ -61,7 +60,7 @@ class AnthropicClient(LLMClient):
     :class:`~clarity_agent.llm.types.LLMResponse` objects.
     """
 
-    TIER_DEFAULTS = _ANTHROPIC_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _ANTHROPIC_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _ANTHROPIC_MODEL_CONTEXT_WINDOWS
 
     def __init__(
@@ -101,11 +100,20 @@ class AnthropicClient(LLMClient):
     async def fetch_models(self) -> ModelCatalog:
         """List the models this key can reach, via ``GET /v1/models``.
 
-        The listing reports ``id`` and ``display_name`` but no context
-        window, so windows come from
-        :data:`_ANTHROPIC_MODEL_CONTEXT_WINDOWS` where we know them and
-        are left ``None`` otherwise.  Anthropic returns models
-        newest-first; that order is preserved.
+        Anthropic returns models newest-first; that order is preserved.
+
+        Each entry carries ``max_input_tokens``, which is exactly the
+        number the compaction check wants: it compares a turn's
+        reported ``input_tokens`` against the window, and this is the
+        input limit rather than a combined input+output figure.  Live
+        values take precedence over
+        :data:`_ANTHROPIC_MODEL_CONTEXT_WINDOWS`, which stays as the
+        offline fallback.
+
+        Read via :func:`getattr` because the pinned SDK's ``ModelInfo``
+        doesn't declare the field — its models are configured
+        ``extra="allow"``, so the value survives parsing regardless,
+        and a future SDK that does declare it needs no change here.
 
         Reached under either auth mode: a ``claude_sdk`` session that
         also has an ``ANTHROPIC_API_KEY`` available lists through here
@@ -115,15 +123,19 @@ class AnthropicClient(LLMClient):
         """
         model_ids: list[str] = []
         display_names: dict[str, str] = {}
+        context_windows: dict[str, int] = {}
         # ``list()`` returns an auto-paginating async iterator.
         async for model in self._client.models.list(limit=100):
             model_ids.append(model.id)
             if model.display_name:
                 display_names[model.id] = model.display_name
+            window = getattr(model, "max_input_tokens", None)
+            if isinstance(window, int) and window > 0:
+                context_windows[model.id] = window
 
         return build_catalog(
-            recommended=self.TIER_DEFAULTS,
-            context_windows=self.MODEL_CONTEXT_WINDOWS,
+            recommended=self.RECOMMENDED_MODELS,
+            context_windows={**self.MODEL_CONTEXT_WINDOWS, **context_windows},
             model_ids=model_ids,
             display_names=display_names,
             source="provider",

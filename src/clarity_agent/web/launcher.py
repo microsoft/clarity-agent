@@ -859,7 +859,6 @@ def create_launcher(
             "backend": None,
             "model": None,
             "active_model": None,
-            "active_tier": None,
             "theme": theme,
             "launcher_mode": True,
         }
