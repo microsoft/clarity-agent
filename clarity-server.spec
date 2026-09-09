@@ -114,6 +114,7 @@ _copilot_bin = (
 datas = [
     ("processes", "processes"),
     ("thinkers", "thinkers"),
+    ("rai-context", "rai-context"),
     ("web/dist", "web/dist"),
     ("src/clarity_agent", "clarity_agent"),
 ]

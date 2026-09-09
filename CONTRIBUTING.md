@@ -158,6 +158,7 @@ The clarity agent guides a project through these stages, roughly in order but wi
 | **Failure brainstorming** | `failure-brainstorming.md` | Raw failures in a mailbox |
 | **Failure analysis** | `failure-analysis.md` | `failures/failures.md` (grouped failure modes with chains), `observations.md` (coverage, provenance, pattern notes) |
 | **Failure management** | `failure-management.md` | Management plans in failure mode files; updates to solution/architecture |
+| **Responsible AI assessment** | `rai-assessment.md` | `rai-assessment.md` in the assessed project, independent of protocol state |
 | **Decision guidance** | `decision-guidance.md` | `decisions/decisions.md` (cross-cutting, invoked from any stage) |
 
 The dependency graph enforces the general order (you can't meaningfully analyze failures without a solution), but the agent is flexible — users can work on whatever they want, and the packet status checker will flag what's become inconsistent.
@@ -192,6 +193,7 @@ The "program logic." Each file is a set of instructions an AI assistant follows.
 | `failure-brainstorming.md` | Generate raw failure modes from multiple perspectives. |
 | `failure-analysis.md` | Group raw failures into modes, build causal chains, find intervention points. |
 | `failure-management.md` | Develop plans for handling each failure mode; may modify solution/architecture. |
+| `rai-assessment.md` | Conduct a standalone Responsible AI impact assessment from a user-provided project plan. |
 | `decision-guidance.md` | Think through important decisions at any stage. |
 | `README.md` | Status table for all process guides. |
 
@@ -238,6 +240,14 @@ Specialized perspectives for failure brainstorming. Each is a markdown file with
 | `adversarial-analysis-thinker.md` | Reasons from the adversary's perspective — identifies who would attack or misuse the system, their motivations, capabilities, and means. |
 | `codebase-scanner-thinker.md` | Scans a repository for architectural signals — API routes, configs, auth patterns, secrets, AI integrations, infrastructure — to inform architecture design and threat modeling. |
 | `security-catalog-thinker.md` | Maps threats from `catalogs/security-catalog.csv` to the system's components and records applicable failure modes. |
+| `responsible-ai-thinker.md` | Examines affected stakeholders, concrete harms, Sensitive Uses, mitigations, and evidence gaps. |
+
+### `rai-context/` — Responsible AI Guidance
+
+| File | Role |
+| --- | --- |
+| `rai-background.md` | Defines the review context and six Responsible AI principles used by the assessment. |
+| `sensitive-use-cases.md` | Defines Sensitive Use categories, examples, and escalation signals. |
 
 ### `dev-tools/` — Development Utilities
 

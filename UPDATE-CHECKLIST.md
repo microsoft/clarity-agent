@@ -29,6 +29,7 @@ Process files are auto-discovered from the `processes/` directory, so no registr
 - [ ] **`src/clarity_agent/protocol/packet_status.py`** — `DOCUMENT_PROCESS`: if the process creates/updates tracked documents, add mappings
 - [ ] **`processes/clarity-agent.md`** — Add routing logic and add to the Process Map section
 - [ ] **`src/clarity_agent/mcp/server.py`** — MCP `instructions` string and `run_clarity` inline guide: check if the new process should be mentioned in tool instructions or inlined by `run_clarity`
+- [ ] **Runtime context assets** — If the process reads bundled files outside `processes/` or `thinkers/`, add them to `pyproject.toml` wheel force-includes and `clarity-server.spec` data files
 - [ ] **`processes/README.md`** — Add to the process list and status table
 - [ ] **`CONTRIBUTING.md`** — Add to semantic stages table and file reference table
 

@@ -358,6 +358,26 @@ class ClaritySession:
         tools: list[dict[str, Any]] = list(feedback_tools)
         tool_handler: ToolHandler = feedback_handler
 
+        if process_name == "rai-assessment":
+            from clarity_agent.ai_actions.rai_assessment import (
+                create_rai_assessment_handler,
+                create_rai_assessment_tools,
+            )
+
+            rai_handler = create_rai_assessment_handler(
+                self.project_dir,
+                on_tool_use=self.backend.on_tool_use,
+            )
+            tools.extend(create_rai_assessment_tools())
+            _feedback_handler = feedback_handler
+
+            def _combined_rai(tool_call: Any) -> str:
+                if tool_call.name == "send_feedback":
+                    return _feedback_handler(tool_call)
+                return rai_handler(tool_call)
+
+            tool_handler = _combined_rai
+
         # For failure-brainstorming, add tools so the AI can record
         # findings with controlled formatting.
         if process_name == "failure-brainstorming":
@@ -414,6 +434,14 @@ class ClaritySession:
             _prepend_behaviors(process_specific, self.load_behaviors())
             or process_specific
         )
+
+        if process_name == "rai-assessment":
+            from clarity_agent.ai_actions.rai_assessment import load_rai_guidance
+
+            system_prompt += (
+                "\n\n## Required Responsible AI Guidance\n\n"
+                f"{load_rai_guidance(self.clarity_agent_dir)}"
+            )
 
         # Include packet status report for processes that benefit from it
         status_report: str | None = self.get_packet_status_report()
@@ -473,15 +501,10 @@ class ClaritySession:
             if handoff_match:
                 next_process: str = handoff_match.group(1)
                 try:
-                    next_content: str = self.load_process(next_process)
-                    process_name = next_process
+                    self.load_process(next_process)
                     print(f"\nLoading {next_process} process guide...\n")
-                    user_input = (
-                        f"We're now running the {next_process} process. "
-                        f"Here is the process guide:\n\n{next_content}\n\n"
-                        f"Follow this process from its beginning, taking "
-                        f"into account our conversation so far."
-                    )
+                    self.run_custom_process(next_process)
+                    return
                 except FileNotFoundError:
                     print(f"  Unknown process: {next_process}")
                     continue
@@ -492,8 +515,9 @@ class ClaritySession:
             )
             print(f"\nAssistant: {response}\n")
 
-        # Record document state after process completes
-        self.record_document_state()
+        # Standalone processes do not own or update Clarity protocol state.
+        if process_name != "rai-assessment":
+            self.record_document_state()
 
     def interactive_mode(self) -> None:
         """Run in interactive mode with command menu."""

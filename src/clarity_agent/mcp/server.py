@@ -59,6 +59,9 @@ mcp = FastMCP(
         "after a break. Use MCP tool responses as the authority for "
         "process guidance; do not inspect the clarity-agent source "
         "repository or run Clarity CLI commands to operate the protocol. "
+        "When the user requests a Responsible AI impact assessment, call "
+        "run_rai_assessment with the path to their Markdown project plan. "
+        "This assessment runs independently of the normal Clarity workflow. "
         "After completing significant implementation, call "
         "get_packet_status to check if protocol documents need updating. "
         "Call generate_packet when the user needs a shareable review packet."
@@ -111,7 +114,7 @@ def _resolve_agent_dir() -> Path:
 
 
 # ===================================================================
-# MCP TOOLS (9 tools — the coding agent surface)
+# MCP TOOLS (10 tools — the coding agent surface)
 # ===================================================================
 
 
@@ -198,6 +201,57 @@ def run_clarity(project_dir: str | None = None) -> str:
                 )
 
     return status_text
+
+
+@mcp.tool()
+def run_rai_assessment(
+    project_plan: str,
+    project_dir: str | None = None,
+) -> str:
+    """Start a standalone Responsible AI impact assessment from a project plan.
+
+    The project plan must be a Markdown file inside the assessed project. This
+    tool returns the plan, process guide, thinker method, and required RAI
+    context together so the calling agent can conduct the assessment without
+    initializing or running any other Clarity process.
+    """
+    from clarity_agent.ai_actions.rai_assessment import (
+        load_rai_guidance,
+        read_project_plan,
+    )
+
+    resolved_project_dir = _resolve_project_dir(project_dir)
+    try:
+        plan_path, plan_content = read_project_plan(
+            resolved_project_dir,
+            project_plan,
+        )
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        return f"Error: {exc}"
+
+    agent_dir = _resolve_agent_dir()
+    guide_path = agent_dir / "processes" / "rai-assessment.md"
+    if not guide_path.is_file():
+        return "Error: Responsible AI assessment process guide is unavailable"
+
+    return (
+        "# Standalone Responsible AI Impact Assessment\n\n"
+        f"Project plan: `{plan_path}`\n\n"
+        f"{PROCESS_GUIDE_USAGE_NOTE}\n\n"
+        "Do not initialize or run another Clarity process. Use the supplied "
+        "project plan as the assessment's required project evidence. Maintain "
+        "the assessment at the output path specified by the user, or at "
+        f"`{resolved_project_dir / 'rai-assessment.md'}` by default.\n\n"
+        "---\n\n"
+        "## Process Guide\n\n"
+        f"{guide_path.read_text(encoding='utf-8').strip()}\n\n"
+        "---\n\n"
+        "## Required Responsible AI Guidance\n\n"
+        f"{load_rai_guidance(agent_dir)}\n\n"
+        "---\n\n"
+        "## User-Provided Project Plan\n\n"
+        f"{plan_content.strip()}\n"
+    )
 
 
 @mcp.tool()

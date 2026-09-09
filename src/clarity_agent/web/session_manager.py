@@ -831,6 +831,27 @@ class WebSessionAdapter:
         self._setup_feedback_tools()
         specialists: list[Any] = []
 
+        if process_name == "rai-assessment":
+            from clarity_agent.ai_actions.rai_assessment import (
+                create_rai_assessment_handler,
+                create_rai_assessment_tools,
+            )
+
+            rai_handler = create_rai_assessment_handler(
+                self.project_dir,
+                on_tool_use=self._backend.on_tool_use if self._backend else None,
+            )
+            assert self._tools is not None
+            self._tools.extend(create_rai_assessment_tools())
+            feedback_handler = self._feedback_handler
+
+            def _combined_rai_handler(tool_call: Any) -> str:
+                if tool_call.name == "send_feedback":
+                    return feedback_handler(tool_call)
+                return rai_handler(tool_call)
+
+            self._tool_handler = _combined_rai_handler
+
         # For failure-brainstorming, add tools so the AI can record
         # findings with controlled formatting.
         if process_name == "failure-brainstorming":
@@ -879,6 +900,14 @@ class WebSessionAdapter:
             f"Process guides: {self.clarity_agent_dir / 'processes'}/\n"
             f"Thinker guides: {self.clarity_agent_dir / 'thinkers'}/"
         )
+
+        if process_name == "rai-assessment":
+            from clarity_agent.ai_actions.rai_assessment import load_rai_guidance
+
+            system_prompt += (
+                "\n\n## Required Responsible AI Guidance\n\n"
+                f"{load_rai_guidance(self.clarity_agent_dir)}"
+            )
 
         status_report = self._session.get_packet_status_report()
         if status_report:

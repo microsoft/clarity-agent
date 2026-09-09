@@ -117,6 +117,8 @@ This project uses the Clarity Protocol for structured thinking about consequenti
 
 1. *The user asks.* When they want to explore what to build, clarify requirements, brainstorm risks, or work through a decision: call the `run_clarity` MCP tool. Follow the guidance returned by that tool instead of searching the repo for Clarity instructions.
 
+    When the user explicitly requests a Responsible AI impact assessment, call `run_rai_assessment` with the path to the Markdown project plan they provide. Follow the self-contained guidance returned by that tool. Do not initialize or run the normal Clarity workflow for this assessment.
+
 2. *You recognize an inflection point.* Before making choices that would be expensive to reverse — new services, auth/trust models, data schemas, external integrations, significant API contracts — call `check_decision` with what you plan to do. It returns existing decisions, requirements, and architecture so you can check for conflicts. Don't interrupt for routine implementation. The test: "If this turns out wrong, is it a 5-minute fix or a multi-day rework?" Interrupt for the latter.
 
 **After building — keep the record current.** After significant implementation work (new features, architectural changes), call `get_packet_status` to find stale protocol documents. Update them with `read_protocol_document` / `write_protocol_document`. Record significant choices with `record_decision`; add risks with `record_failure`.

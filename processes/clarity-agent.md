@@ -26,6 +26,8 @@ Throughout these process guides, paths like `.clarity-protocol/goal/problem.md` 
 
 This is the default process. When in doubt, start here.
 
+An explicit request for a Responsible AI impact assessment takes priority over the normal protocol dependency order. Ask for the path to the user's Markdown project plan if it is not already known, then hand off directly to **rai-assessment**. Do not initialize or require the rest of the Clarity protocol for that assessment.
+
 ## Process
 
 ### Step 1: Quietly Assess the State
@@ -187,6 +189,7 @@ This process routes to all other processes:
 - **failure-brainstorming** — Generate raw failure modes from multiple perspectives
 - **failure-analysis** — Group raw failures into failure modes with chains and intervention points
 - **failure-management** — Develop management plans for identified failure modes
+- **rai-assessment** — Conduct a standalone Responsible AI impact assessment from a user-provided project plan
 - **architecture-design** — Create technical designs
 - **discovery-prototype** — Test a specific hypothesis through minimal, focused implementation
 - **discovery-research** — Design and execute a research program to answer open questions

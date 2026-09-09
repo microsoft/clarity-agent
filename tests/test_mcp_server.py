@@ -54,6 +54,7 @@ def test_all_tools_registered() -> None:
     tool_names = {t.name for t in mcp._tool_manager.list_tools()}
     expected = {
         "run_clarity",
+        "run_rai_assessment",
         "check_decision",
         "get_packet_status",
         "read_protocol_document",
@@ -305,6 +306,46 @@ class TestListProcesses:
         result = list_processes()
         assert "problem-clarification" in result
         assert "failure-brainstorming" in result
+
+
+class TestRunRaiAssessment:
+    def test_given_project_plan_when_run_then_returns_self_contained_guidance(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Arrange
+        plan = tmp_path / "docs" / "project-plan.md"
+        plan.parent.mkdir()
+        plan.write_text("# Example project plan\n", encoding="utf-8")
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+
+        from clarity_agent.mcp.server import run_rai_assessment
+
+        # Act
+        result = run_rai_assessment("docs/project-plan.md")
+
+        # Assert
+        assert "Responsible AI Assessment" in result
+        assert "Responsible AI review background" in result
+        assert "Sensitive use cases" in result
+        assert "Example project plan" in result
+
+    def test_given_missing_project_plan_when_run_then_returns_error(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Arrange
+        monkeypatch.setenv("CLARITY_PROJECT_DIR", str(tmp_path))
+
+        from clarity_agent.mcp.server import run_rai_assessment
+
+        # Act
+        result = run_rai_assessment("missing.md")
+
+        # Assert
+        assert result.startswith("Error: Project plan not found")
 
 
 class TestReadProcessGuide:

@@ -95,7 +95,7 @@ Replace `/path/to/clarity-agent` with the absolute path to your clarity-agent cl
 
 ## Available Tools
 
-The MCP server exposes 9 tools, designed around four moments in a coding agent's workflow:
+The MCP server exposes 10 tools, including a standalone Responsible AI assessment entry point:
 
 ### Before acting: check for conflicts
 
@@ -108,6 +108,7 @@ The MCP server exposes 9 tools, designed around four moments in a coding agent's
 | Tool | Purpose |
 |---|---|
 | `run_clarity` | Assess project state, get recommended next step with process guide inlined |
+| `run_rai_assessment` | Conduct a standalone Responsible AI impact assessment from a Markdown project plan |
 | `get_packet_status` | Check document staleness after completing significant work |
 
 ### Read, write, record

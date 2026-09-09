@@ -90,6 +90,45 @@ clarity embed /path/to/your-project
 
 This adds an `AGENTS.md` snippet and a `.clarity-protocol/` directory. These are plain files managed just like any other file in your repo — committed, reviewed in PRs, and diffed. From then on, your coding agent (Claude Code, Cursor, etc.) follows the process guides as part of its normal workflow.
 
+## Responsible AI Impact Assessment
+
+Clarity can conduct a Responsible AI (RAI) impact assessment as a standalone process. You do not need to initialize or complete the normal Clarity protocol. The assessment starts from a Markdown project plan supplied by you, explores affected stakeholders and concrete harms, screens for Sensitive Uses, and develops mitigations, residual risks, open questions, and recommended actions.
+
+Prepare a project plan inside the project directory. The plan should describe the intended AI capability, users and affected people, deployment context, data, decisions influenced by the system, validation approach, known risks, and unresolved questions. See [`docs/project-plan.md`](docs/project-plan.md) for an example.
+
+### Run from the app
+
+1. Open the project folder in Clarity.
+2. Select **RAI Assessment** in the session header or **Run an RAI impact assessment** on the new-project screen.
+3. Provide the project-plan path relative to the project root, such as `docs/project-plan.md`.
+4. Answer the focused follow-up questions. Clarity updates `rai-assessment.md` in the project root as the conversation progresses unless you request another path.
+
+### Run from the CLI
+
+Run the standalone process against the directory containing the project plan:
+
+```bash
+clarity process rai-assessment /path/to/project
+```
+
+When prompted, provide the relative Markdown path, such as `docs/project-plan.md`. From a source checkout, use:
+
+```bash
+uv run python clarity.py process rai-assessment /path/to/project
+```
+
+### Run from a coding agent
+
+After configuring the Clarity MCP server, ask your coding agent:
+
+```text
+Conduct a Responsible AI impact assessment using docs/project-plan.md.
+```
+
+The agent calls `run_rai_assessment` with that path. The tool supplies the project plan, assessment process, Responsible AI guidance, Sensitive Use criteria, and specialist analysis method together. It does not initialize or route through other Clarity processes.
+
+The resulting assessment is a decision aid, not a compliance certification, legal opinion, or substitute for any required formal Microsoft or customer review.
+
 ## What It Does
 
 Clarity guides you through structured conversations, writing the results to the clarity protocol as it goes:
@@ -99,6 +138,8 @@ Clarity guides you through structured conversations, writing the results to the 
 **Solution exploration** — "Given that problem, how might we solve it?" Explores approaches, surfaces tradeoffs, and checks that the solution actually addresses the problem.
 
 **Failure analysis** — Multiple AI "thinkers" independently examine your system from different angles (security, human factors, adversarial, operational), then you work through the results together: grouping related failures, tracing causal chains, building management plans.
+
+**Responsible AI impact assessment** — Reviews a user-provided project plan for affected stakeholders, concrete harms, Sensitive Uses, mitigations, residual risks, evidence gaps, and escalation needs. This process can run independently of the Clarity protocol.
 
 **Decision tracking** — Important choices get captured with criteria, options, and rationale. When upstream documents change, the agent knows which decisions might need revisiting.
 

@@ -31,6 +31,7 @@ packages = ["src/clarity_agent"]
 "processes" = "clarity_agent/_data/processes"
 "thinkers" = "clarity_agent/_data/thinkers"
 "catalogs" = "clarity_agent/_data/catalogs"
+"rai-context" = "clarity_agent/_data/rai-context"
 "AGENTS.md" = "clarity_agent/_data/AGENTS.md"
 
 [project.optional-dependencies]

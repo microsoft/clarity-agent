@@ -156,6 +156,19 @@ export default function ChatPanel() {
           )}
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              autoStarted.current = true;
+              startProcess("rai-assessment");
+            }}
+            disabled={!connected || streaming}
+            className="text-xs px-3.5 py-1.5 border border-border-strong rounded-lg
+              text-body-label hover:bg-surface-dim hover:border-accent/30
+              disabled:opacity-40 disabled:cursor-not-allowed
+              transition-all duration-200"
+          >
+            RAI Assessment
+          </button>
           <span
             className={`inline-flex items-center gap-1.5 text-xs ${
               connected ? "text-body-muted" : "text-status-error"
@@ -268,6 +281,13 @@ export default function ChatPanel() {
                       onClick: () => {
                         autoStarted.current = true;
                         startProcess("clarity-agent");
+                      },
+                    },
+                    {
+                      label: "Run an RAI impact assessment",
+                      onClick: () => {
+                        autoStarted.current = true;
+                        startProcess("rai-assessment");
                       },
                     },
                     {

@@ -16,6 +16,11 @@ lives in src/clarity-agent. In the ordinary order that they're invoked:
 - failure-management.md comes up with plans on how to manage these failures, usually modifying the
   solution and architecture -- and so we loop back.
 
+For a standalone Responsible AI review:
+
+- rai-assessment.md conducts an impact assessment from a user-provided Markdown project plan. It
+  does not require any other Clarity process or protocol document.
+
 When the project narrative needs work, or you're preparing to explain the project to people:
 
 - message-clarification.md builds the summary and audience-specific messaging.
@@ -37,5 +42,6 @@ When nontrivial decisions need to be made, we log these in .clarity-protocol/dec
 | `failure-brainstorming.md` | Core version implemented (tool-based pipeline with thinker registry and 6 specialist thinkers). |
 | `failure-analysis.md` | Basic version implemented; please improve. |
 | `failure-management.md` | Basic version implemented; please improve. |
+| `rai-assessment.md` | Core version implemented as a standalone project-plan assessment. |
 | `message-clarification.md` | Core version implemented. |
 | `decision-guidance.md` | Basic version implemented; please improve. |
