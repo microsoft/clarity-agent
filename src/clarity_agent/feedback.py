@@ -63,7 +63,6 @@ def gather_llm_info(
     provider: str | None = None,
     model: str | None = None,
     active_model: str | None = None,
-    active_tier: str | None = None,
 ) -> dict[str, str]:
     """Gather LLM backend/model information into a display dict."""
     info: dict[str, str] = {}
@@ -73,8 +72,6 @@ def gather_llm_info(
         info["Configured model"] = model
     if active_model:
         info["Active model"] = active_model
-    if active_tier:
-        info["Active tier"] = active_tier
     return info
 
 

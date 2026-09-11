@@ -58,6 +58,90 @@ StatusCallback = Callable[[str], None]
 ToolHandler = Callable[["ToolUseBlock"], str]
 
 
+@dataclass(frozen=True)
+class ModelInfo:
+    """One model a provider will accept as a ``model=`` argument.
+
+    Produced either by a live provider listing (``/v1/models`` and
+    friends) or from a backend's built-in tables.  Purely descriptive:
+    nothing here changes how a request is made, it just tells the
+    picker what to show.
+    """
+
+    id: str
+    """The identifier passed to the provider as ``model=``."""
+
+    display_name: str
+    """Human-readable name for the picker (``"Claude Opus 5"``)."""
+
+    role: str | None = None
+    """Optional highlight role — one of ``"default"``, ``"deep"``, or
+    ``"fast"``, mirroring the keys of a backend's ``RECOMMENDED_MODELS``.
+
+    Roles exist so the picker can surface a provider's few notable
+    models above the long tail: the one we use by default, a heavier
+    option, and a lighter one.  A model may fill several roles at once
+    (a provider whose heaviest model is also its default);
+    :func:`clarity_agent.llm.model_catalog.assign_roles` keeps the
+    first match in ``default`` → ``deep`` → ``fast`` order, so each
+    model appears exactly once and the model marked "default" is the
+    one :attr:`ModelCatalog.default_model` selects."""
+
+    description: str | None = None
+    """Optional one-line description, when the provider supplies one."""
+
+    context_window: int | None = None
+    """Context window in tokens, when known.  Most provider listings
+    don't report it, so this is usually filled from the backend's
+    ``MODEL_CONTEXT_WINDOWS`` table; Gemini is the exception and
+    reports a live value."""
+
+
+@dataclass(frozen=True)
+class ModelCatalog:
+    """The set of models available for one provider + auth mode."""
+
+    models: list[ModelInfo] = field(default_factory=list)
+    """Available models.  Ordered with highlighted (role-bearing)
+    models first, then the rest in provider order."""
+
+    default_model: str = ""
+    """Model to use when the user has never picked one — the provider's
+    ``default`` role, not its ``deep`` one."""
+
+    source: str = "builtin"
+    """``"provider"`` when fetched live, ``"builtin"`` when it came
+    from the backend's own tables."""
+
+    free_form: bool = False
+    """True when the provider can't be enumerated and the user must
+    type an identifier — Azure, whose deployments are user-named.
+    The picker renders a text field instead of a list."""
+
+    error: str | None = None
+    """Set when a live fetch was attempted and failed.  ``models``
+    then holds the built-in fallback, so the picker stays usable;
+    the message is for an inline note, not an empty menu."""
+
+    @property
+    def highlighted(self) -> list[ModelInfo]:
+        """Models carrying a role, in ``default``/``deep``/``fast`` order."""
+        order = {"default": 0, "deep": 1, "fast": 2}
+        return sorted(
+            (m for m in self.models if m.role is not None),
+            key=lambda m: order.get(m.role or "", 99),
+        )
+
+    @property
+    def rest(self) -> list[ModelInfo]:
+        """Models without a role, in catalog order."""
+        return [m for m in self.models if m.role is None]
+
+    def get(self, model_id: str) -> ModelInfo | None:
+        """Return the entry for *model_id*, or ``None`` if unlisted."""
+        return next((m for m in self.models if m.id == model_id), None)
+
+
 @dataclass
 class TokenUsage:
     """Token usage from an LLM API call."""

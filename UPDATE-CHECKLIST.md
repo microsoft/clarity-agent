@@ -25,7 +25,7 @@ A new `.md` file in `processes/` (e.g., we added `discovery-prototype.md`).
 
 Process files are auto-discovered from the `processes/` directory, so no registration code is needed for loading. But these cross-references need updating:
 
-- [ ] **`src/clarity_agent/llm/config.py`** — `_DEFAULT_PROCESS_TIERS`: add process name → tier mapping
+- [ ] **`src/clarity_agent/process_registry.py`** — `PROCESS_METADATA`: add an entry (display name, one-liner, category)
 - [ ] **`src/clarity_agent/protocol/packet_status.py`** — `DOCUMENT_PROCESS`: if the process creates/updates tracked documents, add mappings
 - [ ] **`processes/clarity-agent.md`** — Add routing logic and add to the Process Map section
 - [ ] **`src/clarity_agent/mcp/server.py`** — MCP `instructions` string and `run_clarity` inline guide: check if the new process should be mentioned in tool instructions or inlined by `run_clarity`
@@ -36,9 +36,11 @@ Process files are auto-discovered from the `processes/` directory, so no registr
 
 A new provider (e.g., alongside existing anthropic, openai, azure_inference, claude_sdk).
 
-- [ ] **`src/clarity_agent/llm/impl/yourprovider.py`** (new file) — Implement `_TIER_DEFAULTS`, client class, and backend class
+- [ ] **`src/clarity_agent/llm/impl/yourprovider.py`** (new file) — Implement `_<PROVIDER>_RECOMMENDED` (the `default`/`deep`/`fast` model roles), `_<PROVIDER>_MODEL_CONTEXT_WINDOWS`, client class, and backend class
 - [ ] **`src/clarity_agent/llm/config.py`** — `_PROVIDERS`: add entry with package_name, env_var, auth_modes, default_auth_mode
-- [ ] **`src/clarity_agent/llm/factory.py`** — `get_provider_tier_defaults()`: add branch returning provider's tier defaults
+- [ ] **`src/clarity_agent/llm/factory.py`** — `get_provider_recommended_models()`: add branch returning the provider's recommended models
+- [ ] **`src/clarity_agent/llm/factory.py`** — `_catalog_source_class()`: add branch returning the class that declares `TIER_DEFAULTS` / `MODEL_CONTEXT_WINDOWS` (the `LLMClient` subclass, or the `ChatBackend` subclass for chat-only providers). Without it `clarity models` and the model picker come up empty; `tests/test_registry_sync.py::TestProviderSync::test_providers_have_model_catalogs` catches this
+- [ ] **`src/clarity_agent/llm/impl/yourprovider.py`** — override `fetch_models()` if the provider publishes a model list; otherwise the inherited default returns the built-in catalog. Raise on failure rather than catching — `fetch_model_catalog()` handles fallback and error reporting
 - [ ] **`src/clarity_agent/llm/factory.py`** — `create_client()`: add branch instantiating your client
 - [ ] **`src/clarity_agent/llm/factory.py`** — `create_chat_backend()`: add branch instantiating your backend
 - [ ] **`CONTRIBUTING.md`** — Update LLM backends table with provider name, `--provider` value, and env var

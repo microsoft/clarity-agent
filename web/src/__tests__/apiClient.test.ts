@@ -8,8 +8,8 @@ import {
   getPacketOptions,
   generatePacket,
   getSession,
-  getModelProfile,
-  setModelOverride,
+  getModels,
+  setModel,
   removeProject,
 } from "../api/client";
 
@@ -176,7 +176,6 @@ describe("API client", () => {
         backend: "anthropic",
         model: "claude-sonnet",
         active_model: "claude-sonnet",
-        active_tier: "default",
       };
       mockFetch.mockReturnValue(jsonResponse(data));
 
@@ -186,20 +185,37 @@ describe("API client", () => {
     });
   });
 
-  describe("Model profile endpoints", () => {
-    it("getModelProfile calls GET /api/model-profile", async () => {
-      const data = {
-        tiers: { default: "claude-sonnet", deep: "claude-opus" },
-        override: null,
-        auto: true,
-        active_model: "claude-sonnet",
-        active_tier: "default",
-      };
-      mockFetch.mockReturnValue(jsonResponse(data));
+  describe("Model endpoints", () => {
+    const catalog = {
+      models: [
+        {
+          id: "claude-opus-5",
+          display_name: "Claude Opus 5",
+          role: "default",
+          description: null,
+          context_window: 1000000,
+        },
+      ],
+      current: "claude-opus-5",
+      default_model: "claude-opus-5",
+      source: "provider",
+      free_form: false,
+      error: null,
+    };
 
-      const result = await getModelProfile();
-      expect(mockFetch).toHaveBeenCalledWith("/api/model-profile", undefined);
-      expect(result).toEqual(data);
+    it("getModels calls GET /api/models", async () => {
+      mockFetch.mockReturnValue(jsonResponse(catalog));
+
+      const result = await getModels();
+      expect(mockFetch).toHaveBeenCalledWith("/api/models", undefined);
+      expect(result).toEqual(catalog);
+    });
+
+    it("getModels asks for a refresh when told to", async () => {
+      mockFetch.mockReturnValue(jsonResponse(catalog));
+
+      await getModels(true);
+      expect(mockFetch).toHaveBeenCalledWith("/api/models?refresh=true", undefined);
     });
 
     it("removeProject sends DELETE to /api/projects/{id}", async () => {
@@ -216,21 +232,15 @@ describe("API client", () => {
       expect(result).toEqual({ status: "removed" });
     });
 
-    it("setModelOverride sends PUT with tier", async () => {
-      const data = {
-        tiers: {},
-        override: "deep",
-        auto: false,
-        active_model: "claude-opus",
-        active_tier: "deep",
-      };
+    it("setModel sends PUT with the model id", async () => {
+      const data = { current: "claude-opus-4-7" };
       mockFetch.mockReturnValue(jsonResponse(data));
 
-      const result = await setModelOverride("deep");
-      expect(mockFetch).toHaveBeenCalledWith("/api/model-profile/override", {
+      const result = await setModel("claude-opus-4-7");
+      expect(mockFetch).toHaveBeenCalledWith("/api/model", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: "deep" }),
+        body: JSON.stringify({ model: "claude-opus-4-7" }),
       });
       expect(result).toEqual(data);
     });

@@ -13,14 +13,16 @@ from google import genai as _genai_mod
 from google.genai import types as _genai_types
 
 from clarity_agent.llm.client import LLMClient
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     TextBlock,
     TokenUsage,
     ToolUseBlock,
 )
 
-_GEMINI_TIER_DEFAULTS: dict[str, str] = {
+_GEMINI_RECOMMENDED: dict[str, str] = {
     "default": "gemini-3.1-pro-preview",
     "deep": "gemini-3.1-pro-preview",
     "fast": "gemini-3.1-flash-lite-preview",
@@ -134,6 +136,29 @@ def _translate_messages(
 # Client
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# Model catalog
+# ---------------------------------------------------------------------------
+
+# Gemini ids come back namespaced ("models/gemini-3.1-pro-preview");
+# the API accepts either form, but the bare id is what we store and
+# display.
+_MODEL_NAME_PREFIX = "models/"
+
+# Descriptions from the listing are paragraph-length; the picker has
+# room for a line.
+_MAX_DESCRIPTION_CHARS = 120
+
+
+def _shorten(text: str) -> str:
+    """Collapse *text* to a single line short enough for the picker."""
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= _MAX_DESCRIPTION_CHARS:
+        return collapsed
+    return collapsed[:_MAX_DESCRIPTION_CHARS - 1].rstrip() + "\u2026"
+
+
 class GeminiClient(LLMClient):
     """Low-level async LLM client wrapping Google's Gemini API.
 
@@ -141,11 +166,50 @@ class GeminiClient(LLMClient):
     :class:`~clarity_agent.llm.types.LLMResponse` objects.
     """
 
-    TIER_DEFAULTS = _GEMINI_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _GEMINI_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _GEMINI_MODEL_CONTEXT_WINDOWS
 
     def __init__(self, *, api_key: str) -> None:
         self._client = _genai_mod.Client(api_key=api_key)
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List models this key can reach that support ``generateContent``.
+
+        Gemini is the one provider whose listing reports a real context
+        window (``input_token_limit``), so those values are used
+        directly rather than read out of
+        :data:`_GEMINI_MODEL_CONTEXT_WINDOWS`.  ``query_base=True`` asks
+        for base models rather than the caller's tuned ones.
+        """
+        model_ids: list[str] = []
+        display_names: dict[str, str] = {}
+        descriptions: dict[str, str] = {}
+        context_windows: dict[str, int] = {}
+
+        pager = await self._client.aio.models.list(config={"query_base": True})
+        async for model in pager:
+            if "generateContent" not in (model.supported_actions or []):
+                continue
+            name = model.name or ""
+            model_id = name.removeprefix(_MODEL_NAME_PREFIX)
+            if not model_id:
+                continue
+            model_ids.append(model_id)
+            if model.display_name:
+                display_names[model_id] = model.display_name
+            if model.description:
+                descriptions[model_id] = _shorten(model.description)
+            if model.input_token_limit:
+                context_windows[model_id] = model.input_token_limit
+
+        return build_catalog(
+            recommended=self.RECOMMENDED_MODELS,
+            context_windows={**self.MODEL_CONTEXT_WINDOWS, **context_windows},
+            model_ids=model_ids,
+            display_names=display_names,
+            descriptions=descriptions,
+            source="provider",
+        )
 
     async def _create_message(
         self,

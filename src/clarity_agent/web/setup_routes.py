@@ -235,7 +235,7 @@ async def setup_configure(body: dict[str, Any]) -> dict[str, Any]:
             try:
                 ns = argparse.Namespace(
                     provider=None, api_key=None, endpoint=None,
-                    model=None, model_deep=None, model_fast=None,
+                    model=None,
                     auth_mode=None,
                 )
                 new_config = LLMConfig.create(ns)

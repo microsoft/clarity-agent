@@ -2,13 +2,29 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   getSettings,
   updateSettings,
+  getModels,
+  setModel as setModelPreference,
   getSetupProviders,
   configureProvider,
   testConnection,
   activateProvider,
 } from "../api/client";
-import type { AppSettings, ProviderInfo, AuthModeInfo } from "../types";
+import type {
+  AppSettings,
+  AuthModeInfo,
+  ModelCatalogInfo,
+  ModelEntry,
+  ProviderInfo,
+} from "../types";
 import ProviderFieldList from "./ProviderFieldList";
+
+// Labels for the highlighted models a provider names.  Mirrors the
+// sidebar picker so the two surfaces read the same.
+const MODEL_ROLE_LABELS: Record<string, string> = {
+  default: "Recommended",
+  deep: "Deeper thinking",
+  fast: "Faster",
+};
 
 type Tab = "provider" | "models" | "appearance" | "accessibility";
 
@@ -459,71 +475,150 @@ function ProviderTab({ settings, onSaved }: { settings: AppSettings; onSaved: ()
 // ---------------------------------------------------------------------------
 
 function ModelsTab({ settings, onSaved }: { settings: AppSettings; onSaved: () => void }) {
-  const [modelDefault, setModelDefault] = useState(settings.model_default ?? "");
-  const [modelDeep, setModelDeep] = useState(settings.model_deep ?? "");
-  const [modelFast, setModelFast] = useState(settings.model_fast ?? "");
+  // "" means "follow the provider's recommendation" — a real state,
+  // distinct from pinning today's recommendation by name.
+  const [model, setModel] = useState(settings.model ?? "");
+  const [catalog, setCatalog] = useState<ModelCatalogInfo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true);
+    try {
+      setCatalog(await getModels(refresh));
+    } catch {
+      setCatalog(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    await updateSettings({
-      model_default: modelDefault || null,
-      model_deep: modelDeep || null,
-      model_fast: modelFast || null,
-    });
+    // Goes through PUT /api/model rather than the settings endpoint so
+    // the running session switches too — otherwise changing the model
+    // here would appear to do nothing until the next restart.
+    await setModelPreference(model || null);
     setSaving(false);
     setSaved(true);
     onSaved();
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const tiers = [
-    { key: "model_default", label: "Default", sublabel: "Used for most processes", value: modelDefault, set: setModelDefault },
-    { key: "model_deep", label: "Deep", sublabel: "For complex reasoning (architecture, decisions)", value: modelDeep, set: setModelDeep },
-    { key: "model_fast", label: "Fast", sublabel: "For quick tasks (thinker runs, routing)", value: modelFast, set: setModelFast },
-  ];
+  const highlighted = (catalog?.models ?? []).filter((m) => m.role);
+  const rest = (catalog?.models ?? []).filter((m) => !m.role);
+  const defaultLabel = catalog?.default_model
+    ? `Provider default (${catalog.default_model})`
+    : "Provider default";
+
+  const optionLabel = (m: ModelEntry) => {
+    const role = m.role ? ` — ${MODEL_ROLE_LABELS[m.role] ?? m.role}` : "";
+    return `${m.display_name}${role}`;
+  };
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-body-muted">
-        Override the default model for each tier. Leave blank to use the provider's default.
+        The model Clarity uses for everything. Leave it on the provider
+        default to track the recommended model as it changes, rather
+        than being pinned to today's.
       </p>
 
-      {tiers.map((t) => (
-        <div key={t.key}>
+      {/* Azure deployments are named at provisioning time, so there's
+          nothing to enumerate — fall back to a text field. */}
+      {catalog?.free_form ? (
+        <div>
           <label className="block text-xs text-body-label mb-1">
-            {t.label}
-            <span className="text-body-faint ml-1.5 font-normal">{t.sublabel}</span>
+            Deployment name
           </label>
           <input
             type="text"
             placeholder="Provider default"
-            value={t.value}
-            onChange={(e) => t.set(e.target.value)}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
-              text-sm text-body-heading placeholder:text-body-faint
-              focus:outline-none focus:border-accent-focus focus:ring-1 focus:ring-accent-focus/30
-              transition-all"
+                       text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
+          <p className="text-xs text-body-faint mt-1.5">
+            Azure deployments are named when you provision them, so there's
+            no list to fetch. Any name your resource serves will work.
+          </p>
         </div>
-      ))}
+      ) : (
+        <div>
+          <label className="block text-xs text-body-label mb-1" htmlFor="model-select">
+            Model
+          </label>
+          <select
+            id="model-select"
+            value={model}
+            disabled={loading}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
+                       text-sm text-body focus:outline-none focus:ring-2 focus:ring-accent/40
+                       disabled:opacity-50"
+          >
+            <option value="">{loading ? "Loading models…" : defaultLabel}</option>
+            {highlighted.length > 0 && (
+              <optgroup label="Recommended">
+                {highlighted.map((m) => (
+                  <option key={m.id} value={m.id}>{optionLabel(m)}</option>
+                ))}
+              </optgroup>
+            )}
+            {rest.length > 0 && (
+              <optgroup label="All models">
+                {rest.map((m) => (
+                  <option key={m.id} value={m.id}>{optionLabel(m)}</option>
+                ))}
+              </optgroup>
+            )}
+            {/* A model saved earlier that the provider no longer lists
+                would otherwise vanish from the menu, silently resetting
+                the user's choice to the provider default. */}
+            {model && !catalog?.models.some((m) => m.id === model) && (
+              <option value={model}>{model} (not currently offered)</option>
+            )}
+          </select>
 
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-3 py-2 rounded-lg bg-accent-focus text-white text-sm
-            hover:brightness-110 disabled:opacity-50 transition-all"
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
-        {saved && <span className="text-xs text-green-400">{"\u2713"} Saved</span>}
-      </div>
+          <div className="flex items-center gap-2 mt-1.5">
+            <button
+              type="button"
+              onClick={() => load(true)}
+              disabled={loading}
+              className="text-xs text-body-faint hover:text-body-muted
+                         transition-colors disabled:opacity-50"
+            >
+              {loading ? "Refreshing…" : "Refresh list"}
+            </button>
+            {catalog?.error && (
+              <span className="text-xs text-body-faint">
+                · Couldn't reach the provider; showing the models built
+                into this release.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-4 py-2 rounded-lg bg-accent text-white text-sm
+                   disabled:opacity-50 transition-opacity"
+      >
+        {saving ? "Saving…" : saved ? "Saved" : "Save"}
+      </button>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Tab: Appearance

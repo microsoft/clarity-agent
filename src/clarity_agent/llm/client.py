@@ -12,8 +12,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, ClassVar
 
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     StructuredToolCallback,
     TextDeltaCallback,
     ToolCallback,
@@ -90,9 +92,9 @@ class LLMClient(ABC):
     Non-Anthropic backends translate this in their ``_create_message``
     implementation.
 
-    Subclasses should declare :attr:`TIER_DEFAULTS` mapping all standard
-    tiers (``"default"``, ``"deep"``, ``"fast"``) to concrete model strings
-    for their provider.
+    Subclasses should declare :attr:`RECOMMENDED_MODELS`, mapping the
+    ``"default"``/``"deep"``/``"fast"`` highlight roles to concrete
+    model strings for their provider.
 
     **Callbacks**
 
@@ -101,19 +103,19 @@ class LLMClient(ABC):
     additional handling (e.g. forwarding events to a web client).
     """
 
-    TIER_DEFAULTS: ClassVar[dict[str, str]] = {}
-    """Provider-specific mapping from tier names to model strings.
+    RECOMMENDED_MODELS: ClassVar[dict[str, str]] = {}
+    """Provider-specific mapping from highlight role to model string.
 
-    Subclasses override this to declare which concrete models correspond
-    to the ``"default"``, ``"deep"``, and ``"fast"`` tiers.  Callers can
-    use :meth:`resolve_model` to translate a tier name before passing it
-    to :meth:`create_message`.
+    Declares which concrete models fill the ``"default"``, ``"deep"``
+    and ``"fast"`` roles.  Used to build the model catalog and to pick
+    a model when the user hasn't; :meth:`create_message` always
+    receives a concrete model, chosen by the backend above.
     """
 
     MODEL_CONTEXT_WINDOWS: ClassVar[dict[str, int]] = {}
     """Provider-specific mapping from concrete model strings to their
     context-window size in tokens.  Co-located with
-    :attr:`TIER_DEFAULTS`; consumed via :meth:`ChatBackend.context_window_for`
+    :attr:`RECOMMENDED_MODELS`; consumed via :meth:`ChatBackend.context_window_for`
     when the :class:`ClientChatBackend` wrapper forwards from its
     wrapped client.
     """
@@ -159,14 +161,36 @@ class LLMClient(ABC):
     Reset to ``False`` at the start of each :meth:`create_message`
     invocation so the inline path opts in per-call."""
 
-    def resolve_model(self, model_or_tier: str) -> str:
-        """Resolve a tier name or model string to a concrete model.
+    @classmethod
+    def builtin_catalog(cls) -> ModelCatalog:
+        """Models this class knows about, without any network call.
 
-        - A known tier name (e.g. ``"deep"``) → the tier's model from
-          :attr:`TIER_DEFAULTS`
-        - Anything else → returned as-is (treated as a literal model string)
+        Derived from :attr:`RECOMMENDED_MODELS` and
+        :attr:`MODEL_CONTEXT_WINDOWS` — the model names this codebase
+        has already vetted — so it can't drift from them the way a
+        separately maintained list would.
+
+        A classmethod because a catalog describes the *provider*, not
+        a particular client: callers need it before credentials are
+        resolved, and it's the fallback whenever a live listing fails.
+        Subclasses override only to change the framing (Azure marks
+        itself ``free_form``), not the contents.
         """
-        return self.TIER_DEFAULTS.get(model_or_tier, model_or_tier)
+        return build_catalog(
+            recommended=cls.RECOMMENDED_MODELS,
+            context_windows=cls.MODEL_CONTEXT_WINDOWS,
+        )
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models these credentials can reach.
+
+        The default is :meth:`builtin_catalog` — correct for providers
+        with no listing endpoint.  Subclasses that can enumerate
+        override this and are free to raise on failure:
+        :func:`~clarity_agent.llm.factory.fetch_model_catalog` catches,
+        falls back to the built-in catalog, and attaches the error.
+        """
+        return self.builtin_catalog()
 
     async def create_message(
         self,

@@ -37,7 +37,7 @@ class _StubBackend(ChatBackend):
     """
 
     supports_tools = True
-    TIER_DEFAULTS = {"default": "stub-model"}
+    RECOMMENDED_MODELS = {"default": "stub-model"}
 
     def __init__(
         self,
@@ -79,11 +79,10 @@ def stub_llm_config():
     """A minimal LLMConfig-shaped object that satisfies ClaritySession's needs."""
     class _StubConfig:
         provider = "stub"
-        tiers = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
-        def resolve(self, process_name: str) -> str:
+
+        def resolve_model(self) -> str:
             return "stub-model"
-        def resolve_tier(self, process_name: str) -> str:
-            return "default"
+
     return _StubConfig()
 
 

@@ -18,24 +18,14 @@ class TestSettingsLoad:
             "ANTHROPIC_API_KEY": "sk-ant-test",
             "CLARITY_LLM_PROVIDER": "anthropic",
             "CLARITY_THEME": "midnight",
-            "CLARITY_MODEL_DEEP": "claude-opus-4-6",
+            "CLARITY_MODEL": "claude-opus-4-6",
         }
         with patch.dict(os.environ, env, clear=False):
             s = Settings.load(env_path=Path("/nonexistent/.env"))
         assert s.anthropic_api_key == "sk-ant-test"
         assert s.provider == "anthropic"
         assert s.theme == "midnight"
-        assert s.model_deep == "claude-opus-4-6"
-
-    def test_loads_process_overrides(self) -> None:
-        env = {
-            "CLARITY_PROCESS_MODEL_PROBLEM_CLARIFICATION": "deep",
-            "CLARITY_PROCESS_MODEL_ARCHITECTURE_DESIGN": "o1-preview",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            s = Settings.load(env_path=Path("/nonexistent/.env"))
-        assert s.process_model_overrides["problem-clarification"] == "deep"
-        assert s.process_model_overrides["architecture-design"] == "o1-preview"
+        assert s.model == "claude-opus-4-6"
 
     def test_default_theme(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
@@ -79,20 +69,18 @@ class TestSettingsLoad:
         settings_file.write_text(json.dumps({
             "provider": "anthropic",
             "theme": "midnight",
-            "model_deep": "claude-opus-4-6",
-            "process_model_overrides": {"problem-clarification": "deep"},
+            "model": "claude-opus-4-6",
         }))
 
         clean_env = {k: v for k, v in os.environ.items()
                      if k not in ("CLARITY_LLM_PROVIDER", "CLARITY_THEME",
-                                  "CLARITY_MODEL_DEEP")}
+                                  "CLARITY_MODEL")}
         with patch.dict(os.environ, clean_env, clear=True), \
              patch("clarity_agent.app_paths.clarity_data_dir", return_value=tmp_path):
             s = Settings.load(env_path=tmp_path / ".env")
         assert s.provider == "anthropic"
         assert s.theme == "midnight"
-        assert s.model_deep == "claude-opus-4-6"
-        assert s.process_model_overrides["problem-clarification"] == "deep"
+        assert s.model == "claude-opus-4-6"
 
     def test_env_vars_override_settings_json(self, tmp_path: Path) -> None:
         settings_file = tmp_path / "settings.json"
@@ -123,14 +111,14 @@ class TestSettingsSave:
             settings_path=tmp_path / "settings.json",
             provider="anthropic",
             theme="midnight",
-            model_deep="claude-opus-4-6",
+            model="claude-opus-4-6",
         )
         s.save()
 
         data = json.loads((tmp_path / "settings.json").read_text())
         assert data["provider"] == "anthropic"
         assert data["theme"] == "midnight"
-        assert data["model_deep"] == "claude-opus-4-6"
+        assert data["model"] == "claude-opus-4-6"
 
     def test_secrets_go_to_keyring(self, tmp_path: Path) -> None:
         s = Settings(
@@ -150,17 +138,6 @@ class TestSettingsSave:
         data = json.loads((tmp_path / "settings.json").read_text())
         assert "anthropic_api_key" not in data
 
-    def test_process_overrides_go_to_settings_json(self, tmp_path: Path) -> None:
-        s = Settings(
-            env_path=tmp_path / ".env",
-            settings_path=tmp_path / "settings.json",
-            process_model_overrides={"problem-clarification": "deep"},
-        )
-        s.save()
-
-        data = json.loads((tmp_path / "settings.json").read_text())
-        assert data["process_model_overrides"]["problem-clarification"] == "deep"
-
     def test_roundtrip(self, tmp_path: Path) -> None:
         """Save then load produces the same settings."""
         s = Settings(
@@ -169,14 +146,13 @@ class TestSettingsSave:
             provider="anthropic",
             anthropic_api_key="sk-test",
             theme="midnight",
-            model_deep="claude-opus-4-6",
-            process_model_overrides={"architecture-design": "deep"},
+            model="claude-opus-4-6",
         )
         s.save()
 
         clean_env = {k: v for k, v in os.environ.items()
                      if k not in ("CLARITY_LLM_PROVIDER", "CLARITY_THEME",
-                                  "CLARITY_MODEL_DEEP", "ANTHROPIC_API_KEY")}
+                                  "CLARITY_MODEL", "ANTHROPIC_API_KEY")}
         with patch.dict(os.environ, clean_env, clear=True), \
              patch("clarity_agent.app_paths.clarity_data_dir", return_value=tmp_path):
             loaded = Settings.load(env_path=tmp_path / ".env")
@@ -184,8 +160,7 @@ class TestSettingsSave:
         assert loaded.provider == "anthropic"
         assert loaded.anthropic_api_key == "sk-test"
         assert loaded.theme == "midnight"
-        assert loaded.model_deep == "claude-opus-4-6"
-        assert loaded.process_model_overrides["architecture-design"] == "deep"
+        assert loaded.model == "claude-opus-4-6"
 
     def test_skips_none_values(self, tmp_path: Path) -> None:
         s = Settings(
@@ -247,12 +222,6 @@ class TestSettingsSave:
 
 
 class TestSettingsAccessors:
-    def test_tier_overrides(self) -> None:
-        s = Settings(model_default="gpt-4", model_deep="gpt-4-turbo")
-        tiers = s.tier_overrides
-        assert tiers == {"default": "gpt-4", "deep": "gpt-4-turbo"}
-        assert "fast" not in tiers
-
     def test_get_by_env_key(self) -> None:
         s = Settings(anthropic_api_key="sk-test", theme="midnight")
         assert s.get("ANTHROPIC_API_KEY") == "sk-test"
@@ -305,3 +274,68 @@ class TestSettingsAccessors:
             loaded = Settings.load(env_path=tmp_path / ".env")
         assert loaded.auth_mode == "device_code"
         assert loaded.tenant_id == "t-123"
+
+
+class TestModelTierMigration:
+    """Migrating the old model_default/deep/fast trio into one ``model``.
+
+    Under the old tier system every process resolved through the
+    ``"deep"`` tier, so ``model_deep`` is what a user was actually
+    running on — that has to be what survives, even when they also set
+    ``model_default``.
+    """
+
+    def _load(self, tmp_path: Path, payload: dict[str, object]) -> Settings:
+        (tmp_path / "settings.json").write_text(json.dumps(payload))
+        clean_env = {
+            k: v for k, v in os.environ.items()
+            if not k.startswith("CLARITY_")
+        }
+        with patch.dict(os.environ, clean_env, clear=True), \
+             patch("clarity_agent.app_paths.clarity_data_dir", return_value=tmp_path):
+            return Settings.load(env_path=tmp_path / ".env")
+
+    def test_deep_wins_because_that_is_what_was_running(self, tmp_path: Path) -> None:
+        s = self._load(tmp_path, {
+            "model_default": "gpt-4",
+            "model_deep": "gpt-4-turbo",
+            "model_fast": "gpt-4-mini",
+        })
+        assert s.model == "gpt-4-turbo"
+
+    def test_falls_back_to_default_then_fast(self, tmp_path: Path) -> None:
+        assert self._load(tmp_path, {"model_default": "gpt-4"}).model == "gpt-4"
+        assert self._load(tmp_path, {"model_fast": "gpt-4-mini"}).model == "gpt-4-mini"
+
+    def test_azure_deployment_name_survives(self, tmp_path: Path) -> None:
+        """The setup wizard wrote the deployment name as model_default."""
+        s = self._load(tmp_path, {
+            "provider": "azure", "model_default": "my-gpt5-deployment",
+        })
+        assert s.model == "my-gpt5-deployment"
+
+    def test_legacy_keys_are_dropped_once_migrated(self, tmp_path: Path) -> None:
+        self._load(tmp_path, {"model_deep": "gpt-4-turbo"})
+        data = json.loads((tmp_path / "settings.json").read_text())
+        assert data["model"] == "gpt-4-turbo"
+        for key in ("model_default", "model_deep", "model_fast"):
+            assert key not in data
+
+    def test_an_explicit_model_is_not_overwritten(self, tmp_path: Path) -> None:
+        s = self._load(tmp_path, {"model": "chosen", "model_deep": "old-deep"})
+        assert s.model == "chosen"
+
+    def test_nothing_to_migrate_leaves_model_unset(self, tmp_path: Path) -> None:
+        """Unset means "follow the provider's recommendation"."""
+        assert self._load(tmp_path, {"provider": "anthropic"}).model is None
+
+    @pytest.mark.parametrize("payload", [
+        {"model_deep": ""},
+        {"model_deep": "   "},
+        {"model_deep": None},
+        {"model_deep": 42},
+    ])
+    def test_unusable_legacy_values_are_ignored(
+        self, tmp_path: Path, payload: dict[str, object],
+    ) -> None:
+        assert self._load(tmp_path, payload).model is None

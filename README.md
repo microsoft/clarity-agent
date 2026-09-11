@@ -74,6 +74,8 @@ On first launch, the setup wizard walks you through connecting an LLM provider.
 
 Clarity works best with frontier models — structured thinking is where model quality matters most. The setup wizard tests your credentials before saving them. Run `clarity doctor` at any time to re-check the configuration.
 
+Clarity uses one model for everything, and defaults to the strongest model your provider offers. Pick a different one from the model selector in the bottom-left of the window, or under Preferences → Models; the choice is remembered. `clarity models` lists what your provider offers from the command line.
+
 ### Start a session
 
 The app opens the project picker. Create a new project or open an existing folder. Clarity will ask what you're working on and guide you through structured thinking about your problem, solution, and failure modes. Everything is saved to a `.clarity-protocol/` directory — no codebase required.

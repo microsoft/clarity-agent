@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 from clarity_agent.llm.client import extract_tool_detail, truncate
 from clarity_agent.llm.impl.anthropic import (
     _ANTHROPIC_MODEL_CONTEXT_WINDOWS,
-    _ANTHROPIC_TIER_DEFAULTS,
+    _ANTHROPIC_RECOMMENDED,
 )
 from clarity_agent.llm.types import (
     CompactionInfo,
@@ -103,7 +103,7 @@ class SdkChatBackend(ChatBackend):
     supports_tools: bool = True
     # We share defaults with the Anthropic API backend -- same company and same
     # models, just a different interface.
-    TIER_DEFAULTS = _ANTHROPIC_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _ANTHROPIC_RECOMMENDED
     # The SDK backend talks to the same Anthropic models as the
     # direct API path, so the context-window map is shared.  When
     # the SDK's internal context management compacts a session,
@@ -118,6 +118,7 @@ class SdkChatBackend(ChatBackend):
         project_dir: Path,
         clarity_agent_dir: Path,
         api_key: str | None = None,
+        model: str | None = None,
         transcript: Transcript | None = None,
     ) -> None:
         try:
@@ -127,7 +128,7 @@ class SdkChatBackend(ChatBackend):
                 "claude-agent-sdk is not installed. Install it with: pip install claude-agent-sdk"
             ) from None
 
-        super().__init__(transcript=transcript)
+        super().__init__(transcript=transcript, model=model)
         self._sdk: ModuleType = claude_agent_sdk
         self.project_dir: Path = project_dir
         self.clarity_agent_dir: Path = clarity_agent_dir

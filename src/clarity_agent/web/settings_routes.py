@@ -42,10 +42,7 @@ async def get_settings() -> dict[str, Any]:
     return {
         "provider": s.provider,
         "auth_mode": s.auth_mode,
-        "model_default": s.model_default,
-        "model_deep": s.model_deep,
-        "model_fast": s.model_fast,
-        "process_model_overrides": dict(s.process_model_overrides),
+        "model": s.model,
         "provider_auth_modes": dict(s.provider_auth_modes),
         "theme": s.theme,
         "font_scale": s.font_scale,
@@ -63,16 +60,13 @@ async def get_settings() -> dict[str, Any]:
 async def update_settings(body: dict[str, Any]) -> dict[str, Any]:
     """Update settings. Only provided fields are changed.
 
-    Body: ``{provider: str, theme: str, model_default: str, ...}``
+    Body: ``{provider: str, theme: str, model: str, ...}``
     """
     from clarity_agent.settings import _ALL_KEYS, Settings
 
     s = Settings.current()
 
     for key, value in body.items():
-        if key == "process_model_overrides" and isinstance(value, dict):
-            s.process_model_overrides = value
-            continue
         if key == "provider_auth_modes" and isinstance(value, dict):
             s.provider_auth_modes = value
             continue
@@ -131,7 +125,7 @@ async def activate_provider(body: dict[str, Any]) -> dict[str, Any]:
         try:
             ns = argparse.Namespace(
                 provider=None, api_key=None, endpoint=None,
-                model=None, model_deep=None, model_fast=None,
+                model=None,
                 auth_mode=None,
             )
             new_config = LLMConfig.create(ns)

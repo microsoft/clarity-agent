@@ -140,7 +140,7 @@ Select a provider with `--provider`:
 ./clarity ./my-project --provider gemini
 ```
 
-Each provider resolves its default model from provider-specific tier defaults (defined as `*_TIER_DEFAULTS` in `llm/impl/`), which can be overridden via settings, environment variables, or the `--model` flag.
+Clarity uses one model for everything. Each provider declares three recommended models (`*_RECOMMENDED` in `llm/impl/`) — a `default`, a heavier `deep`, and a lighter `fast` — which the model picker highlights; the `default` is what runs when the user hasn't chosen. Override it with `--model`, the `CLARITY_MODEL` environment variable, or the picker. Run `clarity models` to list what a provider offers.
 
 **Architecture:** `LLMConfig` (in `llm/config.py`) resolves provider, API key, model, and endpoint from CLI flags and environment variables. `create_chat_backend()` (in `llm/factory.py`) instantiates the correct backend. `ClaritySession` accepts any `ChatBackend` and doesn't know which provider is behind it.
 

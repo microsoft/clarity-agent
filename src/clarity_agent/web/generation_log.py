@@ -15,7 +15,6 @@ PROVIDER_MANAGED_CONTEXT_BACKENDS = frozenset({"CopilotChatBackend", "SdkChatBac
 class RequestLogContext:
     provider: str
     model: str
-    tier: str
     process: str
     auth_mode: str
     credential: str
@@ -89,7 +88,6 @@ def format_request_started(context: RequestLogContext) -> str:
     return (
         "llm.request started. "
         f"Sending this turn to provider {context.provider} with model {context.model}. "
-        f"Tier: {context.tier}. "
         f"Process: {context.process}. "
         f"Auth mode: {context.auth_mode}; credential {context.credential}; "
         f"endpoint {context.endpoint}. "

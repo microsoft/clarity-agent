@@ -186,7 +186,7 @@ def _install_mocks(
     timing.
     """
     send = AsyncMock(side_effect=send_side_effects)
-    create = AsyncMock(side_effect=lambda _model: _set_session(backend))
+    create = AsyncMock(side_effect=lambda model: _set_session(backend, model))
     destroy = AsyncMock(side_effect=lambda: _clear_session(backend))
     backend._send_and_wait = send  # type: ignore[method-assign]
     backend._create_session = create  # type: ignore[method-assign]
@@ -194,13 +194,28 @@ def _install_mocks(
     return send, create, destroy
 
 
-def _set_session(backend: CopilotChatBackend) -> None:
-    # Sentinel object — _async_chat only checks `is None`, never calls methods.
-    backend._session = object()  # type: ignore[assignment]
+class _StubSession:
+    """Stand-in for a live ``CopilotSession``.
+
+    Only needs ``set_model``: ``_async_chat`` calls it when the model
+    changes under a live session, since Copilot binds the model at
+    session creation.
+    """
+
+    def __init__(self) -> None:
+        self.set_model = AsyncMock()
+
+
+def _set_session(backend: CopilotChatBackend, model: str) -> None:
+    # Mirrors the real ``_create_session``, which records the model the
+    # session was built with so a later change can be detected.
+    backend._session = _StubSession()  # type: ignore[assignment]
+    backend._session_model = model
 
 
 def _clear_session(backend: CopilotChatBackend) -> None:
     backend._session = None
+    backend._session_model = None
 
 
 # ---- import Any after defining helpers (kept here for locality) ----
@@ -387,3 +402,61 @@ def test_history_preserved_across_same_system_prompt(tmp_path: Path) -> None:
     asyncio.run(backend._async_chat("c"))  # no system_prompt — no reset
 
     assert backend._user_messages == ["a", "b", "c"]
+
+
+# ---------------------------------------------------------------------------
+# Switching models mid-conversation
+# ---------------------------------------------------------------------------
+
+class TestModelSwitching:
+    """Copilot binds the model at session creation.
+
+    Without an explicit switch, changing models mid-conversation is
+    silently ignored and the turn keeps running on the old one.
+    """
+
+    def _backend(self, tmp_path: Path) -> CopilotChatBackend:
+        return CopilotChatBackend(
+            project_dir=tmp_path, clarity_agent_dir=tmp_path, model="model-a",
+        )
+
+    def test_first_turn_creates_a_session_with_the_model(self, tmp_path: Path) -> None:
+        backend = self._backend(tmp_path)
+        _, create, _ = _install_mocks(backend, send_side_effects=["ok"])
+
+        asyncio.run(backend._async_chat("hi", None))
+
+        create.assert_awaited_once_with("model-a")
+
+    def test_changing_model_switches_the_live_session(self, tmp_path: Path) -> None:
+        backend = self._backend(tmp_path)
+        _install_mocks(backend, send_side_effects=["one", "two"])
+
+        asyncio.run(backend._async_chat("first", None))
+        session = backend._session
+        asyncio.run(backend._async_chat("second", None, model="model-b"))
+
+        session.set_model.assert_awaited_once_with("model-b")  # type: ignore[union-attr]
+        assert backend._session_model == "model-b"
+
+    def test_same_model_does_not_churn_the_session(self, tmp_path: Path) -> None:
+        backend = self._backend(tmp_path)
+        _install_mocks(backend, send_side_effects=["one", "two"])
+
+        asyncio.run(backend._async_chat("first", None))
+        session = backend._session
+        asyncio.run(backend._async_chat("second", None, model="model-a"))
+
+        session.set_model.assert_not_awaited()  # type: ignore[union-attr]
+
+    def test_history_is_preserved_across_a_switch(self, tmp_path: Path) -> None:
+        """``set_model`` keeps history — that's why we prefer it to a rebuild."""
+        backend = self._backend(tmp_path)
+        _, create, destroy = _install_mocks(backend, send_side_effects=["one", "two"])
+
+        asyncio.run(backend._async_chat("first", None))
+        asyncio.run(backend._async_chat("second", None, model="model-b"))
+
+        destroy.assert_not_awaited()
+        assert create.await_count == 1
+        assert backend._user_messages == ["first", "second"]

@@ -16,21 +16,23 @@ from typing import Any
 import anthropic as _anthropic_mod
 
 from clarity_agent.llm.client import LLMClient, extract_tool_detail, truncate
+from clarity_agent.llm.model_catalog import build_catalog
 from clarity_agent.llm.types import (
     LLMResponse,
+    ModelCatalog,
     TextBlock,
     TokenUsage,
     ToolUseBlock,
 )
 
-_ANTHROPIC_TIER_DEFAULTS: dict[str, str] = {
+_ANTHROPIC_RECOMMENDED: dict[str, str] = {
     "default": "claude-opus-5",
-    "deep": "claude-opus-5",
+    "deep": "claude-fable-5-1",
     "fast": "claude-sonnet-5",
 }
 
 # Context-window size (in tokens) per model.  Co-located with the
-# tier defaults so a single backend file declares everything about
+# recommendations so a single backend file declares everything about
 # its known models.  The compaction trigger compares the last turn's
 # ``input_tokens`` (from the provider's response) against this;
 # users on a model not listed here can add an override via
@@ -58,11 +60,86 @@ class AnthropicClient(LLMClient):
     :class:`~clarity_agent.llm.types.LLMResponse` objects.
     """
 
-    TIER_DEFAULTS = _ANTHROPIC_TIER_DEFAULTS
+    RECOMMENDED_MODELS = _ANTHROPIC_RECOMMENDED
     MODEL_CONTEXT_WINDOWS = _ANTHROPIC_MODEL_CONTEXT_WINDOWS
 
-    def __init__(self, *, api_key: str) -> None:
-        self._client = _anthropic_mod.AsyncAnthropic(api_key=api_key)
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        auth_token: str | None = None,
+    ) -> None:
+        """Build a client from an API key or a bearer token.
+
+        ``api_key`` is the ordinary path (``x-api-key``).  ``auth_token``
+        authenticates as a bearer instead, which is how a Claude Code
+        OAuth token is presented; that path also needs the OAuth beta
+        header.  Exactly one must be given.
+
+        The token path exists to enumerate models for the
+        ``claude_sdk`` auth mode (see
+        :mod:`clarity_agent.llm.claude_code_auth`).  Chat under that
+        mode still belongs to the SDK backend — this client is not a
+        way around that.
+        """
+        if bool(api_key) == bool(auth_token):
+            raise ValueError(
+                "AnthropicClient needs exactly one of api_key or auth_token",
+            )
+
+        if auth_token:
+            from clarity_agent.llm.claude_code_auth import OAUTH_BETA_HEADER
+
+            self._client = _anthropic_mod.AsyncAnthropic(
+                auth_token=auth_token,
+                default_headers={"anthropic-beta": OAUTH_BETA_HEADER},
+            )
+        else:
+            self._client = _anthropic_mod.AsyncAnthropic(api_key=api_key)
+
+    async def fetch_models(self) -> ModelCatalog:
+        """List the models this key can reach, via ``GET /v1/models``.
+
+        Anthropic returns models newest-first; that order is preserved.
+
+        Each entry carries ``max_input_tokens``, which is exactly the
+        number the compaction check wants: it compares a turn's
+        reported ``input_tokens`` against the window, and this is the
+        input limit rather than a combined input+output figure.  Live
+        values take precedence over
+        :data:`_ANTHROPIC_MODEL_CONTEXT_WINDOWS`, which stays as the
+        offline fallback.
+
+        Read via :func:`getattr` because the pinned SDK's ``ModelInfo``
+        doesn't declare the field — its models are configured
+        ``extra="allow"``, so the value survives parsing regardless,
+        and a future SDK that does declare it needs no change here.
+
+        Reached under either auth mode: a ``claude_sdk`` session that
+        also has an ``ANTHROPIC_API_KEY`` available lists through here
+        too, since the listing only needs the key, not the agent
+        runtime that mode uses for chat.  See
+        :func:`~clarity_agent.llm.factory._listing_client`.
+        """
+        model_ids: list[str] = []
+        display_names: dict[str, str] = {}
+        context_windows: dict[str, int] = {}
+        # ``list()`` returns an auto-paginating async iterator.
+        async for model in self._client.models.list(limit=100):
+            model_ids.append(model.id)
+            if model.display_name:
+                display_names[model.id] = model.display_name
+            window = getattr(model, "max_input_tokens", None)
+            if isinstance(window, int) and window > 0:
+                context_windows[model.id] = window
+
+        return build_catalog(
+            recommended=self.RECOMMENDED_MODELS,
+            context_windows={**self.MODEL_CONTEXT_WINDOWS, **context_windows},
+            model_ids=model_ids,
+            display_names=display_names,
+            source="provider",
+        )
 
     async def _create_message(
         self,

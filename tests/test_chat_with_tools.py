@@ -31,7 +31,7 @@ def _make_backend(
 def _mock_client(responses: list[LLMResponse]) -> MagicMock:
     """Create a mock LLMClient that returns the given responses in sequence."""
     client = MagicMock()
-    client.TIER_DEFAULTS = {"default": "test-model", "deep": "test-deep", "fast": "test-fast"}
+    client.RECOMMENDED_MODELS = {"default": "test-model", "deep": "test-deep", "fast": "test-fast"}
     client.on_tool_use = None
     client._suppress_tool_output = False
     # Mock client doesn't go through the streaming path, so callbacks
@@ -197,7 +197,7 @@ class TestChatWithTools:
     def test_suppress_tool_output_restored_on_error(self, tmp_path: Path) -> None:
         """_suppress_tool_output is reset even if an exception occurs."""
         client = MagicMock()
-        client.TIER_DEFAULTS = {"default": "m", "deep": "d", "fast": "f"}
+        client.RECOMMENDED_MODELS = {"default": "m", "deep": "d", "fast": "f"}
         client.on_tool_use = None
         client._suppress_tool_output = False
 

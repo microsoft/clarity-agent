@@ -355,16 +355,12 @@ describe("chatReducer", () => {
   });
 
   describe("model_changed", () => {
-    it("updates model state", () => {
+    it("updates the active model", () => {
       const next = chatReducer(initialState, {
         type: "model_changed",
-        tier: "deep",
         model: "claude-opus-4-20250514",
-        auto: false,
       });
-      expect(next.activeTier).toBe("deep");
       expect(next.activeModel).toBe("claude-opus-4-20250514");
-      expect(next.autoModel).toBe(false);
     });
   });
 
@@ -386,8 +382,6 @@ describe("chatReducer", () => {
         streaming: true,
         currentProcess: "problem-clarification",
         activeModel: "claude-sonnet",
-        activeTier: "default",
-        autoModel: false,
         error: null,
         statusPhase: null,
         historyLoaded: true,
@@ -402,8 +396,6 @@ describe("chatReducer", () => {
       expect(next.currentProcess).toBeNull();
       // Model state preserved
       expect(next.activeModel).toBe("claude-sonnet");
-      expect(next.activeTier).toBe("default");
-      expect(next.autoModel).toBe(false);
     });
   });
 
@@ -732,7 +724,6 @@ describe("chatReducer", () => {
         messages: [{ id: "h", role: "user", content: "x", timestamp: 1 }],
       });
       expect(next.activeModel).toBe("claude-sonnet");
-      expect(next.activeTier).toBe("default");
       expect(next.sessionTokens).toBe(12345);
     });
   });

@@ -48,7 +48,7 @@ class _StubBackend(ChatBackend):
     """Minimal ChatBackend stub for resume-path testing."""
 
     supports_tools = True
-    TIER_DEFAULTS = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
+    RECOMMENDED_MODELS = {"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"}
     MODEL_CONTEXT_WINDOWS = {"stub-model": 1_000}
 
     def __init__(self) -> None:
@@ -89,7 +89,7 @@ class _StubLLMConfig(LLMConfig):
             api_key=None,
             endpoint=None,
             auth_mode="default",
-            tiers={"default": "stub-model", "deep": "stub-deep", "fast": "stub-fast"},
+            model="stub-model",
         )
         self.last_backend: _StubBackend | None = None
 
@@ -104,12 +104,6 @@ class _StubLLMConfig(LLMConfig):
         self.last_backend = _StubBackend()
         self.last_backend._transcript = transcript
         return self.last_backend
-
-    def resolve(self, process_name: str) -> str:
-        return "stub-model"
-
-    def resolve_tier(self, process_name: str) -> str:
-        return "default"
 
 
 @pytest.fixture
@@ -288,7 +282,7 @@ class TestGenerationLogDetails:
             api_key="secret-api-key",
             endpoint="https://example.openai.azure.com/openai?api-key=secret",
             auth_mode="api_key",
-            tiers={"default": "deployment-a"},
+            model="deployment-a",
         )
         adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
 
@@ -311,7 +305,7 @@ class TestGenerationLogDetails:
             api_key=None,
             endpoint="https://example.openai.azure.com",
             auth_mode="default",
-            tiers={"default": "deployment-a"},
+            model="deployment-a",
         )
         adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
 
@@ -331,7 +325,7 @@ class TestGenerationLogDetails:
             api_key="secret-api-key",
             endpoint="https://example.openai.azure.com",
             auth_mode="api_key",
-            tiers={"default": "stub-model"},
+            model="stub-model",
         )
         adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
         backend = _StubBackend()
@@ -383,7 +377,7 @@ class TestGenerationLogDetails:
             api_key=None,
             endpoint=None,
             auth_mode="sdk_native",
-            tiers={"default": "stub-model"},
+            model="stub-model",
         )
         adapter = WebSessionAdapter(tmp_path, tmp_path, cfg)
         adapter._backend = _StubBackend()

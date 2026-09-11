@@ -6,10 +6,9 @@ can dispatch a backend call to.  Three reserved role names map
 to the framework's three role slots (target, user, judge):
 
   ``_target`` — default role for the system under test (a
-            ClaritySession).  Runs the normal Clarity tier
-            routing, so the model choice per process is governed
-            by the target provider's tier defaults — the
-            ``model`` field is NOT used for this role.
+            ClaritySession).  ``model`` pins the model under
+            test; leave it unset to follow the provider's
+            recommendation.
   ``_user``  — default role for the simulated user, a
             single-call LLM.  ``model`` picks the exact model.
   ``_judge`` — default role for the evaluator, a single-call
@@ -166,19 +165,18 @@ class EvalConfig:
 
         ``slot`` is one of ``"target"``, ``"user"``, ``"judge"``.
         Selects which role's configuration to dispatch against
-        (default is the reserved ``_target``/``_user``/``_judge``)
-        AND determines the backend's behavior — specifically, the
-        target slot uses Clarity's tier-based per-process model
-        routing, while the user and judge slots dispatch to the
-        role's specific model.
+        (default is the reserved ``_target``/``_user``/``_judge``).
 
         ``role``, if given, overrides which named role to use.
         That role must exist in :attr:`roles`; ``None`` falls back
-        to the reserved default for the slot.  The slot + tier
-        routing decision is independent of which role is selected
-        — an alternative role used for the target slot still gets
-        tier routing, an alternative role used for the user slot
-        still gets exact-model dispatch.
+        to the reserved default for the slot.
+
+        Every slot dispatches to its role's ``model``.  The target
+        slot used to be the exception — Clarity picked a model per
+        process from the old tier system, so the field was
+        discarded — but with one model for everything there's
+        nothing left to decide, and an eval that can't pin the
+        model under test isn't reproducible.
 
         Credentials are resolved by ``LLMConfig.create()`` from the
         environment, keyring, or settings — same as the main app.
@@ -186,22 +184,16 @@ class EvalConfig:
         resolved_role = self.resolve_role(slot, role)
         role_cfg = self.roles[resolved_role]
 
-        # The target slot uses tier-based routing — Clarity decides
-        # which model to call per-tier (default/deep/fast) based on
-        # the provider's tier defaults — so the role's ``model``
-        # field is ignored regardless of which role is selected.
-        # User and judge slots dispatch to the exact configured
-        # model.
-        is_target_slot = slot == "target"
-        model = None if is_target_slot else role_cfg.model
+        # ``None`` when the role doesn't pin one, which lets
+        # ``LLMConfig.create`` fall back to the saved preference and
+        # then the provider's recommendation.
+        model = role_cfg.model
 
         ns = argparse.Namespace(
             provider=role_cfg.provider,
             api_key=None,
             endpoint=None,
             model=model,
-            model_deep=None,
-            model_fast=None,
             auth_mode=role_cfg.auth_mode,
         )
         llm_config = LLMConfig.create(ns)
@@ -316,11 +308,7 @@ def describe_resolved_config(config: EvalConfig) -> str:
                 f"{endpoint or '(unset — set AZURE_AI_ENDPOINT)'}"
             )
 
-        if name == _RESERVED_TARGET:
-            # Target-slot role uses per-process tier routing; the
-            # model field is ignored (provider tier defaults apply).
-            lines.append("    model:       per-process tier routing")
-        elif role_cfg.model:
+        if role_cfg.model:
             lines.append(f"    model:       {role_cfg.model}")
             if role_cfg.provider == "azure" and endpoint:
                 base = endpoint.rstrip("/")

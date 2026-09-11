@@ -1408,7 +1408,7 @@ class TestClientChatBackend:
     def _make_mock_client(self, *responses: LLMResponse) -> AsyncMock:
         """Create a mock LLMClient returning the given responses in order."""
         client = AsyncMock()
-        client.TIER_DEFAULTS = {"default": "test-model", "deep": "deep-model"}
+        client.RECOMMENDED_MODELS = {"default": "test-model", "deep": "deep-model"}
         if len(responses) == 1:
             client.create_message = AsyncMock(return_value=responses[0])
         else:
@@ -1448,20 +1448,26 @@ class TestClientChatBackend:
         call_kwargs = mock_client.create_message.call_args[1]
         assert "Be helpful" in call_kwargs["system"]
 
-    def test_tier_defaults_delegate_to_client(self, tmp_path: Any) -> None:
+    def test_recommendations_delegate_to_client(self, tmp_path: Any) -> None:
+        """The wrapper reports the wrapped client's recommendations."""
         mock_client = self._make_mock_client(
             LLMResponse(content=[TextBlock(text="ok")])
         )
         backend = self._make_backend(mock_client, tmp_path)
 
-        assert backend.TIER_DEFAULTS == {"default": "test-model", "deep": "deep-model"}
-        assert backend.resolve_model("deep") == "deep-model"
+        assert backend.RECOMMENDED_MODELS == {"default": "test-model", "deep": "deep-model"}
 
-    def test_tier_overrides_win_over_client_defaults(self, tmp_path: Any) -> None:
-        # User-configured tiers (from LLMConfig.tiers — i.e. --model /
-        # settings / evals config) must override the provider's built-in
-        # TIER_DEFAULTS. Otherwise resolve_model(None) silently ignores
-        # a configured model and the backend calls the wrong deployment.
+    def test_no_configured_model_uses_the_provider_default(self, tmp_path: Any) -> None:
+        mock_client = self._make_mock_client(
+            LLMResponse(content=[TextBlock(text="ok")])
+        )
+        backend = self._make_backend(mock_client, tmp_path)
+
+        assert backend.resolve_model(None) == "test-model"
+
+    def test_configured_model_wins_over_the_provider_default(self, tmp_path: Any) -> None:
+        # Otherwise resolve_model(None) silently ignores a configured
+        # model and the backend calls the wrong deployment.
         mock_client = self._make_mock_client(
             LLMResponse(content=[TextBlock(text="ok")])
         )
@@ -1469,19 +1475,29 @@ class TestClientChatBackend:
             mock_client,
             project_dir=tmp_path,
             clarity_agent_dir=tmp_path,
-            tiers={"default": "user-chosen-model"},
+            model="user-chosen-model",
         )
 
         assert backend.resolve_model(None) == "user-chosen-model"
-        assert backend.resolve_model("default") == "user-chosen-model"
-        # Non-overridden tiers still fall through to the client defaults.
-        assert backend.resolve_model("deep") == "deep-model"
 
-    def test_factory_passes_config_tiers_to_backend(self, tmp_path: Any) -> None:
+    def test_explicit_model_passes_through_untouched(self, tmp_path: Any) -> None:
+        """A model string is just a model string — no name indirection."""
+        mock_client = self._make_mock_client(
+            LLMResponse(content=[TextBlock(text="ok")])
+        )
+        backend = self._make_backend(mock_client, tmp_path)
+
+        # "deep" was a tier name once; now it's an ordinary identifier
+        # and must reach the provider verbatim rather than resolving to
+        # some other model.
+        assert backend.resolve_model("deep") == "deep"
+        assert backend.resolve_model("some-other-model") == "some-other-model"
+
+    def test_factory_passes_config_model_to_backend(self, tmp_path: Any) -> None:
         # End-to-end guard: create_chat_backend must propagate
-        # LLMConfig.tiers into the backend so an explicit --model /
-        # config model actually reaches the API call.  Regression guard
-        # for a bug where the factory dropped tiers on the floor and the
+        # LLMConfig.model into the backend so an explicit --model
+        # actually reaches the API call.  Regression guard for a bug
+        # where the factory dropped it on the floor and the
         # simulated-user backend silently used the provider default.
         import argparse
 
@@ -1490,8 +1506,7 @@ class TestClientChatBackend:
 
         ns = argparse.Namespace(
             provider="openai", api_key="sk-test", endpoint=None,
-            model="explicit-model", model_deep=None, model_fast=None,
-            auth_mode="api_key",
+            model="explicit-model", auth_mode="api_key",
         )
         config = LLMConfig.create(ns)
         backend = create_chat_backend(
@@ -1620,7 +1635,7 @@ class TestClientChatBackendCompaction:
         """
         from clarity_agent.llm.types import TokenUsage
         client = AsyncMock()
-        client.TIER_DEFAULTS = {"default": "test-model"}
+        client.RECOMMENDED_MODELS = {"default": "test-model"}
         client.MODEL_CONTEXT_WINDOWS = {"test-model": 128_000}
         client.create_message = AsyncMock(
             return_value=LLMResponse(

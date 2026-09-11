@@ -48,7 +48,7 @@ def _cfg() -> LLMConfig:
     return LLMConfig(
         provider="anthropic",
         api_key="fake-key",
-        tiers={"default": "fake-model"},
+        model="fake-model",
     )
 
 
