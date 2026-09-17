@@ -13,6 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from clarity_agent.llm import ClientChatBackend, LLMResponse, TextBlock, ToolUseBlock
+from clarity_agent.session import ClaritySession
+from clarity_agent.transcript import ToolResult, Transcript
 
 
 def _make_backend(
@@ -252,3 +254,38 @@ class TestChatWithTools:
         )
         assert result == "Both found."
         assert calls == ["a", "b"]
+
+    def test_handled_tool_result_is_persisted(self, tmp_path: Path) -> None:
+        tool_resp = LLMResponse(
+            content=[ToolUseBlock(id="feedback-1", name="send_feedback", input={})],
+            stop_reason="tool_use",
+        )
+        final_resp = LLMResponse(
+            content=[TextBlock(text="Done.")],
+            stop_reason="end_turn",
+        )
+        backend = _make_backend(_mock_client([tool_resp, final_resp]), tmp_path)
+        transcript = Transcript(tmp_path)
+        session = ClaritySession(
+            tmp_path,
+            tmp_path / "agent",
+            backend,
+            MagicMock(),
+            transcript,
+        )
+
+        result = session.chat(
+            "Send feedback",
+            tools=self._sample_tools(),
+            tool_handler=lambda tc: "Issue draft ready",
+        )
+
+        assert result == "Done."
+        tool_results = [
+            event for event in transcript.current_events()
+            if isinstance(event, ToolResult)
+        ]
+        assert len(tool_results) == 1
+        assert tool_results[0].tool_use_id == "feedback-1"
+        assert tool_results[0].content == "Issue draft ready"
+        transcript.close()

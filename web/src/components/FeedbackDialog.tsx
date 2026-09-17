@@ -12,14 +12,12 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
   const [includeLlmInfo, setIncludeLlmInfo] = useState(true);
   const [includeTranscript, setIncludeTranscript] = useState(false);
   const [transcriptTurns, setTranscriptTurns] = useState(5);
-  const [includeProtocol, setIncludeProtocol] = useState(false);
+  const [context, setContext] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // After submission: true = uploaded, "fallback" = local save + mailto.
-  const [done, setDone] = useState<true | "fallback" | null>(null);
-  const [filePath, setFilePath] = useState<string | null>(null);
+  const [issueUrl, setIssueUrl] = useState<string | null>(null);
 
-  const canSend = message.trim().length > 0 && !done;
+  const canSend = message.trim().length > 0 && !issueUrl;
 
   const handleSubmit = async () => {
     if (!canSend) return;
@@ -32,15 +30,10 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
         contact_email: contactEmail,
         include_llm_info: includeLlmInfo,
         transcript_turns: includeTranscript ? transcriptTurns : 0,
-        include_protocol: includeProtocol,
+        context,
       });
 
-      if (result.submitted) {
-        setDone(true);
-      } else {
-        setDone("fallback");
-        setFilePath(result.file_path);
-      }
+      setIssueUrl(result.issue_url);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -77,7 +70,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={4}
-              disabled={!!done}
+              disabled={!!issueUrl}
               placeholder="Tell us what you think, report a bug, or suggest an improvement..."
               className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
                 text-sm text-body-heading placeholder:text-body-faint
@@ -92,7 +85,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
               <input
                 type="checkbox"
                 checked={contactOk}
-                disabled={!!done}
+                disabled={!!issueUrl}
                 onChange={(e) => setContactOk(e.target.checked)}
                 className="rounded border-border text-accent-focus focus:ring-accent-focus/30"
               />
@@ -104,7 +97,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
               <input
                 type="email"
                 value={contactEmail}
-                disabled={!!done}
+                disabled={!!issueUrl}
                 onChange={(e) => setContactEmail(e.target.value)}
                 placeholder="your@email.com"
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
@@ -124,7 +117,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
               <input
                 type="checkbox"
                 checked={includeLlmInfo}
-                disabled={!!done}
+                disabled={!!issueUrl}
                 onChange={(e) => setIncludeLlmInfo(e.target.checked)}
                 className="rounded border-border text-accent-focus focus:ring-accent-focus/30"
               />
@@ -138,7 +131,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
                 <input
                   type="checkbox"
                   checked={includeTranscript}
-                  disabled={!!done}
+                  disabled={!!issueUrl}
                   onChange={(e) => setIncludeTranscript(e.target.checked)}
                   className="rounded border-border text-accent-focus focus:ring-accent-focus/30"
                 />
@@ -154,7 +147,7 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
                     min={1}
                     max={50}
                     value={transcriptTurns}
-                    disabled={!!done}
+                    disabled={!!issueUrl}
                     onChange={(e) => setTranscriptTurns(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-16 px-2 py-1 rounded border border-border bg-surface-ground
                       text-sm text-body-heading text-center
@@ -166,49 +159,42 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
               )}
             </div>
 
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeProtocol}
-                disabled={!!done}
-                onChange={(e) => setIncludeProtocol(e.target.checked)}
-                className="rounded border-border text-accent-focus focus:ring-accent-focus/30"
-              />
-              <span className="text-sm text-body-heading">
-                Full clarity protocol
-              </span>
+            <label htmlFor="feedback-context" className="block text-xs text-body-label">
+              Other relevant context (optional)
             </label>
+            <textarea
+              id="feedback-context"
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              rows={2}
+              disabled={!!issueUrl}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-surface-ground
+                text-sm text-body-heading focus:outline-none focus:border-accent-focus
+                focus:ring-1 focus:ring-accent-focus/30 disabled:opacity-60 transition-all resize-y"
+            />
           </div>
 
           {/* Privacy notice — shown before submission */}
-          {!done && (
+          {!issueUrl && (
             <p className="text-xs text-body-faint leading-relaxed">
               The information you select will be shared with the Clarity Agent
               team and used to improve the product.
             </p>
           )}
 
-          {/* Success: uploaded */}
-          {done === true && (
+          {issueUrl && (
             <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/5 text-sm">
               <p className="text-green-400">
-                Thank you! Your feedback has been submitted.
+                Your feedback is ready to review on GitHub.
               </p>
-            </div>
-          )}
-
-          {/* Fallback: saved locally */}
-          {done === "fallback" && (
-            <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-sm space-y-1.5">
-              <p className="text-amber-400">
-                Feedback could not be submitted automatically. Your
-                feedback has been saved locally.
-              </p>
-              {filePath && (
-                <p className="text-xs text-body-muted font-mono break-all">
-                  {filePath}
-                </p>
-              )}
+              <a
+                href={issueUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 text-accent-focus hover:underline"
+              >
+                Review and create issue
+              </a>
             </div>
           )}
 
@@ -227,16 +213,16 @@ export default function FeedbackDialog({ onClose }: FeedbackDialogProps) {
             className="px-4 py-2 text-sm rounded-lg text-body-muted
               hover:text-body hover:bg-surface-dim transition-colors"
           >
-            {done ? "Done" : "Cancel"}
+            {issueUrl ? "Done" : "Cancel"}
           </button>
-          {!done && (
+          {!issueUrl && (
             <button
               onClick={handleSubmit}
               disabled={!canSend || sending}
               className="px-4 py-2 text-sm rounded-lg bg-accent-focus text-white
                 hover:brightness-110 disabled:opacity-40 transition-all"
             >
-              {sending ? "Submitting..." : "Send Feedback"}
+              {sending ? "Preparing..." : "Prepare GitHub Issue"}
             </button>
           )}
         </div>
