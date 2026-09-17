@@ -56,16 +56,6 @@ class TestFormatFeedbackMd:
         assert "## Transcript Excerpt" in md
         assert "User: hello" in md
 
-    def test_protocol_included(self) -> None:
-        report = FeedbackReport(
-            message="Test",
-            protocol_content="# Problem\n\nSomething is broken.",
-        )
-        md = format_feedback_md(report)
-        assert "## Clarity Protocol" in md
-        assert "Something is broken" in md
-
-
 # -----------------------------------------------------------------------
 # GitHub issue draft
 # -----------------------------------------------------------------------
@@ -85,6 +75,14 @@ class TestFeedbackIssueUrl:
         assert "The+app+hangs" in url
         assert "user%40example.com" in url
         assert "failure+brainstorming" in url
+
+    def test_truncates_oversized_issue_body(self) -> None:
+        report = FeedbackReport(message="Feedback", context="🔥" * 10_000)
+
+        url = build_feedback_issue_url(report)
+
+        assert len(url) <= 7000
+        assert "Additional+feedback+context+was+truncated" in url
 
 
 # -----------------------------------------------------------------------

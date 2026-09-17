@@ -11,6 +11,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 GITHUB_NEW_ISSUE_URL = "https://github.com/microsoft/clarity-agent/issues/new"
+_MAX_ISSUE_URL_LENGTH = 7000
+_TRUNCATION_NOTICE = "\n\n> Additional feedback context was truncated to fit this issue draft."
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +29,6 @@ class FeedbackReport:
     llm_info: dict[str, str] = field(default_factory=dict)
     transcript_excerpt: str | None = None
     context: str | None = None
-    protocol_content: str | None = None
 
 
 @dataclass
@@ -85,27 +86,6 @@ def gather_transcript(project_dir: Path, n_turns: int) -> str | None:
     return "\n---\n".join(turns)
 
 
-def gather_protocol(project_dir: Path) -> str | None:
-    """Generate a complete markdown packet from the clarity protocol.
-
-    Uses the packet builder so the output is well-structured and
-    includes all protocol sections.  Returns ``None`` if the protocol
-    directory does not exist.
-    """
-    from clarity_agent.app_paths import protocol_dir
-
-    proto = protocol_dir(project_dir)
-    if not proto.exists():
-        return None
-
-    try:
-        from clarity_agent.packet import generate_packet
-        packet_bytes: bytes = generate_packet(proto, format="markdown")
-        return packet_bytes.decode("utf-8")
-    except Exception:
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Formatting
 # ---------------------------------------------------------------------------
@@ -144,11 +124,6 @@ def format_feedback_md(report: FeedbackReport) -> str:
     if report.context:
         parts.append(f"## Additional Context\n\n{report.context}\n")
 
-    if report.protocol_content:
-        parts.append(
-            f"## Clarity Protocol\n\n{report.protocol_content}\n"
-        )
-
     return "\n".join(parts)
 
 
@@ -158,11 +133,24 @@ def format_feedback_md(report: FeedbackReport) -> str:
 
 def build_feedback_issue_url(report: FeedbackReport) -> str:
     """Build a prefilled GitHub issue URL for the user to review."""
-    query = urlencode({
-        "title": "Product feedback",
-        "body": format_feedback_md(report),
-    })
-    return f"{GITHUB_NEW_ISSUE_URL}?{query}"
+    body = format_feedback_md(report)
+
+    def issue_url(content: str) -> str:
+        query = urlencode({"title": "Product feedback", "body": content})
+        return f"{GITHUB_NEW_ISSUE_URL}?{query}"
+
+    url = issue_url(body)
+    if len(url) <= _MAX_ISSUE_URL_LENGTH:
+        return url
+
+    low, high = 0, len(body)
+    while low < high:
+        midpoint = (low + high + 1) // 2
+        if len(issue_url(body[:midpoint] + _TRUNCATION_NOTICE)) <= _MAX_ISSUE_URL_LENGTH:
+            low = midpoint
+        else:
+            high = midpoint - 1
+    return issue_url(body[:low] + _TRUNCATION_NOTICE)
 
 
 # ---------------------------------------------------------------------------
