@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 from clarity_agent.feedback import (
     GITHUB_NEW_ISSUE_URL,
     FeedbackReport,
@@ -80,9 +82,11 @@ class TestFeedbackIssueUrl:
         report = FeedbackReport(message="Feedback", context="🔥" * 10_000)
 
         url = build_feedback_issue_url(report)
+        body = parse_qs(urlparse(url).query)["body"][0]
 
         assert len(url) <= 7000
-        assert "Additional+feedback+context+was+truncated" in url
+        assert "## Additional Context" in body
+        assert body.endswith("[Content truncated to fit this GitHub issue draft.]\n")
 
 
 # -----------------------------------------------------------------------

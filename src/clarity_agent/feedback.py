@@ -6,13 +6,15 @@ and prepare a user-reviewed GitHub issue.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import urlencode
 
 GITHUB_NEW_ISSUE_URL = "https://github.com/microsoft/clarity-agent/issues/new"
+# Stay below the commonly supported 8 KB request-target limit used by browsers
+# and proxies, leaving room for redirects or other URL additions.
 _MAX_ISSUE_URL_LENGTH = 7000
-_TRUNCATION_NOTICE = "\n\n> Additional feedback context was truncated to fit this issue draft."
+_TRUNCATION_NOTICE = "\n\n[Content truncated to fit this GitHub issue draft.]"
 
 
 # ---------------------------------------------------------------------------
@@ -133,24 +135,45 @@ def format_feedback_md(report: FeedbackReport) -> str:
 
 def build_feedback_issue_url(report: FeedbackReport) -> str:
     """Build a prefilled GitHub issue URL for the user to review."""
-    body = format_feedback_md(report)
-
-    def issue_url(content: str) -> str:
-        query = urlencode({"title": "Product feedback", "body": content})
+    def issue_url(candidate: FeedbackReport) -> str:
+        query = urlencode({
+            "title": "Product feedback",
+            "body": format_feedback_md(candidate),
+        })
         return f"{GITHUB_NEW_ISSUE_URL}?{query}"
 
-    url = issue_url(body)
+    url = issue_url(report)
     if len(url) <= _MAX_ISSUE_URL_LENGTH:
         return url
 
-    low, high = 0, len(body)
-    while low < high:
-        midpoint = (low + high + 1) // 2
-        if len(issue_url(body[:midpoint] + _TRUNCATION_NOTICE)) <= _MAX_ISSUE_URL_LENGTH:
-            low = midpoint
-        else:
-            high = midpoint - 1
-    return issue_url(body[:low] + _TRUNCATION_NOTICE)
+    candidate = report
+    for field_name in ("context", "transcript_excerpt", "message"):
+        value = getattr(candidate, field_name)
+        if not value:
+            continue
+
+        low, high = 0, len(value)
+        best: FeedbackReport | None = None
+        while low <= high:
+            midpoint = (low + high) // 2
+            shortened = replace(
+                candidate,
+                **{field_name: value[:midpoint] + _TRUNCATION_NOTICE},
+            )
+            if len(issue_url(shortened)) <= _MAX_ISSUE_URL_LENGTH:
+                best = shortened
+                low = midpoint + 1
+            else:
+                high = midpoint - 1
+        if best is not None:
+            return issue_url(best)
+        empty_value = "" if field_name == "message" else None
+        candidate = replace(candidate, **{field_name: empty_value})
+
+    fallback = issue_url(FeedbackReport(message=_TRUNCATION_NOTICE.strip()))
+    if len(fallback) > _MAX_ISSUE_URL_LENGTH:
+        raise ValueError("GitHub issue URL limit is too small for the issue template")
+    return fallback
 
 
 # ---------------------------------------------------------------------------
