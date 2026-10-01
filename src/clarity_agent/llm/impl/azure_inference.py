@@ -88,7 +88,9 @@ def _translate_messages(
     """Translate canonical messages to Azure message objects.
 
     Azure expects system messages in the messages array rather than as
-    a separate parameter.
+    a separate parameter. Handles canonical Anthropic-style message
+    structures including tool_use blocks in assistant messages and
+    tool_result blocks in user turns.
     """
     result: list[Any] = []
 
@@ -98,13 +100,81 @@ def _translate_messages(
     for msg in messages:
         role: str = msg["role"]
         content: Any = msg["content"]
+
         if role == "user":
-            result.append(_azure_models.UserMessage(content=content))
+            if isinstance(content, str):
+                result.append(_azure_models.UserMessage(content=content))
+            elif isinstance(content, list):
+                has_tool_results = any(
+                    isinstance(b, dict) and b.get("type") == "tool_result"
+                    for b in content
+                )
+                if has_tool_results:
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "tool_result":
+                            res_content = block.get("content", "")
+                            if not isinstance(res_content, str):
+                                res_content = json.dumps(res_content)
+                            result.append(_azure_models.ToolMessage(
+                                content=res_content,
+                                tool_call_id=block.get("tool_use_id", ""),
+                            ))
+                        elif isinstance(block, dict) and block.get("type") == "text":
+                            result.append(_azure_models.UserMessage(content=block.get("text", "")))
+                else:
+                    user_texts: list[str] = []
+                    is_all_text = True
+                    for b in content:
+                        if isinstance(b, dict) and b.get("type") == "text":
+                            user_texts.append(b.get("text", ""))
+                        else:
+                            is_all_text = False
+                            break
+                    if is_all_text:
+                        result.append(_azure_models.UserMessage(content="".join(user_texts)))
+                    else:
+                        result.append(_azure_models.UserMessage(content=content))
+            else:
+                result.append(_azure_models.UserMessage(content=str(content)))
+
         elif role == "assistant":
-            result.append(_azure_models.AssistantMessage(content=content))
+            if isinstance(content, str):
+                result.append(_azure_models.AssistantMessage(content=content))
+            elif isinstance(content, list):
+                text_parts: list[str] = []
+                tool_calls: list[_azure_models.ChatCompletionsToolCall] = []
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    b_type = block.get("type")
+                    if b_type == "text":
+                        text_parts.append(block.get("text", ""))
+                    elif b_type == "tool_use":
+                        inp = block.get("input", {})
+                        arg_str = json.dumps(inp) if isinstance(inp, dict) else str(inp or "{}")
+                        tool_calls.append(_azure_models.ChatCompletionsToolCall(
+                            id=block.get("id", ""),
+                            function=_azure_models.FunctionCall(
+                                name=block.get("name", ""),
+                                arguments=arg_str,
+                            ),
+                        ))
+                content_str = "".join(text_parts) if text_parts else None
+                result.append(_azure_models.AssistantMessage(
+                    content=content_str,
+                    tool_calls=tool_calls if tool_calls else None,
+                ))
+            else:
+                result.append(_azure_models.AssistantMessage(
+                    content=str(content) if content is not None else None
+                ))
+
         elif role == "tool":
+            res_content = content
+            if not isinstance(res_content, str):
+                res_content = json.dumps(res_content) if res_content is not None else ""
             result.append(_azure_models.ToolMessage(
-                content=content,
+                content=res_content,
                 tool_call_id=msg.get("tool_use_id", ""),
             ))
 

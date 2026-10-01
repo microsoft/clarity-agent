@@ -1956,3 +1956,113 @@ class TestSdkToolLoopRouting:
 
             mock_sdk.assert_called_once()
             assert result.text == "done via sdk"
+
+
+# ---------------------------------------------------------------------------
+# Message translation for tool calls and results (OpenAI & Azure)
+# ---------------------------------------------------------------------------
+
+class TestMessageTranslationToolBlocks:
+    """Verifies that canonical Anthropic-style tool blocks are correctly
+    translated for OpenAI and Azure backends without invalid_value errors.
+    """
+
+    def test_azure_translates_tool_use_and_tool_result(self) -> None:
+        import azure.ai.inference.models as _azure_models
+
+        from clarity_agent.llm.impl.azure_inference import _translate_messages
+
+        canonical_messages = [
+            {"role": "user", "content": "Check status"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Checking status now..."},
+                    {
+                        "type": "tool_use",
+                        "id": "call_123",
+                        "name": "get_status",
+                        "input": {"verbose": True},
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_123",
+                        "content": "Status: OK",
+                    },
+                ],
+            },
+        ]
+
+        translated = _translate_messages(canonical_messages, system="System prompt")
+
+        assert len(translated) == 4
+        assert isinstance(translated[0], _azure_models.SystemMessage)
+        assert translated[0].content == "System prompt"
+
+        assert isinstance(translated[1], _azure_models.UserMessage)
+        assert translated[1].content == "Check status"
+
+        assert isinstance(translated[2], _azure_models.AssistantMessage)
+        assert translated[2].content == "Checking status now..."
+        assert translated[2].tool_calls is not None
+        assert len(translated[2].tool_calls) == 1
+        assert translated[2].tool_calls[0].id == "call_123"
+        assert translated[2].tool_calls[0].function.name == "get_status"
+        assert json.loads(translated[2].tool_calls[0].function.arguments) == {"verbose": True}
+
+        assert isinstance(translated[3], _azure_models.ToolMessage)
+        assert translated[3].content == "Status: OK"
+        assert translated[3].tool_call_id == "call_123"
+
+    def test_openai_translates_tool_use_and_tool_result(self) -> None:
+        from clarity_agent.llm.impl.openai import _translate_messages
+
+        canonical_messages = [
+            {"role": "user", "content": "Check status"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Checking status now..."},
+                    {
+                        "type": "tool_use",
+                        "id": "call_456",
+                        "name": "get_status",
+                        "input": {"verbose": False},
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_456",
+                        "content": "Status: Healthy",
+                    },
+                ],
+            },
+        ]
+
+        translated = _translate_messages(canonical_messages, system="System prompt")
+
+        assert len(translated) == 4
+        assert translated[0] == {"role": "system", "content": "System prompt"}
+        assert translated[1] == {"role": "user", "content": "Check status"}
+
+        assert translated[2]["role"] == "assistant"
+        assert translated[2]["content"] == "Checking status now..."
+        assert len(translated[2]["tool_calls"]) == 1
+        assert translated[2]["tool_calls"][0]["id"] == "call_456"
+        assert translated[2]["tool_calls"][0]["type"] == "function"
+        assert translated[2]["tool_calls"][0]["function"]["name"] == "get_status"
+        assert json.loads(translated[2]["tool_calls"][0]["function"]["arguments"]) == {"verbose": False}
+
+        assert translated[3]["role"] == "tool"
+        assert translated[3]["content"] == "Status: Healthy"
+        assert translated[3]["tool_call_id"] == "call_456"
+
