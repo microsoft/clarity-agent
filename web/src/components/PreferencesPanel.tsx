@@ -534,10 +534,11 @@ function ModelsTab({ settings, onSaved }: { settings: AppSettings; onSaved: () =
           nothing to enumerate — fall back to a text field. */}
       {catalog?.free_form ? (
         <div>
-          <label className="block text-xs text-body-label mb-1">
+          <label htmlFor="preferences-deployment-name" className="block text-xs text-body-label mb-1">
             Deployment name
           </label>
           <input
+            id="preferences-deployment-name"
             type="text"
             placeholder="Provider default"
             value={model}
