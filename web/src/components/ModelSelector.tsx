@@ -245,10 +245,11 @@ export default function ModelSelector() {
                 handleSelect(typed);
               }}
             >
-              <label className="block text-[10px] text-sidebar-text-faint uppercase tracking-wider">
+              <label htmlFor="model-selector-deployment-name" className="block text-[10px] text-sidebar-text-faint uppercase tracking-wider">
                 Deployment name
               </label>
               <input
+                id="model-selector-deployment-name"
                 type="text"
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
