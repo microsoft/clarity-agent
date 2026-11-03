@@ -37,4 +37,4 @@ class FeedbackRequest(BaseModel):
     contact_email: str = ""
     include_llm_info: bool = True
     transcript_turns: int = 0
-    include_protocol: bool = False
+    context: str = ""

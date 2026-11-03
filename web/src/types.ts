@@ -268,12 +268,11 @@ export interface FeedbackPayload {
   contact_email: string;
   include_llm_info: boolean;
   transcript_turns: number;
-  include_protocol: boolean;
+  context: string;
 }
 
 export interface FeedbackResult {
-  submitted: boolean;
-  file_path: string | null;
+  issue_url: string;
 }
 
 // Process metadata
