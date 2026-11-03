@@ -45,6 +45,7 @@ from clarity_agent.transcript import (
     ChapterStarted,
     ProcessStarted,
     SessionResume,
+    ToolResult,
     ToolUse,
     Transcript,
     UserTurn,
@@ -276,9 +277,24 @@ class ClaritySession:
         effective_system_prompt = _prepend_behaviors(
             system_prompt, self.load_behaviors(),
         )
+        effective_tool_handler = tool_handler
+        if self._transcript is not None and tool_handler is not None:
+            transcript = self._transcript
+
+            def recording_tool_handler(block: ToolUseBlock) -> str:
+                result = tool_handler(block)
+                transcript.write(ToolResult(
+                    timestamp=_now(),
+                    tool_use_id=block.id,
+                    content=result,
+                ))
+                return result
+
+            effective_tool_handler = recording_tool_handler
+
         response: str = self.backend.chat(
             user_message, effective_system_prompt, model=model,
-            tools=tools, tool_handler=tool_handler,
+            tools=tools, tool_handler=effective_tool_handler,
         )
         if self._transcript is not None:
             self._transcript.write(AssistantText(timestamp=_now(), content=response))

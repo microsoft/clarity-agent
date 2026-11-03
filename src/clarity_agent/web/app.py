@@ -781,15 +781,10 @@ def create_app(
 
     @app.post("/api/feedback")
     async def send_feedback(request: FeedbackRequest) -> dict[str, Any]:
-        """Assemble and deliver user feedback.
-
-        Tries to upload to Azure Blob Storage.  Falls back to local
-        file + mailto: if upload is not configured or fails.
-        """
+        """Assemble user feedback into a prefilled GitHub issue."""
         from clarity_agent.feedback import (
             FeedbackReport,
             gather_llm_info,
-            gather_protocol,
             gather_transcript,
             prepare_feedback,
         )
@@ -811,24 +806,19 @@ def create_app(
                 project_dir, request.transcript_turns,
             )
 
-        protocol: str | None = None
-        if request.include_protocol:
-            protocol = gather_protocol(project_dir)
-
         report = FeedbackReport(
             message=request.message,
             contact_ok=request.contact_ok,
             contact_email=request.contact_email,
             llm_info=llm_info,
             transcript_excerpt=transcript,
-            protocol_content=protocol,
+            context=request.context,
         )
 
         result = prepare_feedback(report)
 
         return {
-            "submitted": result.submitted,
-            "file_path": str(result.file_path) if result.file_path else None,
+            "issue_url": result.issue_url,
         }
 
     # ------------------------------------------------------------------
